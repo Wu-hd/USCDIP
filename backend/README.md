@@ -4,6 +4,7 @@
 - A-01 平台边界配置读取与查询 API
 - A-02 统一对象主键与对象链字典（数据库版）
 - A-03 坐标与深度字段冻结（GIS 字段规范、坐标转换、深度校验）
+- A-04 权限模型与数据范围矩阵（RBAC + 数据范围 + topic 订阅范围）
 
 当前项目已添加数据库能力。
 
@@ -20,6 +21,11 @@
    - GET /api/gis/field-spec
    - POST /api/gis/convert
    - POST /api/gis/depth/validate
+   - GET /api/authz/matrix-spec
+   - GET /api/authz/matrix
+   - GET /api/authz/users/{userId}/snapshot
+   - GET /api/authz/users/{userId}/topics
+   - POST /api/authz/check
 
 ## 常见问题
 - 报错 `UnsupportedClassVersionError`（如 class file version 65.0）：
@@ -35,6 +41,9 @@
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
 - A-03 字段冻结：authority_srid、display_srid、geometry_2d、z_top、z_bottom、bury_depth、elevation_ref
 - A-03 坐标转换：统一后端服务化处理（禁止前端/导入工具私算）
+- A-04 约束表达：access = entryPermission && menuPermission && dataScope && topicScope
+- A-04 角色覆盖：平台管理员、区域调度员、巡检人员、算法工程师、领导只读
+- A-04 测试约束：跨区订阅拒绝、巡检仅本人任务、算法默认脱敏视图
 
 ## A-03 接口说明
 
@@ -74,6 +83,17 @@
    - DB_USER（默认 postgres）
    - DB_PASSWORD（默认 postgres）
 
+### A-04 数据库存储（本轮新增）
+- 资源配置文件：src/main/resources/a04-authz-matrix.json
+- 权限相关表（由 JPA 自动建表）：
+   - user_account
+   - rbac_role
+   - rbac_permission
+   - rbac_user_role
+   - rbac_role_permission
+   - user_data_scope
+   - topic_scope_rule
+
 ## 测试数据说明
 - 文件：src/main/resources/data.sql
 - 已生成可联调测试数据，覆盖七类对象：
@@ -84,6 +104,14 @@
    - incident：2 条
    - work_order：2 条
    - model_result：2 条
+- 已生成 A-04 权限联调数据：
+   - user_account：5 条（五类角色示例用户）
+   - rbac_role：5 条
+   - rbac_permission：12 条
+   - rbac_user_role：5 条
+   - rbac_role_permission：24 条
+   - user_data_scope：6 条
+   - topic_scope_rule：6 条
 
 ## 快速验证命令
 - 查询对象字典：
@@ -98,6 +126,18 @@
    - curl -s -X POST http://localhost:8080/api/gis/convert -H "Content-Type: application/json" -d "{\"authoritySrid\":\"EPSG:4490\",\"displaySrid\":\"EPSG:3857\",\"geometry2d\":\"POINT(120.1533 30.2741)\"}"
 - 深度校验：
    - curl -s -X POST http://localhost:8080/api/gis/depth/validate -H "Content-Type: application/json" -d "{\"zTop\":2.50,\"zBottom\":-1.20,\"buryDepth\":3.70,\"elevationRef\":\"MSL\"}"
+- 查看 A-04 矩阵规范：
+   - curl -s http://localhost:8080/api/authz/matrix-spec
+- 查看角色矩阵（数据库展开后）：
+   - curl -s http://localhost:8080/api/authz/matrix
+- 查看用户权限快照：
+   - curl -s http://localhost:8080/api/authz/users/U-DISPATCH-001/snapshot
+- 验证“区域调度员跨区拒绝”：
+   - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-DISPATCH-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"regionId\":\"REGION-SH\",\"topic\":\"region.REGION-SH.alerts.critical\",\"dataView\":\"AGGREGATED\"}"
+- 验证“巡检仅本人任务”：
+   - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-INSPECT-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"assignee\":\"zhangsan\",\"topic\":\"user.U-INSPECT-001.workorder.created\",\"dataView\":\"AGGREGATED\"}"
+- 验证“算法工程师默认仅脱敏视图”：
+   - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-ALGO-001\",\"entryPermission\":\"ENTRY:DIAG\",\"menuPermission\":\"MENU:MODEL:READ\",\"dataView\":\"MASKED_FEATURE\",\"topic\":\"diag.model.inference\"}"
 
 ## 下一步建议
 - 接入 Spring Security OIDC，落地 B-02 到 B-05。

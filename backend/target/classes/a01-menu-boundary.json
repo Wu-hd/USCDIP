@@ -1,0 +1,63 @@
+{
+  "version": "1.0.0",
+  "source": "A-01统一菜单与平台边界表-后端落地版",
+  "platforms": [
+    {
+      "platformCode": "PORTAL",
+      "platformName": "平台选择门户",
+      "routePrefix": "/portal",
+      "permissionPrefix": "portal",
+      "allowWrite": false,
+      "description": "仅负责登录态、入口导航、跨平台跳转、单点退出与待办汇总，不承载业务编辑页面"
+    },
+    {
+      "platformCode": "MGMT",
+      "platformName": "综合管理平台",
+      "routePrefix": "/mgmt",
+      "permissionPrefix": "mgmt",
+      "allowWrite": true,
+      "description": "负责建档、配置、治理与日常运维"
+    },
+    {
+      "platformCode": "EMGC",
+      "platformName": "应急指挥平台",
+      "routePrefix": "/emgc",
+      "permissionPrefix": "emgc",
+      "allowWrite": true,
+      "description": "负责事件处置、联动调度与态势展示"
+    },
+    {
+      "platformCode": "DIAG",
+      "platformName": "智能诊断中枢",
+      "routePrefix": "/diag",
+      "permissionPrefix": "diag",
+      "allowWrite": true,
+      "description": "负责模型治理、解释、漂移监控与人工复核"
+    },
+    {
+      "platformCode": "SUPPORT",
+      "platformName": "平台支撑层",
+      "routePrefix": "/api",
+      "permissionPrefix": "support",
+      "allowWrite": true,
+      "description": "工程底座，不作为第四入口"
+    }
+  ],
+  "menuRules": [
+    {
+      "ruleCode": "R1",
+      "name": "单菜单单平台归属",
+      "expression": "menu.platformCode is unique"
+    },
+    {
+      "ruleCode": "R2",
+      "name": "Portal禁止业务写操作",
+      "expression": "platformCode == 'PORTAL' => allowWrite == false"
+    },
+    {
+      "ruleCode": "R3",
+      "name": "联合权限校验",
+      "expression": "access = entryPermission && menuPermission && dataScope && topicScope"
+    }
+  ]
+}

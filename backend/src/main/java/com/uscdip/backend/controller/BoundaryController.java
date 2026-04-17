@@ -1,5 +1,6 @@
 package com.uscdip.backend.controller;
 
+import com.uscdip.backend.model.ApiErrorCode;
 import com.uscdip.backend.model.ApiResponse;
 import com.uscdip.backend.model.BoundarySpec;
 import com.uscdip.backend.model.PlatformBoundary;
@@ -38,6 +39,6 @@ public class BoundaryController {
         return boundarySpecService.findByPlatformCode(platformCode)
                 .map(platform -> ResponseEntity.ok(ApiResponse.success(platform)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(ApiResponse.failure("PLATFORM_NOT_FOUND", "Platform not found: " + platformCode, null)));
+                        .body(ApiResponse.failure(ApiErrorCode.RESOURCE_NOT_FOUND.code(), "Platform not found: " + platformCode, null)));
     }
 }

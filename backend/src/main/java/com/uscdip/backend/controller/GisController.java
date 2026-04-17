@@ -7,6 +7,7 @@ import com.uscdip.backend.dto.DepthValidationResult;
 import com.uscdip.backend.dto.GisFieldSpecItem;
 import com.uscdip.backend.model.ApiResponse;
 import com.uscdip.backend.service.GisCoordinateService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,12 +38,12 @@ public class GisController {
     }
 
     @PostMapping("/convert")
-    public ApiResponse<CoordinateConvertResult> convert(@RequestBody CoordinateConvertRequest request) {
+    public ApiResponse<CoordinateConvertResult> convert(@Valid @RequestBody CoordinateConvertRequest request) {
         return ApiResponse.success(gisCoordinateService.convert(request));
     }
 
     @PostMapping("/depth/validate")
-    public ApiResponse<DepthValidationResult> validateDepth(@RequestBody DepthValidationRequest request) {
+    public ApiResponse<DepthValidationResult> validateDepth(@Valid @RequestBody DepthValidationRequest request) {
         return ApiResponse.success(gisCoordinateService.validateDepth(request));
     }
 }

@@ -5,6 +5,7 @@
 - A-02 统一对象主键与对象链字典（数据库版）
 - A-03 坐标与深度字段冻结（GIS 字段规范、坐标转换、深度校验）
 - A-04 权限模型与数据范围矩阵（RBAC + 数据范围 + topic 订阅范围）
+- A-07 API 错误码与异常响应规范（统一错误码、全局异常处理、traceId 透传）
 
 当前项目已添加数据库能力。
 
@@ -26,6 +27,7 @@
    - GET /api/authz/users/{userId}/snapshot
    - GET /api/authz/users/{userId}/topics
    - POST /api/authz/check
+   - GET /api/error-codes
 
 ## 常见问题
 - 报错 `UnsupportedClassVersionError`（如 class file version 65.0）：
@@ -44,6 +46,10 @@
 - A-04 约束表达：access = entryPermission && menuPermission && dataScope && topicScope
 - A-04 角色覆盖：平台管理员、区域调度员、巡检人员、算法工程师、领导只读
 - A-04 测试约束：跨区订阅拒绝、巡检仅本人任务、算法默认脱敏视图
+- A-07 统一错误结构：success/data/error/traceId
+- A-07 统一错误码：AUTHENTICATION_FAILED、FORBIDDEN、DATA_SCOPE_EMPTY、IDEMPOTENT_CONFLICT、INVALID_PARAMETER、INVALID_REQUEST、RESOURCE_NOT_FOUND、INVALID_STATE_TRANSITION、INTERNAL_ERROR
+- A-07 异常处理：全局异常处理器统一处理参数校验、业务异常、未捕获异常
+- A-07 traceId：请求头 X-Trace-Id 支持透传，未提供时自动生成
 
 ## A-03 接口说明
 
@@ -62,6 +68,24 @@
 - 请求体示例：
    - {"zTop":2.50,"zBottom":-1.20,"buryDepth":3.70,"elevationRef":"MSL","tolerance":0.05}
 - 规则：bury_depth 应满足 |z_top - z_bottom|，支持容差配置。
+
+## A-07 接口说明
+
+### 1) 错误码字典
+- GET /api/error-codes
+- 用途：提供前后端统一错误码与默认文案，便于前端按 code 做分支处理。
+
+### 2) 统一错误响应示例
+- 参数校验失败（HTTP 400）：
+   - {"success":false,"data":null,"error":{"code":"INVALID_PARAMETER","message":"authority_srid is required"},"traceId":"..."}
+- 权限不足（HTTP 403）：
+   - {"success":false,"data":null,"error":{"code":"FORBIDDEN","message":"Authorization denied: ENTRY_PERMISSION_DENIED"},"traceId":"..."}
+- 数据范围为空（HTTP 403）：
+   - {"success":false,"data":null,"error":{"code":"DATA_SCOPE_EMPTY","message":"No accessible data in current scope"},"traceId":"..."}
+
+### 3) traceId 约定
+- 请求可选头：X-Trace-Id
+- 若请求头缺失，后端会自动生成并回传在响应头与响应体 traceId 字段中。
 
 ## 数据库配置说明
 
@@ -83,6 +107,23 @@
    - DB_USER（默认 postgres）
    - DB_PASSWORD（默认 postgres）
 
+### 初始化行为说明（必须了解）
+- H2 默认模式（application.yml）：
+   - spring.jpa.hibernate.ddl-auto=create-drop
+   - spring.jpa.defer-datasource-initialization=true
+   - spring.sql.init.mode=always
+   - 含义：先由 JPA 建表，再执行 data.sql 初始化测试数据。
+- PostgreSQL 模式（application-postgres.yml）：
+   - spring.jpa.hibernate.ddl-auto=update
+   - spring.sql.init.mode=never
+   - 含义：默认不自动执行 data.sql，需手工导入。
+
+### PostgreSQL 手动导入测试数据
+- 建议在首次切换 postgres profile 后执行：
+   - psql -h %DB_HOST% -p %DB_PORT% -U %DB_USER% -d %DB_NAME% -f src/main/resources/data.sql
+- 若使用 PowerShell，可改为：
+   - psql -h $env:DB_HOST -p $env:DB_PORT -U $env:DB_USER -d $env:DB_NAME -f src/main/resources/data.sql
+
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json
 - 权限相关表（由 JPA 自动建表）：
@@ -102,16 +143,19 @@
    - facility：3 条
    - device：3 条
    - incident：2 条
-   - work_order：2 条
+   - work_order：3 条
    - model_result：2 条
 - 已生成 A-04 权限联调数据：
-   - user_account：5 条（五类角色示例用户）
+   - user_account：6 条（含 1 条无角色错误场景用户）
    - rbac_role：5 条
    - rbac_permission：12 条
    - rbac_user_role：5 条
    - rbac_role_permission：24 条
    - user_data_scope：6 条
    - topic_scope_rule：6 条
+- 已生成 A-07 错误场景联调数据：
+   - user_account：新增 U-NOROLE-001（用于权限不足/角色未分配场景）
+   - work_order：新增 WO-CONFLICT-001（用于幂等冲突场景模拟）
 
 ## 快速验证命令
 - 查询对象字典：
@@ -138,6 +182,12 @@
    - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-INSPECT-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"assignee\":\"zhangsan\",\"topic\":\"user.U-INSPECT-001.workorder.created\",\"dataView\":\"AGGREGATED\"}"
 - 验证“算法工程师默认仅脱敏视图”：
    - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-ALGO-001\",\"entryPermission\":\"ENTRY:DIAG\",\"menuPermission\":\"MENU:MODEL:READ\",\"dataView\":\"MASKED_FEATURE\",\"topic\":\"diag.model.inference\"}"
+- 查看 A-07 错误码字典：
+   - curl -s http://localhost:8080/api/error-codes
+- 验证 A-07 参数校验错误：
+   - curl -s -X POST http://localhost:8080/api/gis/convert -H "Content-Type: application/json" -d "{}"
+- 验证 A-07 数据范围为空错误：
+   - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-DISPATCH-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"regionId\":\"REGION-SH\",\"topic\":\"region.REGION-SH.alerts.critical\",\"dataView\":\"AGGREGATED\"}"
 
 ## 下一步建议
 - 接入 Spring Security OIDC，落地 B-02 到 B-05。

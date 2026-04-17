@@ -21,6 +21,11 @@ INSERT INTO incident (incident_id, segment_id, node_id, title, severity, status,
 ('INC-001', 'SEG-001', 'NODE-002', '压力异常升高', 'HIGH', 'OPEN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('INC-002', 'SEG-002', 'NODE-003', '流量下降预警', 'MEDIUM', 'OPEN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
+INSERT INTO alarm (alarm_id, segment_id, node_id, rule_code, severity, status, dedupe_key, suppress_until, last_action, created_at, updated_at) VALUES
+('ALM-001', 'SEG-001', 'NODE-002', 'RULE-PRESSURE-HIGH', 'HIGH', 'TRIGGERED', 'SEG-001:RULE-PRESSURE-HIGH:202604110900', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('ALM-002', 'SEG-001', 'NODE-002', 'RULE-PRESSURE-HIGH', 'MEDIUM', 'SUPPRESSED', 'SEG-001:RULE-PRESSURE-HIGH:202604110915', '2026-04-11 09:40:00', 'SUPPRESS', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('ALM-003', 'SEG-002', 'NODE-003', 'RULE-FLOW-LOW', 'HIGH', 'ESCALATED', 'SEG-002:RULE-FLOW-LOW:202604110905', NULL, 'ESCALATE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
 INSERT INTO work_order (work_order_id, incident_id, segment_id, node_id, assignee, status, created_at, updated_at) VALUES
 ('WO-001', 'INC-001', 'SEG-001', 'NODE-002', 'zhangsan', 'DISPATCHED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('WO-002', 'INC-002', 'SEG-002', 'NODE-003', 'lisi', 'CREATED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
@@ -28,6 +33,20 @@ INSERT INTO work_order (work_order_id, incident_id, segment_id, node_id, assigne
 INSERT INTO model_result (model_result_id, segment_id, node_id, model_code, model_version, status, created_at, updated_at) VALUES
 ('MR-001', 'SEG-001', 'NODE-002', 'LEAK-RISK', 'v1.0.0', 'VALID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('MR-002', 'SEG-002', 'NODE-003', 'PRESSURE-ANOMALY', 'v1.0.0', 'VALID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO realtime_link_metric (metric_id, trace_id, device_id, segment_id, node_id, chain_stage, event_time, recv_time, is_backfill, last_ack_seq, metric_code, metric_value, latency_ms, created_at) VALUES
+('RTM-001', 'tr-20260411-0001', 'DEV-001', 'SEG-001', 'NODE-001', 'device_sampling', '2026-04-11 09:00:00', '2026-04-11 09:00:00', FALSE, NULL, 'PRESSURE_KPA', 312.6, 0, CURRENT_TIMESTAMP),
+('RTM-002', 'tr-20260411-0001', 'DEV-001', 'SEG-001', 'NODE-001', 'edge_recv', '2026-04-11 09:00:00', '2026-04-11 09:00:01', FALSE, NULL, 'PRESSURE_KPA', 312.6, 1000, CURRENT_TIMESTAMP),
+('RTM-003', 'tr-20260411-0001', 'DEV-001', 'SEG-001', 'NODE-001', 'cloud_ingest', '2026-04-11 09:00:00', '2026-04-11 09:00:02', FALSE, NULL, 'PRESSURE_KPA', 312.6, 2000, CURRENT_TIMESTAMP),
+('RTM-004', 'tr-20260411-0001', 'DEV-001', 'SEG-001', 'NODE-001', 'alarm_decide', '2026-04-11 09:00:00', '2026-04-11 09:00:03', FALSE, NULL, 'PRESSURE_KPA', 312.6, 3000, CURRENT_TIMESTAMP),
+('RTM-005', 'tr-20260411-0001', 'DEV-001', 'SEG-001', 'NODE-001', 'frontend_recv', '2026-04-11 09:00:00', '2026-04-11 09:00:03', FALSE, 101, 'PRESSURE_KPA', 312.6, 3300, CURRENT_TIMESTAMP),
+('RTM-006', 'tr-20260411-0001', 'DEV-001', 'SEG-001', 'NODE-001', 'map_render', '2026-04-11 09:00:00', '2026-04-11 09:00:04', FALSE, 101, 'PRESSURE_KPA', 312.6, 3900, CURRENT_TIMESTAMP),
+('RTM-007', 'tr-20260411-0002', 'DEV-002', 'SEG-001', 'NODE-002', 'device_sampling', '2026-04-11 09:03:05', '2026-04-11 09:03:05', FALSE, NULL, 'FLOW_M3H', 81.2, 0, CURRENT_TIMESTAMP),
+('RTM-008', 'tr-20260411-0002', 'DEV-002', 'SEG-001', 'NODE-002', 'cloud_ingest', '2026-04-11 09:03:05', '2026-04-11 09:03:07', FALSE, NULL, 'FLOW_M3H', 81.2, 2100, CURRENT_TIMESTAMP),
+('RTM-009', 'tr-20260411-0002', 'DEV-002', 'SEG-001', 'NODE-002', 'map_render', '2026-04-11 09:03:05', '2026-04-11 09:03:09', FALSE, 132, 'FLOW_M3H', 81.2, 4100, CURRENT_TIMESTAMP),
+('RTM-010', 'tr-20260411-0003', 'DEV-003', 'SEG-002', 'NODE-003', 'device_sampling', '2026-04-11 08:40:10', '2026-04-11 08:40:10', TRUE, NULL, 'VIB_MM_S', 12.3, 0, CURRENT_TIMESTAMP),
+('RTM-011', 'tr-20260411-0003', 'DEV-003', 'SEG-002', 'NODE-003', 'cloud_ingest', '2026-04-11 08:40:10', '2026-04-11 09:10:22', TRUE, NULL, 'VIB_MM_S', 12.3, 1812000, CURRENT_TIMESTAMP),
+('RTM-012', 'tr-20260411-0003', 'DEV-003', 'SEG-002', 'NODE-003', 'frontend_recv', '2026-04-11 08:40:10', '2026-04-11 09:10:23', TRUE, 88, 'VIB_MM_S', 12.3, 1813000, CURRENT_TIMESTAMP);
 
 INSERT INTO user_account (user_id, username, display_name, primary_region_id, status, created_at, updated_at) VALUES
 ('U-ADMIN-001', 'admin', '平台管理员', 'GLOBAL', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

@@ -1,7 +1,10 @@
 package com.uscdip.backend.entity;
 
+import com.uscdip.backend.model.WorkOrderStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -35,8 +38,18 @@ public class WorkOrderEntity {
     @Column(name = "assignee", length = 64)
     private String assignee;
 
+    @Column(name = "feedback_type", length = 64)
+    private String feedbackType;
+
+    @Column(name = "feedback_reason", length = 512)
+    private String feedbackReason;
+
+    @Column(name = "last_action", length = 64)
+    private String lastAction;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 32)
-    private String status;
+    private WorkOrderStatus status;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

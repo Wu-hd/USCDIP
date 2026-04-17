@@ -1,6 +1,7 @@
 package com.uscdip.backend.repository;
 
 import com.uscdip.backend.entity.WorkOrderEntity;
+import com.uscdip.backend.model.WorkOrderStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -12,4 +13,8 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Stri
     List<WorkOrderEntity> findByNodeId(String nodeId);
 
     List<WorkOrderEntity> findByIncidentIdIn(List<String> incidentIds);
+
+    List<WorkOrderEntity> findByIncidentId(String incidentId);
+
+    List<WorkOrderEntity> findByStatus(WorkOrderStatus status);
 }

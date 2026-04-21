@@ -1,14 +1,24 @@
 package com.uscdip.backend.controller;
 
 import com.uscdip.backend.config.BackendOidcProperties;
+import com.uscdip.backend.dto.AuthCallbackRequest;
+import com.uscdip.backend.dto.AuthLoginDescriptor;
+import com.uscdip.backend.dto.TokenPairResponse;
+import com.uscdip.backend.dto.TokenRefreshRequest;
 import com.uscdip.backend.model.ApiResponse;
 import com.uscdip.backend.model.ErrorCode;
 import com.uscdip.backend.service.AuthorizationService;
+import com.uscdip.backend.service.LocalAccessTokenService;
+import com.uscdip.backend.service.LocalTokenService;
+import com.uscdip.backend.service.OidcAuthorizationService;
 import com.uscdip.backend.service.OidcUserSyncService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -39,29 +49,77 @@ public class AuthController {
     private final ObjectProvider<ClientRegistrationRepository> clientRegistrationRepositoryProvider;
     private final OidcUserSyncService oidcUserSyncService;
     private final AuthorizationService authorizationService;
+    private final OidcAuthorizationService oidcAuthorizationService;
+    private final LocalTokenService localTokenService;
 
     public AuthController(
             BackendOidcProperties oidcProperties,
             ObjectProvider<ClientRegistrationRepository> clientRegistrationRepositoryProvider,
             OidcUserSyncService oidcUserSyncService,
-            AuthorizationService authorizationService
+            AuthorizationService authorizationService,
+            OidcAuthorizationService oidcAuthorizationService,
+            LocalTokenService localTokenService
     ) {
         this.oidcProperties = oidcProperties;
         this.clientRegistrationRepositoryProvider = clientRegistrationRepositoryProvider;
         this.oidcUserSyncService = oidcUserSyncService;
         this.authorizationService = authorizationService;
+        this.oidcAuthorizationService = oidcAuthorizationService;
+        this.localTokenService = localTokenService;
     }
 
     @GetMapping("/login")
     @Operation(summary = "获取 OIDC 登录入口")
-    public ApiResponse<Map<String, Object>> getLogin() {
-        return ApiResponse.success(buildLoginPayload());
+    public ApiResponse<AuthLoginDescriptor> getLogin(
+            @RequestParam(required = false) String redirectUri,
+            HttpServletRequest request
+    ) {
+        return ApiResponse.success(oidcAuthorizationService.createLoginDescriptor(
+                redirectUri,
+                resolveClientIp(request),
+                request.getHeader("User-Agent")
+        ));
     }
 
     @GetMapping("/login-url")
     @Operation(summary = "获取 OIDC 登录入口")
-    public ApiResponse<Map<String, Object>> getLoginUrl() {
-        return ApiResponse.success(buildLoginPayload());
+    public ApiResponse<AuthLoginDescriptor> getLoginUrl(
+            @RequestParam(required = false) String redirectUri,
+            HttpServletRequest request
+    ) {
+        return ApiResponse.success(oidcAuthorizationService.createLoginDescriptor(
+                redirectUri,
+                resolveClientIp(request),
+                request.getHeader("User-Agent")
+        ));
+    }
+
+    @PostMapping("/callback")
+    @Operation(summary = "OIDC 回调换取本地 access/refresh token")
+    public ApiResponse<TokenPairResponse> callback(
+            @Valid @RequestBody AuthCallbackRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        TokenPairResponse tokenPairResponse = oidcAuthorizationService.handleCallback(
+                request,
+                resolveClientIp(httpServletRequest),
+                httpServletRequest.getHeader("User-Agent")
+        );
+        return ApiResponse.success(tokenPairResponse);
+    }
+
+    @PostMapping("/refresh")
+    @Operation(summary = "刷新本地 access/refresh token")
+    public ApiResponse<TokenPairResponse> refresh(
+            @Valid @RequestBody TokenRefreshRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        TokenPairResponse tokenPairResponse = localTokenService.refresh(
+                request.refreshToken(),
+                resolveClientIp(httpServletRequest),
+                httpServletRequest.getHeader("User-Agent")
+        );
+        return ApiResponse.success(tokenPairResponse);
     }
 
     @GetMapping("/me")
@@ -134,19 +192,11 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(payload));
     }
 
-    private Map<String, Object> buildLoginPayload() {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("enabled", oidcProperties.isEnabled());
-        payload.put("registrationId", oidcProperties.getRegistrationId());
-        payload.put(
-                "authorizationUrl",
-                oidcProperties.isEnabled() ? "/oauth2/authorization/" + oidcProperties.getRegistrationId() : ""
-        );
-        return payload;
-    }
-
     private String resolveOrSyncUserId(Authentication authentication) {
         Object principal = authentication.getPrincipal();
+        if (principal instanceof LocalAccessTokenService.AccessTokenPrincipal accessTokenPrincipal) {
+            return accessTokenPrincipal.userId();
+        }
         if (principal instanceof OidcUser oidcUser) {
             return oidcUserSyncService.syncOidcUser(oidcUser);
         }
@@ -184,5 +234,13 @@ public class AuthController {
             logoutUrl.append("&id_token_hint=").append(idTokenHint);
         }
         return logoutUrl.toString();
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

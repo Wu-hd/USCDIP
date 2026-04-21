@@ -108,3 +108,20 @@ INSERT INTO topic_scope_rule (role_code, topic_pattern, description) VALUES
 ('INSPECTOR', 'user.{userId}.workorder.#', '本人工单订阅'),
 ('ALGORITHM_ENGINEER', 'diag.model.#', '模型特征与结果订阅'),
 ('LEADER_READONLY', 'city.aggregate.#', '聚合态势只读订阅');
+
+INSERT INTO auth_refresh_token (
+    token_id, user_id, token_hash, session_id, issued_at, expires_at,
+    rotated_from_token_id, replaced_by_token_id, status, client_ip, user_agent, created_at, updated_at
+) VALUES
+('RT-ACTIVE-001', 'U-DISPATCH-001', '2201cdb5f5026c5d8d933edd346fce1b55a4639c7e2788d971ca3d33ee512244', 'SESSION-ACTIVE-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', NULL, NULL, 'ACTIVE', '127.0.0.1', 'seed-active-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('RT-ROTATED-OLD-001', 'U-OIDC-001', 'b0e5c06acaf04b63daa2b96f41cf9ce3bdbccc2cbe148ba955f02e76fbd1640a', 'SESSION-ROTATE-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', NULL, 'RT-ROTATED-NEW-001', 'ROTATED', '127.0.0.1', 'seed-rotated-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('RT-ROTATED-NEW-001', 'U-OIDC-001', '58ebeec618e7aed94b4871b31a1990aa59494e9bfdd90934ab18aa5b0eecc612', 'SESSION-ROTATE-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', 'RT-ROTATED-OLD-001', NULL, 'ACTIVE', '127.0.0.1', 'seed-rotated-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('RT-REVOKED-001', 'U-LEADER-001', 'beda9b236175a1a46629c49d11dd29408011bd2a3a239c3e1916e6e8c598eeb6', 'SESSION-REVOKED-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', NULL, NULL, 'REVOKED', '127.0.0.1', 'seed-revoked-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('RT-REPLAY-001', 'U-INSPECT-001', '8b96f05c3f907e9ce5dd8315bd97279231be36f9796f6d8655e1e56ee3a3090f', 'SESSION-REPLAY-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', NULL, NULL, 'REPLAY_BLOCKED', '127.0.0.1', 'seed-replay-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO security_audit (
+    event_type, user_id, token_id, session_id, outcome, detail, client_ip, user_agent, trace_id, created_at
+) VALUES
+('TOKEN_REFRESH_SUCCESS', 'U-OIDC-001', 'RT-ROTATED-OLD-001', 'SESSION-ROTATE-001', 'SUCCESS', 'Seed audit for rotated refresh token flow', '127.0.0.1', 'seed-audit-success', 'TRACE-SEED-001', CURRENT_TIMESTAMP),
+('TOKEN_REFRESH_REVOKED', 'U-LEADER-001', 'RT-REVOKED-001', 'SESSION-REVOKED-001', 'DENY', 'Seed audit for revoked refresh token reuse', '127.0.0.1', 'seed-audit-revoked', 'TRACE-SEED-002', CURRENT_TIMESTAMP),
+('TOKEN_REFRESH_REPLAY', 'U-INSPECT-001', 'RT-REPLAY-001', 'SESSION-REPLAY-001', 'DENY', 'Seed audit for replay-blocked refresh token reuse', '127.0.0.1', 'seed-audit-replay', 'TRACE-SEED-003', CURRENT_TIMESTAMP);

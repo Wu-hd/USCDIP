@@ -3,34 +3,24 @@ package com.uscdip.backend.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uscdip.backend.model.ApiResponse;
 import com.uscdip.backend.model.ErrorCode;
-import com.uscdip.backend.service.OidcUserSyncService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.oauth2.client.InMemoryOAuth2AuthorizedClientService;
-import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
-import org.springframework.security.oauth2.client.registration.ClientRegistrations;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
-import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
-import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
-import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
-import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
-import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtDecoders;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import java.io.IOException;
 import java.util.List;
@@ -51,7 +41,9 @@ public class SecurityConfig {
 
     private static final String[] AUTH_ENDPOINTS = {
             "/api/auth/login",
-            "/api/auth/login-url"
+            "/api/auth/login-url",
+            "/api/auth/callback",
+            "/api/auth/refresh"
     };
 
     private static final String[] DEMO_ENDPOINTS = {
@@ -75,11 +67,8 @@ public class SecurityConfig {
         SecurityFilterChain oidcSecurityFilterChain(
                 HttpSecurity http,
                 ObjectMapper objectMapper,
-                OidcUserSyncService oidcUserSyncService,
-                OAuth2AuthorizationRequestResolver pkceAuthorizationRequestResolver
+                LocalAccessTokenAuthenticationFilter localAccessTokenAuthenticationFilter
         ) throws Exception {
-            SavedRequestAwareAuthenticationSuccessHandler delegateSuccessHandler = new SavedRequestAwareAuthenticationSuccessHandler();
-
             http
                     .csrf(csrf -> csrf.disable())
                     .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
@@ -87,21 +76,9 @@ public class SecurityConfig {
                             .requestMatchers(DOCUMENTATION_ENDPOINTS).permitAll()
                             .requestMatchers(AUTH_ENDPOINTS).permitAll()
                             .requestMatchers(DEMO_ENDPOINTS).permitAll()
-                            .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                             .anyRequest().authenticated()
                     )
-                    .oauth2Login(oauth2 -> oauth2
-                            .authorizationEndpoint(endpoint -> endpoint
-                                    .authorizationRequestResolver(pkceAuthorizationRequestResolver)
-                            )
-                            .successHandler((request, response, authentication) -> {
-                                if (authentication != null && authentication.getPrincipal() instanceof OidcUser oidcUser) {
-                                    oidcUserSyncService.syncOidcUser(oidcUser);
-                                }
-                                delegateSuccessHandler.onAuthenticationSuccess(request, response, authentication);
-                            })
-                    )
-                    .oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()))
+                    .addFilterBefore(localAccessTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                     .exceptionHandling(ex -> configureExceptionHandling(ex, objectMapper));
 
             return http.build();
@@ -113,36 +90,37 @@ public class SecurityConfig {
         }
 
         @Bean
-        OAuth2AuthorizedClientService authorizedClientService(ClientRegistrationRepository clientRegistrationRepository) {
-            return new InMemoryOAuth2AuthorizedClientService(clientRegistrationRepository);
-        }
-
-        @Bean
         JwtDecoder jwtDecoder(BackendOidcProperties oidcProperties) {
-            return JwtDecoders.fromIssuerLocation(oidcProperties.getIssuerUri());
+            return NimbusJwtDecoder.withJwkSetUri(oidcProperties.getIssuerUri() + "/protocol/openid-connect/certs").build();
         }
 
         @Bean
-        OAuth2AuthorizationRequestResolver pkceAuthorizationRequestResolver(
-                ClientRegistrationRepository clientRegistrationRepository
+        LocalAccessTokenAuthenticationFilter localAccessTokenAuthenticationFilter(
+                com.uscdip.backend.service.LocalAccessTokenService localAccessTokenService,
+                org.springframework.beans.factory.ObjectProvider<JwtDecoder> jwtDecoderProvider
         ) {
-            DefaultOAuth2AuthorizationRequestResolver resolver = new DefaultOAuth2AuthorizationRequestResolver(
-                    clientRegistrationRepository,
-                    OAuth2AuthorizationRequestRedirectFilter.DEFAULT_AUTHORIZATION_REQUEST_BASE_URI
-            );
-            resolver.setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce());
-            return resolver;
+            return new LocalAccessTokenAuthenticationFilter(localAccessTokenService, jwtDecoderProvider);
         }
 
         private ClientRegistration buildClientRegistration(BackendOidcProperties oidcProperties) {
-            return ClientRegistrations.fromIssuerLocation(oidcProperties.getIssuerUri())
+            String issuerUri = oidcProperties.getIssuerUri();
+            return ClientRegistration.withRegistrationId(oidcProperties.getRegistrationId())
                     .registrationId(oidcProperties.getRegistrationId())
                     .clientId(oidcProperties.getClientId())
                     .clientSecret(oidcProperties.getClientSecret())
                     .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                     .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                     .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
+                    .authorizationUri(issuerUri + "/protocol/openid-connect/auth")
+                    .tokenUri(issuerUri + "/protocol/openid-connect/token")
+                    .jwkSetUri(issuerUri + "/protocol/openid-connect/certs")
+                    .issuerUri(issuerUri)
+                    .userNameAttributeName("sub")
+                    .providerConfigurationMetadata(java.util.Map.of(
+                            "end_session_endpoint", issuerUri + "/protocol/openid-connect/logout"
+                    ))
                     .scope(List.of("openid", "profile", "email"))
+                    .clientName(oidcProperties.getRegistrationId())
                     .build();
         }
     }

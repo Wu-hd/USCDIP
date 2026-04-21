@@ -3,6 +3,8 @@ package com.uscdip.backend.controller;
 import com.uscdip.backend.config.BackendOidcProperties;
 import com.uscdip.backend.model.ApiResponse;
 import com.uscdip.backend.service.AuthorizationService;
+import com.uscdip.backend.service.LocalTokenService;
+import com.uscdip.backend.service.OidcAuthorizationService;
 import com.uscdip.backend.service.OidcUserSyncService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
@@ -39,7 +41,9 @@ class AuthControllerTest {
                 new StaticListableBeanFactory(Map.of("clientRegistrationRepository", clientRegistrationRepository))
                         .getBeanProvider(ClientRegistrationRepository.class),
                 mock(OidcUserSyncService.class),
-                mock(AuthorizationService.class)
+                mock(AuthorizationService.class),
+                mock(OidcAuthorizationService.class),
+                mock(LocalTokenService.class)
         );
 
         ApiResponse<Map<String, Object>> responseBody = controller.logout(
@@ -64,7 +68,9 @@ class AuthControllerTest {
                 new StaticListableBeanFactory(Map.of("clientRegistrationRepository", clientRegistrationRepository))
                         .getBeanProvider(ClientRegistrationRepository.class),
                 mock(OidcUserSyncService.class),
-                mock(AuthorizationService.class)
+                mock(AuthorizationService.class),
+                mock(OidcAuthorizationService.class),
+                mock(LocalTokenService.class)
         );
 
         ApiResponse<Map<String, Object>> responseBody = controller.logout(

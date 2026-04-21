@@ -10,6 +10,12 @@ public class BackendOidcProperties {
     private String issuerUri = "http://localhost:8081/realms/uscdip";
     private String clientId = "uscdip-backend";
     private String clientSecret = "change-me";
+    private String accessTokenSecret = "change-me-local-access-token-secret";
+    private long accessTokenTtlSeconds = 1800;
+    private long refreshTokenTtlSeconds = 1209600;
+    private long stateTtlSeconds = 300;
+    private String refreshTokenHashAlgorithm = "SHA-256";
+    private String localTokenIssuer = "uscdip-backend";
     private String postLogoutRedirectUri = "http://localhost:8080/swagger-ui/index.html";
     private String defaultRole = "LEADER_READONLY";
     private String defaultRegion = "REGION-HZ";
@@ -52,6 +58,54 @@ public class BackendOidcProperties {
 
     public void setClientSecret(String clientSecret) {
         this.clientSecret = clientSecret;
+    }
+
+    public String getAccessTokenSecret() {
+        return accessTokenSecret;
+    }
+
+    public void setAccessTokenSecret(String accessTokenSecret) {
+        this.accessTokenSecret = accessTokenSecret;
+    }
+
+    public long getAccessTokenTtlSeconds() {
+        return accessTokenTtlSeconds;
+    }
+
+    public void setAccessTokenTtlSeconds(long accessTokenTtlSeconds) {
+        this.accessTokenTtlSeconds = accessTokenTtlSeconds;
+    }
+
+    public long getRefreshTokenTtlSeconds() {
+        return refreshTokenTtlSeconds;
+    }
+
+    public void setRefreshTokenTtlSeconds(long refreshTokenTtlSeconds) {
+        this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
+    }
+
+    public long getStateTtlSeconds() {
+        return stateTtlSeconds;
+    }
+
+    public void setStateTtlSeconds(long stateTtlSeconds) {
+        this.stateTtlSeconds = stateTtlSeconds;
+    }
+
+    public String getRefreshTokenHashAlgorithm() {
+        return refreshTokenHashAlgorithm;
+    }
+
+    public void setRefreshTokenHashAlgorithm(String refreshTokenHashAlgorithm) {
+        this.refreshTokenHashAlgorithm = refreshTokenHashAlgorithm;
+    }
+
+    public String getLocalTokenIssuer() {
+        return localTokenIssuer;
+    }
+
+    public void setLocalTokenIssuer(String localTokenIssuer) {
+        this.localTokenIssuer = localTokenIssuer;
     }
 
     public String getPostLogoutRedirectUri() {

@@ -45,6 +45,12 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.failure(ErrorCode.INVALID_PARAMETER, ex.getMessage()));
     }
 
+    @ExceptionHandler(AuthFlowException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthFlowException(AuthFlowException ex) {
+        return ResponseEntity.status(ex.getHttpStatus())
+                .body(ApiResponse.failure(ex.getErrorCode(), ex.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

@@ -14,6 +14,8 @@
 3. 访问接口：
    - GET /api/auth/login
    - GET /api/auth/login-url
+   - POST /api/auth/callback
+   - POST /api/auth/refresh
    - GET /api/menu-boundaries
    - GET /api/platforms
    - GET /api/platforms/{platformCode}
@@ -47,6 +49,7 @@
 - B-01 OpenAPI 草案：Controller 注解 + /v3/api-docs + Swagger UI
 - B-01 分页对象：PageResponse(items/total/page/pageSize/totalPages/hasNext)
 - B-02 OIDC 登录集成：默认本地可关闭 + 按需启用 OAuth2 Login + PKCE + 用户信息同步 + 统一登出
+- B-03 Access / Refresh Token 刷新轮换：本地 access token、refresh token rotation、重放检测、最小安全审计
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -139,6 +142,8 @@
 ### 4) 认证接口
 - GET /api/auth/login：正式登录入口描述接口，返回 enabled、registrationId、authorizationUrl
 - GET /api/auth/login-url：兼容别名，响应与 /api/auth/login 一致
+- POST /api/auth/callback：前端回调页携带 code/state/redirectUri 调后端，交换本地 access/refresh token
+- POST /api/auth/refresh：携带 refresh token 执行 rotation，返回新的 access/refresh token
 - GET /api/auth/me：OIDC 开启后返回当前登录用户权限快照；OIDC 关闭时返回 OIDC_DISABLED
 - POST /api/auth/logout：OIDC 开启后执行统一登出并返回 providerLogoutUrl；OIDC 关闭时返回 OIDC_DISABLED
 
@@ -163,12 +168,53 @@
 - 角色优先取 OIDC claims 中的角色信息；若为空，则回退到 `OIDC_DEFAULT_ROLE`。
 - 区域优先取 `region_scopes`/`region`；若为空，则回退到 `OIDC_DEFAULT_REGION`。
 
-### 8) 数据加载验证（数据库已接入）
+## B-03 Access / Refresh Token 刷新轮换说明
+
+### 1) 目标能力
+- OIDC 只负责身份建立，后端自签发本地 access token / refresh token。
+- Access Token 默认有效期 30 分钟，仅用于调用业务接口。
+- Refresh Token 默认有效期 14 天，启用 rotation；刷新成功后旧 token 立即失效。
+- 旧 refresh token 重放会被拒绝，并写入 `security_audit`。
+
+### 2) 新增配置项
+- LOCAL_ACCESS_TOKEN_SECRET：本地 access token HMAC 密钥
+- LOCAL_ACCESS_TOKEN_TTL_SECONDS：本地 access token 有效期，默认 1800
+- LOCAL_REFRESH_TOKEN_TTL_SECONDS：refresh token 有效期，默认 1209600
+- OIDC_STATE_TTL_SECONDS：OIDC state 有效期，默认 300
+- REFRESH_TOKEN_HASH_ALGORITHM：refresh token 哈希算法，默认 SHA-256
+- LOCAL_TOKEN_ISSUER：本地 access token issuer，默认 uscdip-backend
+
+### 3) B-03 接口
+- GET /api/auth/login?redirectUri=<front-end-callback>：生成带 PKCE challenge 和 state 的授权地址
+- GET /api/auth/login-url?redirectUri=<front-end-callback>：兼容别名
+- POST /api/auth/callback：请求体
+   - {"code":"<oidc_code>","state":"<oidc_state>","redirectUri":"http://localhost:5173/auth/callback"}
+- POST /api/auth/refresh：请求体
+   - {"refreshToken":"<refresh_token>"}
+
+### 4) B-03 响应要点
+- `POST /api/auth/callback` 与 `POST /api/auth/refresh` 成功时都返回：
+   - accessToken
+   - accessTokenExpiresAt
+   - refreshToken
+   - refreshTokenExpiresAt
+   - tokenType
+   - userSnapshot
+- 旧 refresh token 重放返回 `TOKEN_REFRESH_REPLAY_DETECTED`
+- 被吊销 refresh token 返回 `TOKEN_REFRESH_REVOKED`
+- 过期 refresh token 返回 `TOKEN_REFRESH_EXPIRED`
+
+### 5) Rotation 规则
+- 每次 refresh 成功后，旧 refresh token 状态改为 `ROTATED`
+- 新 refresh token 会记录 `rotated_from_token_id`
+- 如果再次使用旧 token，会阻断该 `session_id` 下仍然可用的 refresh token，并写审计
+
+### 6) 数据加载验证（数据库已接入）
 - H2 模式：启动后访问 H2 Console，执行
    - SELECT COUNT(*) FROM user_account;
 - 预期包含静态权限样例用户（U-OIDC-001）；真实 OIDC 登录后会新增稳定的 `OIDC-*` 用户记录。
 
-### 9) PostgreSQL 模式提示
+### 7) PostgreSQL 模式提示
 - profile=postgres 下 sql.init.mode=never，不自动执行 data.sql
 - 首次联调需手动导入：
    - psql -U postgres -d uscdip -f src/main/resources/data.sql
@@ -192,6 +238,10 @@
    - DB_NAME（默认 uscdip）
    - DB_USER（默认 postgres）
    - DB_PASSWORD（默认 postgres）
+   - BACKEND_OIDC_ENABLED（默认 false）
+   - OIDC_ISSUER_URI / OIDC_CLIENT_ID / OIDC_CLIENT_SECRET
+   - LOCAL_ACCESS_TOKEN_SECRET / LOCAL_ACCESS_TOKEN_TTL_SECONDS / LOCAL_REFRESH_TOKEN_TTL_SECONDS
+   - OIDC_STATE_TTL_SECONDS / REFRESH_TOKEN_HASH_ALGORITHM / LOCAL_TOKEN_ISSUER
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json
@@ -203,6 +253,10 @@
    - rbac_role_permission
    - user_data_scope
    - topic_scope_rule
+- B-03 新增认证表：
+   - auth_oidc_state
+   - auth_refresh_token
+   - security_audit
 
 ## 测试数据说明
 - 文件：src/main/resources/data.sql
@@ -227,6 +281,13 @@
    - rbac_user_role: U-OIDC-001 -> REGIONAL_DISPATCHER
    - user_data_scope: U-OIDC-001 -> REGION-HZ
 - 说明：该样例仅用于权限演示，不代表真实 OIDC 同步结果。
+- 已新增 B-03 token / audit 联调样例：
+   - 明文 refresh token: sample-refresh-active-001 -> 状态 ACTIVE
+   - 明文 refresh token: sample-refresh-rotated-old-001 -> 状态 ROTATED
+   - 明文 refresh token: sample-refresh-rotated-new-001 -> 状态 ACTIVE（同 session 新 token）
+   - 明文 refresh token: sample-refresh-revoked-001 -> 状态 REVOKED
+   - 明文 refresh token: sample-refresh-replay-blocked-001 -> 状态 REPLAY_BLOCKED
+   - security_audit: 3 条（刷新成功 / revoked reuse / replay reuse）
 - 可直接用于 B-01 分页联调：
    - /api/object-dictionary/page?page=1&pageSize=3
    - /api/object-dictionary/page?page=2&pageSize=3
@@ -261,9 +322,15 @@
 - OpenAPI 文档检查：
    - curl -s http://localhost:8080/v3/api-docs
 - 获取正式 OIDC 登录描述：
-   - curl -s http://localhost:8080/api/auth/login
+   - curl -s "http://localhost:8080/api/auth/login?redirectUri=http://localhost:5173/auth/callback"
 - 获取 OIDC 登录入口：
-   - curl -s http://localhost:8080/api/auth/login-url
+   - curl -s "http://localhost:8080/api/auth/login-url?redirectUri=http://localhost:5173/auth/callback"
+- 使用 code/state 换取本地 token：
+   - curl -s -X POST http://localhost:8080/api/auth/callback -H "Content-Type: application/json" -d "{\"code\":\"<oidc_code>\",\"state\":\"<oidc_state>\",\"redirectUri\":\"http://localhost:5173/auth/callback\"}"
+- 使用 refresh token 轮换：
+   - curl -s -X POST http://localhost:8080/api/auth/refresh -H "Content-Type: application/json" -d "{\"refreshToken\":\"sample-refresh-active-001\"}"
+- 验证旧 refresh token 重放被拒绝：
+   - curl -s -X POST http://localhost:8080/api/auth/refresh -H "Content-Type: application/json" -d "{\"refreshToken\":\"sample-refresh-rotated-old-001\"}"
 - OIDC 关闭时查看登录状态：
    - curl -s http://localhost:8080/api/auth/me
 - OIDC 开启且已登录后获取当前用户：

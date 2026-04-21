@@ -7,6 +7,9 @@ import com.uscdip.backend.dto.DepthValidationResult;
 import com.uscdip.backend.dto.GisFieldSpecItem;
 import com.uscdip.backend.model.ApiResponse;
 import com.uscdip.backend.service.GisCoordinateService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,6 +22,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/gis")
+@Tag(name = "GIS", description = "A-03 坐标与深度字段规范服务")
 public class GisController {
 
     private final GisCoordinateService gisCoordinateService;
@@ -28,6 +32,7 @@ public class GisController {
     }
 
     @GetMapping("/field-spec")
+    @Operation(summary = "查询 GIS 字段规范")
     public ApiResponse<Map<String, Object>> getFieldSpec() {
         List<GisFieldSpecItem> fields = gisCoordinateService.getFieldSpec();
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -37,12 +42,14 @@ public class GisController {
     }
 
     @PostMapping("/convert")
-    public ApiResponse<CoordinateConvertResult> convert(@RequestBody CoordinateConvertRequest request) {
+    @Operation(summary = "统一坐标转换服务")
+    public ApiResponse<CoordinateConvertResult> convert(@Valid @RequestBody CoordinateConvertRequest request) {
         return ApiResponse.success(gisCoordinateService.convert(request));
     }
 
     @PostMapping("/depth/validate")
-    public ApiResponse<DepthValidationResult> validateDepth(@RequestBody DepthValidationRequest request) {
+    @Operation(summary = "埋深字段一致性校验")
+    public ApiResponse<DepthValidationResult> validateDepth(@Valid @RequestBody DepthValidationRequest request) {
         return ApiResponse.success(gisCoordinateService.validateDepth(request));
     }
 }

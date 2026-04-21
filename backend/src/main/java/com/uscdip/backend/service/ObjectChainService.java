@@ -6,6 +6,7 @@ import com.uscdip.backend.entity.FacilityEntity;
 import com.uscdip.backend.entity.IncidentEntity;
 import com.uscdip.backend.entity.NodeEntity;
 import com.uscdip.backend.entity.SegmentEntity;
+import com.uscdip.backend.model.PageResponse;
 import com.uscdip.backend.repository.DeviceRepository;
 import com.uscdip.backend.repository.FacilityRepository;
 import com.uscdip.backend.repository.IncidentRepository;
@@ -60,6 +61,20 @@ public class ObjectChainService {
                 new ObjectDictionaryItem("work_order", "work_order_id", List.of("incident_id", "segment_id", "node_id"), "status"),
                 new ObjectDictionaryItem("model_result", "model_result_id", List.of("segment_id", "node_id"), "status")
         );
+    }
+
+    public PageResponse<ObjectDictionaryItem> getObjectDictionaryPage(int page, int pageSize) {
+        List<ObjectDictionaryItem> dictionary = getObjectDictionary();
+        int safePage = Math.max(page, 1);
+        int safePageSize = Math.max(pageSize, 1);
+        int fromIndex = (safePage - 1) * safePageSize;
+
+        if (fromIndex >= dictionary.size()) {
+            return PageResponse.of(Collections.emptyList(), dictionary.size(), safePage, safePageSize);
+        }
+
+        int toIndex = Math.min(fromIndex + safePageSize, dictionary.size());
+        return PageResponse.of(dictionary.subList(fromIndex, toIndex), dictionary.size(), safePage, safePageSize);
     }
 
     public Optional<ObjectChainResponse> getBySegmentId(String segmentId) {

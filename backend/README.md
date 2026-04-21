@@ -16,6 +16,7 @@
    - GET /api/platforms
    - GET /api/platforms/{platformCode}
    - GET /api/object-dictionary
+   - GET /api/object-dictionary/page?page=1&pageSize=3
    - GET /api/object-chain/segment/{segmentId}
    - GET /api/object-chain/node/{nodeId}
    - GET /api/gis/field-spec
@@ -26,6 +27,8 @@
    - GET /api/authz/users/{userId}/snapshot
    - GET /api/authz/users/{userId}/topics
    - POST /api/authz/check
+   - GET /v3/api-docs
+   - GET /swagger-ui/index.html
 
 ## 常见问题
 - 报错 `UnsupportedClassVersionError`（如 class file version 65.0）：
@@ -35,7 +38,10 @@
 
 ## 当前实现范围
 - A-01 边界配置文件：src/main/resources/a01-menu-boundary.json
-- 统一响应结构：success/data/error/traceId
+- 统一响应结构：success/data/error/traceId/timestamp
+- B-01 错误码枚举：INVALID_PARAMETER、UNAUTHORIZED、FORBIDDEN、RESOURCE_NOT_FOUND、DATA_SCOPE_EMPTY、IDEMPOTENT_CONFLICT 等
+- B-01 OpenAPI 草案：Controller 注解 + /v3/api-docs + Swagger UI
+- B-01 分页对象：PageResponse(items/total/page/pageSize/totalPages/hasNext)
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -62,6 +68,43 @@
 - 请求体示例：
    - {"zTop":2.50,"zBottom":-1.20,"buryDepth":3.70,"elevationRef":"MSL","tolerance":0.05}
 - 规则：bury_depth 应满足 |z_top - z_bottom|，支持容差配置。
+
+## B-01 契约说明
+
+### 1) 统一响应体
+- 成功响应示例字段：
+   - success: true
+   - data: 业务数据
+   - error: null
+   - traceId: 请求链路标识
+   - timestamp: 服务端时间戳（ISO-8601）
+
+### 2) 统一错误码
+- 参数错误：INVALID_PARAMETER
+- 未登录/认证失败：UNAUTHORIZED
+- 权限不足：FORBIDDEN
+- 资源不存在：RESOURCE_NOT_FOUND / PLATFORM_NOT_FOUND / SEGMENT_NOT_FOUND / NODE_NOT_FOUND / USER_NOT_FOUND
+- 幂等冲突：IDEMPOTENT_CONFLICT
+- 内部异常：INTERNAL_ERROR
+
+### 3) 分页结构示例
+- 端点：GET /api/object-dictionary/page?page=1&pageSize=3
+- 返回 data 为 PageResponse：
+   - items: 当前页列表
+   - total: 总记录数
+   - page: 当前页（从 1 开始）
+   - pageSize: 每页条数
+   - totalPages: 总页数
+   - hasNext: 是否有下一页
+
+### 4) TraceId 透传规则
+- 请求头可携带 X-Trace-Id。
+- 若未携带，后端自动生成 UUID。
+- 响应头固定回传 X-Trace-Id，响应体 traceId 与其一致。
+
+### 5) OpenAPI 访问
+- 原始文档：GET /v3/api-docs
+- 可视化页面：GET /swagger-ui/index.html
 
 ## 数据库配置说明
 
@@ -112,6 +155,9 @@
    - rbac_role_permission：24 条
    - user_data_scope：6 条
    - topic_scope_rule：6 条
+- 可直接用于 B-01 分页联调：
+   - /api/object-dictionary/page?page=1&pageSize=3
+   - /api/object-dictionary/page?page=2&pageSize=3
 
 ## 快速验证命令
 - 查询对象字典：
@@ -138,6 +184,10 @@
    - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-INSPECT-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"assignee\":\"zhangsan\",\"topic\":\"user.U-INSPECT-001.workorder.created\",\"dataView\":\"AGGREGATED\"}"
 - 验证“算法工程师默认仅脱敏视图”：
    - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-ALGO-001\",\"entryPermission\":\"ENTRY:DIAG\",\"menuPermission\":\"MENU:MODEL:READ\",\"dataView\":\"MASKED_FEATURE\",\"topic\":\"diag.model.inference\"}"
+- 分页接口联调：
+   - curl -s "http://localhost:8080/api/object-dictionary/page?page=1&pageSize=3"
+- OpenAPI 文档检查：
+   - curl -s http://localhost:8080/v3/api-docs
 
 ## 下一步建议
 - 接入 Spring Security OIDC，落地 B-02 到 B-05。

@@ -8,4 +8,6 @@ import java.util.List;
 public interface UserDataScopeRepository extends JpaRepository<UserDataScopeEntity, Long> {
 
     List<UserDataScopeEntity> findByUserId(String userId);
+
+    void deleteByUserId(String userId);
 }

@@ -34,7 +34,8 @@ INSERT INTO user_account (user_id, username, display_name, primary_region_id, st
 ('U-DISPATCH-001', 'hz_dispatcher', '杭州区域调度员', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('U-INSPECT-001', 'zhangsan', '巡检人员张三', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('U-ALGO-001', 'algo_user', '算法工程师', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('U-LEADER-001', 'leader_readonly', '领导只读', 'CITY-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+('U-LEADER-001', 'leader_readonly', '领导只读', 'CITY-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('U-OIDC-001', 'oidc_static_sample', '静态权限样例用户', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO rbac_role (role_code, role_name, description, read_only) VALUES
 ('PLATFORM_ADMIN', '平台管理员', '全平台管理权限', FALSE),
@@ -88,7 +89,8 @@ INSERT INTO rbac_user_role (user_id, role_code) VALUES
 ('U-DISPATCH-001', 'REGIONAL_DISPATCHER'),
 ('U-INSPECT-001', 'INSPECTOR'),
 ('U-ALGO-001', 'ALGORITHM_ENGINEER'),
-('U-LEADER-001', 'LEADER_READONLY');
+('U-LEADER-001', 'LEADER_READONLY'),
+('U-OIDC-001', 'REGIONAL_DISPATCHER');
 
 INSERT INTO user_data_scope (user_id, scope_type, scope_value) VALUES
 ('U-DISPATCH-001', 'REGION', 'REGION-HZ'),
@@ -96,7 +98,8 @@ INSERT INTO user_data_scope (user_id, scope_type, scope_value) VALUES
 ('U-INSPECT-001', 'REGION', 'REGION-HZ'),
 ('U-INSPECT-001', 'ASSIGNEE', 'zhangsan'),
 ('U-ALGO-001', 'DATA_VIEW', 'MASKED_FEATURE'),
-('U-LEADER-001', 'REGION_AGGREGATE', 'CITY-HZ');
+('U-LEADER-001', 'REGION_AGGREGATE', 'CITY-HZ'),
+('U-OIDC-001', 'REGION', 'REGION-HZ');
 
 INSERT INTO topic_scope_rule (role_code, topic_pattern, description) VALUES
 ('PLATFORM_ADMIN', '#', '全量订阅'),

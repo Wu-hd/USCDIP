@@ -11,6 +11,10 @@ public enum ErrorCode {
     SEGMENT_NOT_FOUND("SEGMENT_NOT_FOUND", "Segment not found"),
     NODE_NOT_FOUND("NODE_NOT_FOUND", "Node not found"),
     USER_NOT_FOUND("USER_NOT_FOUND", "User not found"),
+    OIDC_DISABLED("OIDC_DISABLED", "OIDC authentication is disabled"),
+    OIDC_LOGIN_REQUIRED("OIDC_LOGIN_REQUIRED", "OIDC login is required"),
+    OIDC_USER_SYNC_FAILED("OIDC_USER_SYNC_FAILED", "OIDC user synchronization failed"),
+    OIDC_LOGOUT_FAILED("OIDC_LOGOUT_FAILED", "OIDC logout failed"),
     INTERNAL_ERROR("INTERNAL_ERROR", "Internal server error");
 
     private final String code;

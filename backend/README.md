@@ -12,6 +12,8 @@
 1. 进入 backend 目录。
 2. 首次或切换 JDK 后执行 mvn clean spring-boot:run。
 3. 访问接口：
+   - GET /api/auth/login
+   - GET /api/auth/login-url
    - GET /api/menu-boundaries
    - GET /api/platforms
    - GET /api/platforms/{platformCode}
@@ -27,6 +29,8 @@
    - GET /api/authz/users/{userId}/snapshot
    - GET /api/authz/users/{userId}/topics
    - POST /api/authz/check
+   - GET /api/auth/me
+   - POST /api/auth/logout
    - GET /v3/api-docs
    - GET /swagger-ui/index.html
 
@@ -42,6 +46,7 @@
 - B-01 错误码枚举：INVALID_PARAMETER、UNAUTHORIZED、FORBIDDEN、RESOURCE_NOT_FOUND、DATA_SCOPE_EMPTY、IDEMPOTENT_CONFLICT 等
 - B-01 OpenAPI 草案：Controller 注解 + /v3/api-docs + Swagger UI
 - B-01 分页对象：PageResponse(items/total/page/pageSize/totalPages/hasNext)
+- B-02 OIDC 登录集成：默认本地可关闭 + 按需启用 OAuth2 Login + PKCE + 用户信息同步 + 统一登出
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -106,6 +111,68 @@
 - 原始文档：GET /v3/api-docs
 - 可视化页面：GET /swagger-ui/index.html
 
+## B-02 OIDC 登录集成说明
+
+### 1) 目标能力
+- 接入 OIDC（一期默认 Keycloak）
+- 浏览器端走标准授权码流程，后端开启 PKCE 参数
+- 默认开发模式可关闭 OIDC，保证本地无 Keycloak 时也能正常启动
+- 登录成功后自动同步用户到 user_account、rbac_user_role、user_data_scope
+- 提供统一登出接口，返回 OIDC 提供方退出地址
+
+### 2) 必需依赖
+- spring-boot-starter-security
+- spring-boot-starter-oauth2-client
+- spring-boot-starter-oauth2-resource-server
+- spring-security-oauth2-jose
+
+### 3) 配置项
+- BACKEND_OIDC_ENABLED（默认 false，true 时启用 OIDC 登录链路）
+- OIDC_ISSUER_URI（默认 http://localhost:8081/realms/uscdip）
+- OIDC_CLIENT_ID（默认 uscdip-backend）
+- OIDC_CLIENT_SECRET（默认 change-me）
+- OIDC_REGISTRATION_ID（默认 keycloak）
+- OIDC_POST_LOGOUT_REDIRECT_URI（默认 http://localhost:8080/swagger-ui/index.html）
+- OIDC_DEFAULT_ROLE（默认 LEADER_READONLY）
+- OIDC_DEFAULT_REGION（默认 REGION-HZ）
+
+### 4) 认证接口
+- GET /api/auth/login：正式登录入口描述接口，返回 enabled、registrationId、authorizationUrl
+- GET /api/auth/login-url：兼容别名，响应与 /api/auth/login 一致
+- GET /api/auth/me：OIDC 开启后返回当前登录用户权限快照；OIDC 关闭时返回 OIDC_DISABLED
+- POST /api/auth/logout：OIDC 开启后执行统一登出并返回 providerLogoutUrl；OIDC 关闭时返回 OIDC_DISABLED
+
+### 5) 默认本地模式
+- 默认 `BACKEND_OIDC_ENABLED=false`，不会触发 OIDC issuer discovery。
+- 此模式下，A-01/A-02/A-03/A-04 的规范与演示接口保持匿名可访问，便于本地开发与联调。
+- 此模式下：
+   - GET /api/auth/login 与 GET /api/auth/login-url 返回 `enabled=false`
+   - GET /api/auth/me 与 POST /api/auth/logout 返回 `503 + OIDC_DISABLED`
+
+### 6) 启用 OIDC 联调
+- 启动示例：
+   - `mvn spring-boot:run -Dspring-boot.run.arguments="--backend.oidc.enabled=true"`
+- 启用后若 `OIDC_ISSUER_URI` 不可达，应用会在启动阶段失败，这是预期行为。
+- Keycloak Client 建议使用标准授权码流程并开启 PKCE
+- Redirect URI 建议配置：
+   - http://localhost:8080/login/oauth2/code/keycloak
+
+### 7) 用户同步规则
+- 首次成功 OIDC 登录后，后端按 `issuer + sub` 生成稳定的 `OIDC-*` user_id。
+- 用户名优先取 `preferred_username`，其次 `email`、`name`。
+- 角色优先取 OIDC claims 中的角色信息；若为空，则回退到 `OIDC_DEFAULT_ROLE`。
+- 区域优先取 `region_scopes`/`region`；若为空，则回退到 `OIDC_DEFAULT_REGION`。
+
+### 8) 数据加载验证（数据库已接入）
+- H2 模式：启动后访问 H2 Console，执行
+   - SELECT COUNT(*) FROM user_account;
+- 预期包含静态权限样例用户（U-OIDC-001）；真实 OIDC 登录后会新增稳定的 `OIDC-*` 用户记录。
+
+### 9) PostgreSQL 模式提示
+- profile=postgres 下 sql.init.mode=never，不自动执行 data.sql
+- 首次联调需手动导入：
+   - psql -U postgres -d uscdip -f src/main/resources/data.sql
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -148,13 +215,18 @@
    - work_order：2 条
    - model_result：2 条
 - 已生成 A-04 权限联调数据：
-   - user_account：5 条（五类角色示例用户）
+   - user_account：6 条（含静态权限样例用户）
    - rbac_role：5 条
    - rbac_permission：12 条
-   - rbac_user_role：5 条
+   - rbac_user_role：6 条
    - rbac_role_permission：24 条
-   - user_data_scope：6 条
+   - user_data_scope：7 条
    - topic_scope_rule：6 条
+- 已保留 B-02 静态权限样例：
+   - user_account: U-OIDC-001 / oidc_static_sample
+   - rbac_user_role: U-OIDC-001 -> REGIONAL_DISPATCHER
+   - user_data_scope: U-OIDC-001 -> REGION-HZ
+- 说明：该样例仅用于权限演示，不代表真实 OIDC 同步结果。
 - 可直接用于 B-01 分页联调：
    - /api/object-dictionary/page?page=1&pageSize=3
    - /api/object-dictionary/page?page=2&pageSize=3
@@ -188,8 +260,18 @@
    - curl -s "http://localhost:8080/api/object-dictionary/page?page=1&pageSize=3"
 - OpenAPI 文档检查：
    - curl -s http://localhost:8080/v3/api-docs
+- 获取正式 OIDC 登录描述：
+   - curl -s http://localhost:8080/api/auth/login
+- 获取 OIDC 登录入口：
+   - curl -s http://localhost:8080/api/auth/login-url
+- OIDC 关闭时查看登录状态：
+   - curl -s http://localhost:8080/api/auth/me
+- OIDC 开启且已登录后获取当前用户：
+   - curl -s http://localhost:8080/api/auth/me -H "Authorization: Bearer <access_token>"
+- OIDC 开启且已登录后执行统一登出：
+   - curl -s -X POST http://localhost:8080/api/auth/logout -H "Authorization: Bearer <access_token>"
 
 ## 下一步建议
-- 接入 Spring Security OIDC，落地 B-02 到 B-05。
+- 基于 B-02 继续落地 B-03（Refresh Token 刷新轮换）与 B-04（Token 吊销收敛）。
 - 接入 Flyway，落地版本化迁移脚本。
 - 在网关层增加限流、审计、风险接口单独策略。

@@ -21,3 +21,14 @@ spring:
 
 server:
   port: 8080
+
+backend:
+  oidc:
+    enabled: ${BACKEND_OIDC_ENABLED:false}
+    registration-id: ${OIDC_REGISTRATION_ID:keycloak}
+    issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8081/realms/uscdip}
+    client-id: ${OIDC_CLIENT_ID:uscdip-backend}
+    client-secret: ${OIDC_CLIENT_SECRET:change-me}
+    post-logout-redirect-uri: ${OIDC_POST_LOGOUT_REDIRECT_URI:http://localhost:8080/swagger-ui/index.html}
+    default-role: ${OIDC_DEFAULT_ROLE:LEADER_READONLY}
+    default-region: ${OIDC_DEFAULT_REGION:REGION-HZ}

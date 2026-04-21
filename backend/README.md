@@ -53,6 +53,7 @@
 - B-02 OIDC 登录集成：默认本地可关闭 + 按需启用 OAuth2 Login + PKCE + 用户信息同步 + 统一登出
 - B-03 Access / Refresh Token 刷新轮换：本地 access token、refresh token rotation、重放检测、最小安全审计
 - B-04 Token 吊销与权限收敛：当前 session 登出吊销、账号禁用失效、权限重大变更全量收敛
+- B-06 Gateway 校验与限流：数据库驱动的应用内 Gateway 过滤、黑白名单、输入校验、单实例限流与高风险审计
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -307,6 +308,65 @@
 - 旁路账号一旦 `EXPIRED / REVOKED / INACTIVE`，对应活跃 session 与 refresh token 会被收敛。
 - 旁路会话调用 `POST /api/auth/logout` 时不会返回 OIDC provider 跳转地址，但会返回 `authMode=BREAK_GLASS`。
 
+## B-06 Gateway 校验与限流说明
+
+### 1) 目标能力
+- 在现有 Spring Boot 单体内实现应用级 Gateway 过滤器，不额外引入 Spring Cloud Gateway。
+- 路由策略、黑白名单和高风险审计由数据库表驱动。
+- 限流默认按：
+   - 已登录：`userId + routeCode`
+   - 匿名：`clientIp + routeCode`
+- 当前版本限流计数器为单实例内存实现，不依赖 Redis / MQ / 分布式共享状态。
+
+### 2) 过滤器职责
+- `GatewayControlFilter` 放在本地 access token 认证之后、控制器之前。
+- 固定执行顺序：
+   - 路由策略匹配
+   - IP / 用户黑白名单检查
+   - `authRequired` 前置要求
+   - `POST/PUT/PATCH` JSON Content-Type 校验
+   - 请求体大小限制
+   - `page/pageSize` 分页参数范围校验
+   - 单实例内存限流
+   - 高风险访问审计
+
+### 3) 新增配置项
+- GATEWAY_BODY_SIZE_LIMIT_BYTES：请求体上限，默认 4096
+- GATEWAY_PAGE_SIZE_MAX：分页接口 `pageSize` 上限，默认 200
+- GATEWAY_DEFAULT_WINDOW_SECONDS：默认限流窗口秒数，默认 60
+- GATEWAY_DEFAULT_CAPACITY：默认窗口容量，默认 10
+
+### 4) 路由策略口径
+- 当前已接入 Gateway 风控的真实高风险接口：
+   - POST /api/auth/admin/users/{userId}/disable
+   - POST /api/auth/admin/users/{userId}/permissions/revoke
+   - POST /api/auth/emergency/accounts/{accountId}/activate
+   - POST /api/auth/emergency/accounts/{accountId}/revoke
+   - POST /api/auth/emergency/login
+   - POST /api/auth/refresh
+- 继续保持匿名可访问的公共接口样例：
+   - GET /api/menu-boundaries
+   - GET /api/object-dictionary
+   - GET /api/object-dictionary/page
+   - GET /api/authz/matrix
+- 已预置未来路由策略样例，但当前仓库没有对应控制器：
+   - /api/exports/**
+   - /api/workorders/batch-dispatch
+   - /api/models/publish
+
+### 5) 错误码与行为
+- 命中 blocklist：`403 + GATEWAY_BLOCKED`
+- 命中限流：`429 + RATE_LIMITED`
+- 变更请求 Content-Type 错误：`415 + UNSUPPORTED_CONTENT_TYPE`
+- 请求体超限：`413 + REQUEST_BODY_TOO_LARGE`
+- 分页参数超限：`400 + INVALID_PARAMETER`
+
+### 6) 边界说明
+- `gateway_route_policy` 与 `gateway_client_rule` 是当前版本的 Gateway 真值表。
+- `gateway_risk_audit` 记录 allow / deny / rate-limited 等决策。
+- 限流计数器不落库；多实例部署时各实例窗口互相独立。
+- README 与 `data.sql` 里的阈值只用于联调示例，不代表生产建议值。
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -330,6 +390,8 @@
    - OIDC_ISSUER_URI / OIDC_CLIENT_ID / OIDC_CLIENT_SECRET
    - LOCAL_ACCESS_TOKEN_SECRET / LOCAL_ACCESS_TOKEN_TTL_SECONDS / LOCAL_REFRESH_TOKEN_TTL_SECONDS
    - EMERGENCY_ACCESS_TOKEN_TTL_SECONDS / EMERGENCY_REFRESH_TOKEN_TTL_SECONDS / EMERGENCY_PASSWORD_HASH_STRENGTH
+   - GATEWAY_BODY_SIZE_LIMIT_BYTES / GATEWAY_PAGE_SIZE_MAX
+   - GATEWAY_DEFAULT_WINDOW_SECONDS / GATEWAY_DEFAULT_CAPACITY
    - OIDC_STATE_TTL_SECONDS / REFRESH_TOKEN_HASH_ALGORITHM / LOCAL_TOKEN_ISSUER
 
 ### A-04 数据库存储（本轮新增）
@@ -349,6 +411,10 @@
    - security_audit
 - B-05 新增：
    - emergency_account
+- B-06 新增：
+   - gateway_route_policy
+   - gateway_client_rule
+   - gateway_risk_audit
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -359,6 +425,10 @@
 - B-04 在 `user_account` 上新增：
    - token_valid_after
    - disabled_at
+- B-06 说明：
+   - `gateway_route_policy` 保存路由风控、输入校验和限流策略
+   - `gateway_client_rule` 保存 IP / 用户黑白名单
+   - `gateway_risk_audit` 保存 Gateway allow / deny / rate-limited 审计记录
 
 ## 测试数据说明
 - 文件：src/main/resources/data.sql
@@ -371,12 +441,12 @@
    - work_order：2 条
    - model_result：2 条
 - 已生成 A-04 权限联调数据：
-   - user_account：9 条（含静态权限样例用户、B-04 禁用用户样例、B-04 权限收敛样例、B-05 应急用户样例）
+   - user_account：10 条（含静态权限样例用户、B-04 禁用用户样例、B-04 权限收敛样例、B-05 应急用户样例、B-06 网关阻断用户样例）
    - rbac_role：6 条
    - rbac_permission：12 条
-   - rbac_user_role：9 条
+   - rbac_user_role：10 条
    - rbac_role_permission：29 条
-   - user_data_scope：10 条
+   - user_data_scope：11 条
    - topic_scope_rule：8 条
 - 已保留 B-02 静态权限样例：
    - user_account: U-OIDC-001 / oidc_static_sample
@@ -384,12 +454,9 @@
    - user_data_scope: U-OIDC-001 -> REGION-HZ
 - 说明：该样例仅用于权限演示，不代表真实 OIDC 同步结果。
 - 已新增 B-03 token / audit 联调样例：
-   - 明文 refresh token: sample-refresh-active-001 -> 状态 ACTIVE
-   - 明文 refresh token: sample-refresh-rotated-old-001 -> 状态 ROTATED
-   - 明文 refresh token: sample-refresh-rotated-new-001 -> 状态 ACTIVE（同 session 新 token）
-   - 明文 refresh token: sample-refresh-revoked-001 -> 状态 REVOKED
-   - 明文 refresh token: sample-refresh-replay-blocked-001 -> 状态 REPLAY_BLOCKED
-   - security_audit: 5 条（刷新成功 / revoked reuse / replay reuse / disabled user / permission convergence）
+   - auth_refresh_token：ACTIVE / ROTATED / REVOKED / REPLAY_BLOCKED 多状态样例
+   - security_audit：5 条（刷新成功 / revoked reuse / replay reuse / disabled user / permission convergence）
+   - 说明：仓库不保存可直接使用的明文 refresh token；联调 `/api/auth/refresh` 时请先通过回调换 token 或本地服务签发真实 refresh token
 - 已新增 B-04 session / convergence 联调样例：
    - auth_session: ACTIVE / REVOKED 两类 session 状态样例，并包含 `ACCOUNT_DISABLED` / `PERMISSION_CHANGED` 吊销原因样例
    - user_account: `token_valid_after` 与 `disabled_at` 字段样例
@@ -399,9 +466,15 @@
    - user_account: `U-B05-COMMAND-001` 绑定 `BREAK_GLASS_COMMAND`
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
+- 已新增 B-06 Gateway 联调样例：
+   - gateway_route_policy：13 条（公共只读、当前高风险、未来导出/批量派单/模型发布预置策略）
+   - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
+   - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
+   - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令
+   - Gateway 黑白名单和阈值只用于联调，不建议直接照搬到生产
 - 可直接用于 B-01 分页联调：
    - /api/object-dictionary/page?page=1&pageSize=3
    - /api/object-dictionary/page?page=2&pageSize=3
@@ -442,9 +515,7 @@
 - 使用 code/state 换取本地 token：
    - curl -s -X POST http://localhost:8080/api/auth/callback -H "Content-Type: application/json" -d "{\"code\":\"<oidc_code>\",\"state\":\"<oidc_state>\",\"redirectUri\":\"http://localhost:5173/auth/callback\"}"
 - 使用 refresh token 轮换：
-   - curl -s -X POST http://localhost:8080/api/auth/refresh -H "Content-Type: application/json" -d "{\"refreshToken\":\"sample-refresh-active-001\"}"
-- 验证旧 refresh token 重放被拒绝：
-   - curl -s -X POST http://localhost:8080/api/auth/refresh -H "Content-Type: application/json" -d "{\"refreshToken\":\"sample-refresh-rotated-old-001\"}"
+   - 先通过 `POST /api/auth/callback` 或 `POST /api/auth/emergency/login` 获取真实 refresh token，再调用 `POST /api/auth/refresh`
 - OIDC 关闭时查看登录状态：
    - curl -s http://localhost:8080/api/auth/me
 - OIDC 开启且已登录后获取当前用户：
@@ -463,8 +534,18 @@
    - curl -s -X POST http://localhost:8080/api/auth/emergency/accounts/EA-B05-INACTIVE-001/revoke -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"reason\":\"drill finished\"}"
 - 查询应急旁路独立审计：
    - curl -s "http://localhost:8080/api/auth/emergency/audit?page=0&pageSize=20" -H "Authorization: Bearer <admin_access_token>"
+- 验证 Gateway IP blocklist 拒绝：
+   - curl -s http://localhost:8080/api/menu-boundaries -H "X-Forwarded-For: 203.0.113.77" -H "X-Trace-Id: TRACE-B06-BLOCK"
+- 验证 Gateway 分页参数限制：
+   - curl -s "http://localhost:8080/api/object-dictionary/page?page=1&pageSize=10000" -H "X-Trace-Id: TRACE-B06-PAGE"
+- 验证 Gateway Content-Type 校验：
+   - curl -s -X POST http://localhost:8080/api/auth/refresh -H "Content-Type: text/plain" -d "not-json" -H "X-Trace-Id: TRACE-B06-CT"
+- 验证应急登录接口限流：
+   - 连续多次执行 `curl -s -X POST http://localhost:8080/api/auth/emergency/login -H "Content-Type: application/json" -H "X-Trace-Id: TRACE-B06-RATE" -d "{\"username\":\"bg_active_hz\",\"password\":\"wrong-password\"}"`
+- 查看 Gateway 审计样例：
+   - H2 Console / PostgreSQL 中执行 `SELECT * FROM gateway_risk_audit ORDER BY created_at DESC;`
 
 ## 下一步建议
-- 基于当前认证骨架继续落地 B-06（Gateway 校验与限流）。
+- 基于当前 Gateway 骨架继续落地 B-07（细粒度 RBAC 与数据范围联动）。
 - 接入 Flyway，落地版本化迁移脚本。
-- 在网关层增加限流、审计、风险接口单独策略。
+- 评估将单实例内存限流升级为 Redis 共享限流。

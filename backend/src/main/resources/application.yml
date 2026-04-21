@@ -41,3 +41,8 @@ backend:
     post-logout-redirect-uri: ${OIDC_POST_LOGOUT_REDIRECT_URI:http://localhost:8080/swagger-ui/index.html}
     default-role: ${OIDC_DEFAULT_ROLE:LEADER_READONLY}
     default-region: ${OIDC_DEFAULT_REGION:REGION-HZ}
+  gateway:
+    body-size-limit-bytes: ${GATEWAY_BODY_SIZE_LIMIT_BYTES:4096}
+    page-size-max: ${GATEWAY_PAGE_SIZE_MAX:200}
+    default-window-seconds: ${GATEWAY_DEFAULT_WINDOW_SECONDS:60}
+    default-capacity: ${GATEWAY_DEFAULT_CAPACITY:10}

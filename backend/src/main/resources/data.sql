@@ -40,7 +40,8 @@ INSERT INTO user_account (
 ('U-OIDC-001', 'oidc_static_sample', '静态权限样例用户', 'REGION-HZ', 'ACTIVE', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('U-B04-DISABLED-001', 'disabled_demo', 'B04禁用用户样例', 'REGION-HZ', 'DISABLED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('U-B04-CONVERGED-001', 'converged_demo', 'B04权限收敛样例', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('U-B05-COMMAND-001', 'emergency_command', 'B05应急指挥样例', 'REGION-EMGC-HZ', 'ACTIVE', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+('U-B05-COMMAND-001', 'emergency_command', 'B05应急指挥样例', 'REGION-EMGC-HZ', 'ACTIVE', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('U-B06-BLOCKED-001', 'gateway_blocked_user', 'B06网关阻断样例', 'REGION-HZ', 'ACTIVE', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO rbac_role (role_code, role_name, description, read_only) VALUES
 ('PLATFORM_ADMIN', '平台管理员', '全平台管理权限', FALSE),
@@ -104,7 +105,8 @@ INSERT INTO rbac_user_role (user_id, role_code) VALUES
 ('U-OIDC-001', 'REGIONAL_DISPATCHER'),
 ('U-B04-DISABLED-001', 'REGIONAL_DISPATCHER'),
 ('U-B04-CONVERGED-001', 'REGIONAL_DISPATCHER'),
-('U-B05-COMMAND-001', 'BREAK_GLASS_COMMAND');
+('U-B05-COMMAND-001', 'BREAK_GLASS_COMMAND'),
+('U-B06-BLOCKED-001', 'LEADER_READONLY');
 
 INSERT INTO user_data_scope (user_id, scope_type, scope_value) VALUES
 ('U-DISPATCH-001', 'REGION', 'REGION-HZ'),
@@ -116,7 +118,8 @@ INSERT INTO user_data_scope (user_id, scope_type, scope_value) VALUES
 ('U-OIDC-001', 'REGION', 'REGION-HZ'),
 ('U-B04-DISABLED-001', 'REGION', 'REGION-HZ'),
 ('U-B04-CONVERGED-001', 'REGION', 'REGION-HZ'),
-('U-B05-COMMAND-001', 'REGION', 'REGION-EMGC-HZ');
+('U-B05-COMMAND-001', 'REGION', 'REGION-EMGC-HZ'),
+('U-B06-BLOCKED-001', 'REGION', 'REGION-HZ');
 
 INSERT INTO topic_scope_rule (role_code, topic_pattern, description) VALUES
 ('PLATFORM_ADMIN', '#', '全量订阅'),
@@ -173,3 +176,35 @@ INSERT INTO security_audit (
 ('BREAK_GLASS_ACCOUNT_ACTIVATED', 'U-B05-COMMAND-001', NULL, NULL, 'BREAK_GLASS', 'EA-B05-ACTIVE-001', 'SUCCESS', 'Seed audit for emergency account activation', '127.0.0.1', 'seed-break-glass-activate', 'TRACE-SEED-006', CURRENT_TIMESTAMP),
 ('BREAK_GLASS_LOGIN_SUCCESS', 'U-B05-COMMAND-001', NULL, 'SESSION-B05-ACTIVE-001', 'BREAK_GLASS', 'EA-B05-ACTIVE-001', 'SUCCESS', 'Seed audit for emergency login success', '127.0.0.1', 'seed-break-glass-login', 'TRACE-SEED-007', CURRENT_TIMESTAMP),
 ('BREAK_GLASS_ACCOUNT_REVOKED', 'U-B05-COMMAND-001', NULL, 'SESSION-B05-EXPIRED-001', 'BREAK_GLASS', 'EA-B05-EXPIRED-001', 'SUCCESS', 'Seed audit for emergency account revocation', '127.0.0.1', 'seed-break-glass-revoke', 'TRACE-SEED-008', CURRENT_TIMESTAMP);
+
+INSERT INTO gateway_route_policy (
+    policy_id, route_code, path_pattern, http_method, auth_required, risk_level, validation_profile,
+    rate_limit_scope, rate_limit_capacity, rate_limit_window_seconds, audit_enabled, enabled, created_at, updated_at
+) VALUES
+('GWP-PUBLIC-MENU-001', 'PUBLIC_MENU_BOUNDARIES', '/api/menu-boundaries', 'GET', FALSE, 'LOW', 'NONE', 'IP', 120, 60, FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PUBLIC-OBJECT-001', 'PUBLIC_OBJECT_DICTIONARY', '/api/object-dictionary', 'GET', FALSE, 'LOW', 'NONE', 'IP', 120, 60, FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PUBLIC-OBJECT-PAGE-001', 'PUBLIC_OBJECT_DICTIONARY_PAGE', '/api/object-dictionary/page', 'GET', FALSE, 'LOW', 'PAGE_QUERY', 'IP', 120, 60, FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PUBLIC-AUTHZ-MATRIX-001', 'PUBLIC_AUTHZ_MATRIX', '/api/authz/matrix', 'GET', FALSE, 'LOW', 'NONE', 'IP', 120, 60, FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-AUTH-REFRESH-001', 'AUTH_REFRESH', '/api/auth/refresh', 'POST', FALSE, 'HIGH', 'JSON_BODY', 'USER_OR_IP', 8, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-EMERGENCY-LOGIN-001', 'EMERGENCY_LOGIN', '/api/auth/emergency/login', 'POST', FALSE, 'HIGH', 'JSON_BODY', 'IP', 5, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-ADMIN-DISABLE-001', 'AUTH_ADMIN_DISABLE', '/api/auth/admin/users/*/disable', 'POST', TRUE, 'CRITICAL', 'NONE', 'USER_OR_IP', 5, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-ADMIN-PERMISSIONS-001', 'AUTH_ADMIN_PERMISSION_REVOKE', '/api/auth/admin/users/*/permissions/revoke', 'POST', TRUE, 'CRITICAL', 'NONE', 'USER_OR_IP', 5, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-EMERGENCY-ACTIVATE-001', 'EMERGENCY_ACCOUNT_ACTIVATE', '/api/auth/emergency/accounts/*/activate', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 3, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-EMERGENCY-REVOKE-001', 'EMERGENCY_ACCOUNT_REVOKE', '/api/auth/emergency/accounts/*/revoke', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 3, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-FUTURE-EXPORTS-001', 'FUTURE_EXPORTS', '/api/exports/**', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 2, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-FUTURE-BATCH-DISPATCH-001', 'FUTURE_BATCH_DISPATCH', '/api/workorders/batch-dispatch', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 2, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-FUTURE-MODEL-PUBLISH-001', 'FUTURE_MODEL_PUBLISH', '/api/models/publish', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 2, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO gateway_client_rule (
+    rule_id, rule_type, subject_type, subject_value, reason, expires_at, enabled, created_at, updated_at
+) VALUES
+('GCR-ALLOW-IP-001', 'ALLOWLIST', 'IP', '10.10.10.10', 'Seed allowlist example for trusted gateway client', TIMESTAMP '2099-12-31 23:59:59', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GCR-BLOCK-IP-001', 'BLOCKLIST', 'IP', '203.0.113.77', 'Seed blocklist example for denied client IP', TIMESTAMP '2099-12-31 23:59:59', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GCR-BLOCK-USER-001', 'BLOCKLIST', 'USER', 'U-B06-BLOCKED-001', 'Seed blocklist example for denied user', TIMESTAMP '2099-12-31 23:59:59', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO gateway_risk_audit (
+    route_code, path_pattern, http_method, user_id, auth_mode, decision, reason_code, risk_level, client_ip, trace_id, created_at
+) VALUES
+('EMERGENCY_LOGIN', '/api/auth/emergency/login', 'POST', NULL, NULL, 'ALLOW', 'ALLOW', 'HIGH', '10.10.10.10', 'TRACE-GATEWAY-SEED-001', CURRENT_TIMESTAMP),
+('AUTH_ADMIN_DISABLE', '/api/auth/admin/users/*/disable', 'POST', 'U-B06-BLOCKED-001', 'STANDARD', 'DENY', 'BLOCKLIST_MATCHED', 'CRITICAL', '203.0.113.77', 'TRACE-GATEWAY-SEED-002', CURRENT_TIMESTAMP),
+('AUTH_REFRESH', '/api/auth/refresh', 'POST', 'U-DISPATCH-001', 'STANDARD', 'DENY', 'RATE_LIMITED', 'HIGH', '127.0.0.1', 'TRACE-GATEWAY-SEED-003', CURRENT_TIMESTAMP);

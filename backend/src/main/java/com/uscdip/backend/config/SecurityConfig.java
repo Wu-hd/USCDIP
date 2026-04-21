@@ -30,7 +30,7 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties(BackendOidcProperties.class)
+@EnableConfigurationProperties({BackendOidcProperties.class, GatewayProperties.class})
 public class SecurityConfig {
 
     private static final String[] DOCUMENTATION_ENDPOINTS = {
@@ -63,6 +63,16 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder(oidcProperties.getEmergencyPasswordHashStrength());
     }
 
+    @Bean
+    GatewayControlFilter gatewayControlFilter(
+            com.uscdip.backend.service.GatewayPolicyService gatewayPolicyService,
+            com.uscdip.backend.service.GatewayRateLimitService gatewayRateLimitService,
+            GatewayProperties gatewayProperties,
+            ObjectMapper objectMapper
+    ) {
+        return new GatewayControlFilter(gatewayPolicyService, gatewayRateLimitService, gatewayProperties, objectMapper);
+    }
+
     private static final String[] DEMO_ENDPOINTS = {
             "/api/menu-boundaries",
             "/api/platforms",
@@ -84,7 +94,8 @@ public class SecurityConfig {
         SecurityFilterChain oidcSecurityFilterChain(
                 HttpSecurity http,
                 ObjectMapper objectMapper,
-                LocalAccessTokenAuthenticationFilter localAccessTokenAuthenticationFilter
+                LocalAccessTokenAuthenticationFilter localAccessTokenAuthenticationFilter,
+                GatewayControlFilter gatewayControlFilter
         ) throws Exception {
             http
                     .csrf(csrf -> csrf.disable())
@@ -96,6 +107,7 @@ public class SecurityConfig {
                             .anyRequest().authenticated()
                     )
                     .addFilterBefore(localAccessTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                    .addFilterAfter(gatewayControlFilter, LocalAccessTokenAuthenticationFilter.class)
                     .exceptionHandling(ex -> configureExceptionHandling(ex, objectMapper));
 
             return http.build();
@@ -142,7 +154,8 @@ public class SecurityConfig {
         SecurityFilterChain localSecurityFilterChain(
                 HttpSecurity http,
                 ObjectMapper objectMapper,
-                LocalAccessTokenAuthenticationFilter localAccessTokenAuthenticationFilter
+                LocalAccessTokenAuthenticationFilter localAccessTokenAuthenticationFilter,
+                GatewayControlFilter gatewayControlFilter
         ) throws Exception {
             http
                     .csrf(csrf -> csrf.disable())
@@ -155,6 +168,7 @@ public class SecurityConfig {
                             .anyRequest().authenticated()
                     )
                     .addFilterBefore(localAccessTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                    .addFilterAfter(gatewayControlFilter, LocalAccessTokenAuthenticationFilter.class)
                     .exceptionHandling(ex -> configureExceptionHandling(ex, objectMapper));
 
             return http.build();

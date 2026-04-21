@@ -71,6 +71,7 @@ public class MasterDataChangeService {
     private final ObjectRelationRepository objectRelationRepository;
     private final ObjectScopeBindingRepository objectScopeBindingRepository;
     private final ObjectScopeService objectScopeService;
+    private final ObjectGeoIndexService objectGeoIndexService;
     private final ObjectMapper objectMapper;
 
     public MasterDataChangeService(
@@ -84,6 +85,7 @@ public class MasterDataChangeService {
             ObjectRelationRepository objectRelationRepository,
             ObjectScopeBindingRepository objectScopeBindingRepository,
             ObjectScopeService objectScopeService,
+            ObjectGeoIndexService objectGeoIndexService,
             ObjectMapper objectMapper
     ) {
         this.masterChangeRequestRepository = masterChangeRequestRepository;
@@ -96,6 +98,7 @@ public class MasterDataChangeService {
         this.objectRelationRepository = objectRelationRepository;
         this.objectScopeBindingRepository = objectScopeBindingRepository;
         this.objectScopeService = objectScopeService;
+        this.objectGeoIndexService = objectGeoIndexService;
         this.objectMapper = objectMapper;
     }
 
@@ -296,6 +299,7 @@ public class MasterDataChangeService {
         entity.setUpdatedAt(LocalDateTime.now());
         NodeEntity saved = nodeRepository.saveAndFlush(entity);
         updateBindingRegion(ObjectScopeService.OBJECT_NODE, entity.getNodeId(), payload, null);
+        objectGeoIndexService.refreshObjectAndDependents(ObjectScopeService.OBJECT_NODE, entity.getNodeId());
         return new VersionedObject(saved, saved.getVersionNo());
     }
 
@@ -318,6 +322,7 @@ public class MasterDataChangeService {
         SegmentEntity saved = segmentRepository.saveAndFlush(entity);
         replaceSegmentNodeRelations(entity.getSegmentId(), entity.getStartNodeId(), entity.getEndNodeId());
         updateBindingRegion(ObjectScopeService.OBJECT_SEGMENT, entity.getSegmentId(), payload, null);
+        objectGeoIndexService.refreshObjectAndDependents(ObjectScopeService.OBJECT_SEGMENT, entity.getSegmentId());
         return new VersionedObject(saved, saved.getVersionNo());
     }
 
@@ -342,6 +347,7 @@ public class MasterDataChangeService {
         String inferredRegion = inferRegionFromBindings(ObjectScopeService.OBJECT_SEGMENT, entity.getSegmentId(), ObjectScopeService.OBJECT_NODE, entity.getNodeId());
         updateBindingRegion(ObjectScopeService.OBJECT_FACILITY, entity.getFacilityId(), payload, inferredRegion);
         cascadeDeviceTopologyFromFacility(entity);
+        objectGeoIndexService.refreshObjectAndDependents(ObjectScopeService.OBJECT_FACILITY, entity.getFacilityId());
         return new VersionedObject(saved, saved.getVersionNo());
     }
 
@@ -380,6 +386,7 @@ public class MasterDataChangeService {
                 .map(ObjectScopeBindingEntity::getRegionId)
                 .orElse(null);
         updateBindingRegion(ObjectScopeService.OBJECT_DEVICE, entity.getDeviceId(), payload, inferredRegion);
+        objectGeoIndexService.refreshObjectAndDependents(ObjectScopeService.OBJECT_DEVICE, entity.getDeviceId());
         return new VersionedObject(saved, saved.getVersionNo());
     }
 

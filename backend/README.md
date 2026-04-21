@@ -69,6 +69,7 @@
 - B-07 RBAC + 数据范围 + 订阅范围：运行时声明式鉴权、对象范围绑定、业务查询过滤与 topic 模拟订阅
 - B-08 主数据表与对象链服务：主数据只读 API、对象链关系真值表、基于 relation 的链路遍历
 - B-09 主数据版本与并发控制：变更申请、单级审批生效、主表 optimistic lock、版本快照与主数据审计
+- B-10 GIS 空间查询与坐标转换服务：bbox 检索、对象点查、统一 WKT 坐标转换与空间索引真值
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -88,7 +89,7 @@
 - POST /api/gis/convert
 - 请求体示例：
    - {"authoritySrid":"EPSG:4490","displaySrid":"EPSG:3857","geometry2d":"POINT(120.1533 30.2741)"}
-- 说明：当前版本对 POINT WKT 提供服务化转换，覆盖 4490<->3857；其他 SRID 组合返回 passthrough 结果。
+- 说明：当前版本对 JTS 可解析的 WKT 提供服务化转换，一期已覆盖 `POINT / LINESTRING` 的 4490<->3857 转换；其他 SRID 组合返回 passthrough 结果。
 
 ### 3) 深度字段一致性校验
 - POST /api/gis/depth/validate
@@ -439,6 +440,9 @@
    - GET /api/gis/field-spec
    - POST /api/gis/convert
    - POST /api/gis/depth/validate
+   - GET /api/gis/objects/bbox
+   - POST /api/gis/objects/pick
+   - GET /api/gis/objects/{objectType}/{objectId}
    - GET /api/authz/matrix-spec
    - GET /api/authz/matrix
 - 改为鉴权访问并接入 B-07 联合校验：
@@ -587,6 +591,78 @@
    - `device.facilityId/segmentId/nodeId`
 - 系统会同步更新 `object_relation`，保证 `/api/object-chain/*` 始终返回最新已生效拓扑。
 
+## B-10 GIS 空间查询与坐标转换服务说明
+
+### 1) 目标能力
+- 在现有 A-03 GIS 字段规范之上，补齐真正可用的空间查询能力：
+   - bbox 检索
+   - 对象点查
+   - 单对象 GIS 详情
+- 继续由后端统一负责 `authority_srid -> display_srid` 的坐标转换，避免前端私自计算。
+- 返回结果不能只有 geometry，必须带对象链主键。
+
+### 2) 空间真值模型
+- 新增空间索引表：`object_geo_index`
+- 覆盖对象：
+   - `NODE`
+   - `SEGMENT`
+   - `FACILITY`
+   - `DEVICE`
+- 字段用途：
+   - `geometry_2d`：空间真值 WKT
+   - `anchor_x / anchor_y`：对象锚点
+   - `bbox_min_x / bbox_min_y / bbox_max_x / bbox_max_y`：bbox 范围
+   - `authority_srid / display_srid`：存储与默认展示坐标系
+   - `region_id`：供数据范围和 GIS 检索联动过滤
+- 一期生成规则：
+   - `NODE`：直接使用 `node.geometry_2d`
+   - `SEGMENT`：由 `start_node + end_node` 生成 `LINESTRING`
+   - `FACILITY / DEVICE`：复用所属 `node` 的锚点坐标
+
+### 3) 接口口径
+- 保留匿名接口：
+   - GET /api/gis/field-spec
+   - POST /api/gis/convert
+   - POST /api/gis/depth/validate
+- 新增鉴权接口：
+   - GET /api/gis/objects/bbox
+   - POST /api/gis/objects/pick
+   - GET /api/gis/objects/{objectType}/{objectId}
+- bbox 查询参数：
+   - `minX`
+   - `minY`
+   - `maxX`
+   - `maxY`
+   - `authoritySrid`
+   - `displaySrid`
+   - `objectType`
+   - `page`
+   - `pageSize`
+- 点查请求体：
+   - `x`
+   - `y`
+   - `authoritySrid`
+   - `displaySrid`
+   - `objectTypes`
+   - `toleranceMeters`
+- GIS 返回统一包含：
+   - `objectType`
+   - `objectId`
+   - `objectName`
+   - `geometry2d`
+   - `anchorPoint`
+   - `bbox`
+   - `relatedObjectIds`
+
+### 4) 权限与查询边界
+- `GET /api/gis/objects/bbox`、`POST /api/gis/objects/pick`、`GET /api/gis/objects/{objectType}/{objectId}` 都按真实业务接口处理，默认需要鉴权。
+- 继续复用 B-07/B-08：
+   - `ObjectScopeService` 数据范围过滤
+   - 对象详情越权直接拒绝
+- B-06 Gateway 已新增 GIS 路由策略：
+   - bbox 查询按分页规则校验
+   - 点查走 JSON body 校验
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -643,6 +719,8 @@
    - master_change_request
    - object_version
    - master_data_audit
+- B-10 新增：
+   - object_geo_index
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -672,6 +750,12 @@
    - `object_version` 保存审批生效后的版本快照
    - `master_data_audit` 保存主数据变更审计，不与 `security_audit` 混用
    - `node / segment / facility / device` 新增 `version_no`
+   - H2 默认启动会自动建表并执行 `data.sql`
+   - PostgreSQL profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
+- B-10 说明：
+   - `object_geo_index` 保存 GIS bbox、锚点、统一 geometry 与区域归属真值
+   - 当前版本不依赖 PostGIS，H2 / PostgreSQL 都可联调
+   - GIS 查询采用应用层空间计算 + 数据库存储索引的组合方式
    - H2 默认启动会自动建表并执行 `data.sql`
    - PostgreSQL profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
 
@@ -712,7 +796,7 @@
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
 - 已新增 B-06 Gateway 联调样例：
-   - gateway_route_policy：29 条（公共规范接口、B-08 主数据接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
+   - gateway_route_policy：32 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
    - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
    - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
    - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
@@ -733,6 +817,11 @@
    - master_data_audit：3 条（SUBMIT / APPROVE / REJECT）
    - `node / segment / facility / device` 初始 `version_no = 1`
    - 可直接用于联调变更申请、审批通过、审批拒绝和版本冲突场景
+- 已新增 B-10 GIS 联调样例：
+   - object_geo_index：11 条（3 个 NODE、2 条 SEGMENT、3 个 FACILITY、3 个 DEVICE）
+   - bbox 范围样例可直接命中 `REGION-HZ` 与 `REGION-BINJIANG` 两组对象
+   - 点查样例可直接命中 `NODE-001`
+   - `SEGMENT` 已提供 `LINESTRING` 空间真值
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令
@@ -770,8 +859,16 @@
    - curl -s http://localhost:8080/api/gis/field-spec
 - 坐标转换：
    - curl -s -X POST http://localhost:8080/api/gis/convert -H "Content-Type: application/json" -d "{\"authoritySrid\":\"EPSG:4490\",\"displaySrid\":\"EPSG:3857\",\"geometry2d\":\"POINT(120.1533 30.2741)\"}"
+- LINESTRING 坐标转换：
+   - curl -s -X POST http://localhost:8080/api/gis/convert -H "Content-Type: application/json" -d "{\"authoritySrid\":\"EPSG:4490\",\"displaySrid\":\"EPSG:3857\",\"geometry2d\":\"LINESTRING(120.1533 30.2741,120.1634 30.2842)\"}"
 - 深度校验：
    - curl -s -X POST http://localhost:8080/api/gis/depth/validate -H "Content-Type: application/json" -d "{\"zTop\":2.50,\"zBottom\":-1.20,\"buryDepth\":3.70,\"elevationRef\":\"MSL\"}"
+- GIS bbox 查询：
+   - curl -s "http://localhost:8080/api/gis/objects/bbox?minX=120.15&minY=30.27&maxX=120.18&maxY=30.30&authoritySrid=EPSG:4490&displaySrid=EPSG:3857&objectType=NODE&page=1&pageSize=10" -H "Authorization: Bearer <hz_scope_access_token>"
+- GIS 对象点查：
+   - curl -s -X POST http://localhost:8080/api/gis/objects/pick -H "Authorization: Bearer <hz_scope_access_token>" -H "Content-Type: application/json" -d "{\"x\":120.1533,\"y\":30.2741,\"authoritySrid\":\"EPSG:4490\",\"displaySrid\":\"EPSG:3857\",\"objectTypes\":[\"NODE\"],\"toleranceMeters\":50}"
+- GIS 对象详情：
+   - curl -s "http://localhost:8080/api/gis/objects/SEGMENT/SEG-001?displaySrid=EPSG:3857" -H "Authorization: Bearer <admin_access_token>"
 - 查看 A-04 矩阵规范：
    - curl -s http://localhost:8080/api/authz/matrix-spec
 - 查看角色矩阵（数据库展开后）：
@@ -836,6 +933,6 @@
    - H2 Console / PostgreSQL 中执行 `SELECT * FROM gateway_risk_audit ORDER BY created_at DESC;`
 
 ## 下一步建议
-- 在 B-10 上补主数据写接口的批量导入/导出与更完整的审批联动。
+- 在 B-11 上补设备台账、心跳上报和在线状态计算。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

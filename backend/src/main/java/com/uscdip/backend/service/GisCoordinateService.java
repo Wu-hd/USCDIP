@@ -5,19 +5,32 @@ import com.uscdip.backend.dto.CoordinateConvertResult;
 import com.uscdip.backend.dto.DepthValidationRequest;
 import com.uscdip.backend.dto.DepthValidationResult;
 import com.uscdip.backend.dto.GisFieldSpecItem;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.CoordinateSequence;
+import org.locationtech.jts.geom.CoordinateSequenceFilter;
+import org.locationtech.jts.geom.Envelope;
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Point;
+import org.locationtech.jts.io.ParseException;
+import org.locationtech.jts.io.WKTReader;
+import org.locationtech.jts.io.WKTWriter;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 public class GisCoordinateService {
 
-    private static final Pattern POINT_PATTERN = Pattern.compile("POINT\\(([-0-9.]+)\\s+([-0-9.]+)\\)");
     private static final BigDecimal DEFAULT_TOLERANCE = new BigDecimal("0.05");
+    private static final String SRID_WGS84 = "EPSG:4490";
+    private static final String SRID_WEB_MERCATOR = "EPSG:3857";
+
+    private final GeometryFactory geometryFactory = new GeometryFactory();
+    private final WKTReader wktReader = new WKTReader(geometryFactory);
+    private final WKTWriter wktWriter = new WKTWriter();
 
     public List<GisFieldSpecItem> getFieldSpec() {
         return List.of(
@@ -47,21 +60,6 @@ public class GisCoordinateService {
         String target = request.getDisplaySrid().trim().toUpperCase();
         String geometry = request.getGeometry2d().trim();
 
-        Matcher matcher = POINT_PATTERN.matcher(geometry);
-        if (!matcher.matches()) {
-            return CoordinateConvertResult.builder()
-                    .sourceSrid(source)
-                    .targetSrid(target)
-                    .sourceGeometry(geometry)
-                    .convertedGeometry(geometry)
-                    .conversionMode("passthrough")
-                    .message("Only POINT WKT is actively converted in current version")
-                    .build();
-        }
-
-        double x = Double.parseDouble(matcher.group(1));
-        double y = Double.parseDouble(matcher.group(2));
-
         if (source.equals(target)) {
             return CoordinateConvertResult.builder()
                     .sourceSrid(source)
@@ -73,38 +71,36 @@ public class GisCoordinateService {
                     .build();
         }
 
-        if ("EPSG:4490".equals(source) && "EPSG:3857".equals(target)) {
-            double[] converted = lonLatToWebMercator(x, y);
+        if (!supportsPair(source, target)) {
             return CoordinateConvertResult.builder()
                     .sourceSrid(source)
                     .targetSrid(target)
                     .sourceGeometry(geometry)
-                    .convertedGeometry(formatPoint(converted[0], converted[1]))
-                    .conversionMode("service")
-                    .message("Converted by backend coordinate service")
+                    .convertedGeometry(geometry)
+                    .conversionMode("passthrough")
+                    .message("SRID pair unsupported, passthrough applied")
                     .build();
         }
 
-        if ("EPSG:3857".equals(source) && "EPSG:4490".equals(target)) {
-            double[] converted = webMercatorToLonLat(x, y);
+        try {
             return CoordinateConvertResult.builder()
                     .sourceSrid(source)
                     .targetSrid(target)
                     .sourceGeometry(geometry)
-                    .convertedGeometry(formatPoint(converted[0], converted[1]))
+                    .convertedGeometry(convertGeometryWkt(source, target, geometry))
                     .conversionMode("service")
                     .message("Converted by backend coordinate service")
                     .build();
+        } catch (IllegalArgumentException ex) {
+            return CoordinateConvertResult.builder()
+                    .sourceSrid(source)
+                    .targetSrid(target)
+                    .sourceGeometry(geometry)
+                    .convertedGeometry(geometry)
+                    .conversionMode("passthrough")
+                    .message(ex.getMessage())
+                    .build();
         }
-
-        return CoordinateConvertResult.builder()
-                .sourceSrid(source)
-                .targetSrid(target)
-                .sourceGeometry(geometry)
-                .convertedGeometry(geometry)
-                .conversionMode("passthrough")
-                .message("SRID pair unsupported, passthrough applied")
-                .build();
     }
 
     public DepthValidationResult validateDepth(DepthValidationRequest request) {
@@ -139,12 +135,122 @@ public class GisCoordinateService {
                 .build();
     }
 
-    private static String formatPoint(double x, double y) {
-        return "POINT(" + round(x) + " " + round(y) + ")";
+    public String convertGeometryWkt(String sourceSrid, String targetSrid, String geometryWkt) {
+        String normalizedSource = normalizeSrid(sourceSrid);
+        String normalizedTarget = normalizeSrid(targetSrid);
+        if (!supportsPair(normalizedSource, normalizedTarget) || isBlank(geometryWkt)) {
+            return geometryWkt;
+        }
+        if (normalizedSource.equals(normalizedTarget)) {
+            return geometryWkt;
+        }
+        Geometry geometry = readGeometry(geometryWkt);
+        Geometry converted = geometry.copy();
+        converted.apply(new CoordinateSequenceFilter() {
+            @Override
+            public void filter(CoordinateSequence seq, int index) {
+                double[] convertedPoint = convertPoint(seq.getX(index), seq.getY(index), normalizedSource, normalizedTarget);
+                seq.setOrdinate(index, 0, convertedPoint[0]);
+                seq.setOrdinate(index, 1, convertedPoint[1]);
+            }
+
+            @Override
+            public boolean isDone() {
+                return false;
+            }
+
+            @Override
+            public boolean isGeometryChanged() {
+                return true;
+            }
+        });
+        converted.geometryChanged();
+        return wktWriter.write(converted);
     }
 
-    private static String round(double value) {
-        return BigDecimal.valueOf(value).setScale(6, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
+    public BigDecimal[] convertPoint(BigDecimal x, BigDecimal y, String sourceSrid, String targetSrid) {
+        double[] converted = convertPoint(
+                x.doubleValue(),
+                y.doubleValue(),
+                normalizeSrid(sourceSrid),
+                normalizeSrid(targetSrid)
+        );
+        return new BigDecimal[]{
+                scale(converted[0]),
+                scale(converted[1])
+        };
+    }
+
+    public BigDecimal[] convertEnvelope(
+            BigDecimal minX,
+            BigDecimal minY,
+            BigDecimal maxX,
+            BigDecimal maxY,
+            String sourceSrid,
+            String targetSrid
+    ) {
+        String normalizedSource = normalizeSrid(sourceSrid);
+        String normalizedTarget = normalizeSrid(targetSrid);
+        if (normalizedSource.equals(normalizedTarget)) {
+            return new BigDecimal[]{scale(minX.doubleValue()), scale(minY.doubleValue()), scale(maxX.doubleValue()), scale(maxY.doubleValue())};
+        }
+        Envelope envelope = new Envelope(minX.doubleValue(), maxX.doubleValue(), minY.doubleValue(), maxY.doubleValue());
+        Coordinate[] corners = {
+                new Coordinate(envelope.getMinX(), envelope.getMinY()),
+                new Coordinate(envelope.getMinX(), envelope.getMaxY()),
+                new Coordinate(envelope.getMaxX(), envelope.getMinY()),
+                new Coordinate(envelope.getMaxX(), envelope.getMaxY())
+        };
+        Envelope converted = new Envelope();
+        for (Coordinate corner : corners) {
+            double[] mapped = convertPoint(corner.x, corner.y, normalizedSource, normalizedTarget);
+            converted.expandToInclude(mapped[0], mapped[1]);
+        }
+        return new BigDecimal[]{
+                scale(converted.getMinX()),
+                scale(converted.getMinY()),
+                scale(converted.getMaxX()),
+                scale(converted.getMaxY())
+        };
+    }
+
+    public Geometry readGeometry(String geometryWkt) {
+        try {
+            return wktReader.read(geometryWkt);
+        } catch (ParseException ex) {
+            throw new IllegalArgumentException("Unsupported WKT geometry: " + geometryWkt, ex);
+        }
+    }
+
+    public Point geometryAnchor(String geometryWkt) {
+        Geometry geometry = readGeometry(geometryWkt);
+        if (geometry instanceof Point point) {
+            return point;
+        }
+        return geometry.getCentroid();
+    }
+
+    public Envelope geometryEnvelope(String geometryWkt) {
+        return readGeometry(geometryWkt).getEnvelopeInternal();
+    }
+
+    private double[] convertPoint(double x, double y, String sourceSrid, String targetSrid) {
+        if (sourceSrid.equals(targetSrid) || !supportsPair(sourceSrid, targetSrid)) {
+            return new double[]{x, y};
+        }
+        if (SRID_WGS84.equals(sourceSrid) && SRID_WEB_MERCATOR.equals(targetSrid)) {
+            return lonLatToWebMercator(x, y);
+        }
+        if (SRID_WEB_MERCATOR.equals(sourceSrid) && SRID_WGS84.equals(targetSrid)) {
+            return webMercatorToLonLat(x, y);
+        }
+        return new double[]{x, y};
+    }
+
+    private boolean supportsPair(String sourceSrid, String targetSrid) {
+        return sourceSrid.equals(targetSrid)
+                || (SRID_WGS84.equals(sourceSrid) && SRID_WEB_MERCATOR.equals(targetSrid))
+                || (SRID_WEB_MERCATOR.equals(sourceSrid) && SRID_WGS84.equals(targetSrid));
     }
 
     private static double[] lonLatToWebMercator(double lon, double lat) {
@@ -163,6 +269,14 @@ public class GisCoordinateService {
 
     private static BigDecimal defaultTolerance(BigDecimal tolerance) {
         return tolerance == null ? DEFAULT_TOLERANCE : tolerance.abs().setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal scale(double value) {
+        return BigDecimal.valueOf(value).setScale(6, RoundingMode.HALF_UP).stripTrailingZeros();
+    }
+
+    private static String normalizeSrid(String value) {
+        return value == null ? "" : value.trim().toUpperCase();
     }
 
     private static boolean isBlank(String value) {

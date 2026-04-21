@@ -55,6 +55,15 @@ class SecurityDisabledIntegrationTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
 
+        mockMvc.perform(get("/api/gis/objects/bbox")
+                        .param("minX", "120.10")
+                        .param("minY", "30.20")
+                        .param("maxX", "120.20")
+                        .param("maxY", "30.30"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
         mockMvc.perform(post("/api/master/changes")
                         .contentType("application/json")
                         .content("""
@@ -64,6 +73,21 @@ class SecurityDisabledIntegrationTest {
                                   "baseVersionNo":1,
                                   "reason":"security-disabled-test",
                                   "payload":{"deviceName":"ignored"}
+                                }
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(post("/api/gis/objects/pick")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "x":120.1533,
+                                  "y":30.2741,
+                                  "authoritySrid":"EPSG:4490",
+                                  "displaySrid":"EPSG:3857",
+                                  "objectTypes":["NODE"]
                                 }
                                 """))
                 .andExpect(status().isUnauthorized())

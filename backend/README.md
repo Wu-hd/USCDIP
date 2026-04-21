@@ -29,6 +29,11 @@
    - GET /api/master/segments
    - GET /api/master/facilities
    - GET /api/master/devices
+   - POST /api/master/changes
+   - GET /api/master/changes
+   - GET /api/master/changes/{requestId}
+   - POST /api/master/changes/{requestId}/approve
+   - POST /api/master/changes/{requestId}/reject
    - GET /api/gis/field-spec
    - POST /api/gis/convert
    - POST /api/gis/depth/validate
@@ -63,6 +68,7 @@
 - B-06 Gateway 校验与限流：数据库驱动的应用内 Gateway 过滤、黑白名单、输入校验、单实例限流与高风险审计
 - B-07 RBAC + 数据范围 + 订阅范围：运行时声明式鉴权、对象范围绑定、业务查询过滤与 topic 模拟订阅
 - B-08 主数据表与对象链服务：主数据只读 API、对象链关系真值表、基于 relation 的链路遍历
+- B-09 主数据版本与并发控制：变更申请、单级审批生效、主表 optimistic lock、版本快照与主数据审计
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -528,6 +534,59 @@
    - 领导只读：聚合只读范围
 - Gateway 种子策略已同步加入 `/api/master/*`，不会被视为匿名开放接口。
 
+## B-09 主数据版本与并发控制说明
+
+### 1) 目标能力
+- 在 B-08 主数据只读 API 之上，补齐最小可用的主数据变更流。
+- 覆盖 `node / segment / facility / device` 四类主数据。
+- 采用单级审批模型：提交后进入 `PENDING/QUEUED`，审批通过后才写入主表真值。
+- 主数据写入启用 optimistic lock，避免“最后一次写入覆盖”。
+
+### 2) 版本与审计模型
+- 主表新增 `version_no`，由 JPA `@Version` 驱动乐观锁：
+   - `node.version_no`
+   - `segment.version_no`
+   - `facility.version_no`
+   - `device.version_no`
+- 新增 B-09 表：
+   - `master_change_request`
+   - `object_version`
+   - `master_data_audit`
+- 表用途：
+   - `master_change_request` 保存申请状态、审批状态、基线版本号和待生效 payload
+   - `object_version` 保存每次审批生效后的对象快照归档
+   - `master_data_audit` 保存提交、审批、拒绝、冲突等主数据审计，不与 `security_audit` 混用
+
+### 3) 接口口径
+- 新增接口：
+   - POST /api/master/changes
+   - GET /api/master/changes
+   - GET /api/master/changes/{requestId}
+   - POST /api/master/changes/{requestId}/approve
+   - POST /api/master/changes/{requestId}/reject
+- 权限要求：
+   - 提交申请、查询列表/详情：`ENTRY:MGMT + MENU:ASSET:WRITE`
+   - 审批通过、审批拒绝：仅 `PLATFORM_ADMIN`
+- 错误码：
+   - `MASTER_DATA_VERSION_CONFLICT`
+   - `MASTER_CHANGE_PENDING`
+   - `MASTER_CHANGE_NOT_FOUND`
+   - `MASTER_CHANGE_INVALID_STATE`
+   - `MASTER_CHANGE_APPROVAL_REQUIRED`
+
+### 4) 并发与拓扑一致性
+- `node / segment` 若已有 `PENDING` 申请，新申请不会直接覆盖，而是进入 `QUEUED`。
+- 审批通过时执行顺序：
+   - 校验当前主表 `version_no` 是否仍等于申请的 `baseVersionNo`
+   - 更新主数据真表
+   - 写入 `object_version`
+   - 写入 `master_data_audit`
+- 若变更涉及拓扑字段：
+   - `segment.startNodeId/endNodeId`
+   - `facility.segmentId/nodeId`
+   - `device.facilityId/segmentId/nodeId`
+- 系统会同步更新 `object_relation`，保证 `/api/object-chain/*` 始终返回最新已生效拓扑。
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -580,6 +639,10 @@
    - object_scope_binding
 - B-08 新增：
    - object_relation
+- B-09 新增：
+   - master_change_request
+   - object_version
+   - master_data_audit
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -602,6 +665,13 @@
 - B-08 说明：
    - `object_relation` 保存 node/segment/facility/device 的拓扑关系真值
    - `/api/master/*` 提供主数据只读查询，`/api/object-chain/*` 提供聚合链路查询
+   - H2 默认启动会自动建表并执行 `data.sql`
+   - PostgreSQL profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
+- B-09 说明：
+   - `master_change_request` 保存主数据变更申请与审批状态
+   - `object_version` 保存审批生效后的版本快照
+   - `master_data_audit` 保存主数据变更审计，不与 `security_audit` 混用
+   - `node / segment / facility / device` 新增 `version_no`
    - H2 默认启动会自动建表并执行 `data.sql`
    - PostgreSQL profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
 
@@ -657,6 +727,12 @@
    - object_relation：13 条（覆盖 segment-start/end-node、segment-facility、node-facility、facility-device）
    - `/api/master/nodes|segments|facilities|devices` 可直接使用现有 H2 或 PostgreSQL 种子联调
    - `incident / work_order / model_result` 仍通过 `segment_id / node_id` 反查对象链
+- 已新增 B-09 主数据版本联调样例：
+   - master_change_request：4 条（PENDING / QUEUED / APPROVED / REJECTED）
+   - object_version：11 条（覆盖 node / segment / facility / device 当前已归档版本）
+   - master_data_audit：3 条（SUBMIT / APPROVE / REJECT）
+   - `node / segment / facility / device` 初始 `version_no = 1`
+   - 可直接用于联调变更申请、审批通过、审批拒绝和版本冲突场景
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令
@@ -678,6 +754,18 @@
    - curl -s http://localhost:8080/api/master/segments/SEG-001 -H "Authorization: Bearer <access_token>"
 - 查询主数据设备详情：
    - curl -s http://localhost:8080/api/master/devices/DEV-001 -H "Authorization: Bearer <access_token>"
+- 提交主数据变更申请：
+   - curl -s -X POST http://localhost:8080/api/master/changes -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"objectType\":\"DEVICE\",\"objectId\":\"DEV-002\",\"baseVersionNo\":1,\"reason\":\"upgrade device metadata\",\"payload\":{\"deviceName\":\"流量计-02-升级版\",\"protocolType\":\"NB-IOT\"}}"
+- 查询主数据变更列表：
+   - curl -s "http://localhost:8080/api/master/changes?page=1&pageSize=10" -H "Authorization: Bearer <admin_access_token>"
+- 审批通过主数据变更：
+   - curl -s -X POST http://localhost:8080/api/master/changes/<requestId>/approve -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"reason\":\"approved for production\"}"
+- 驳回主数据变更：
+   - curl -s -X POST http://localhost:8080/api/master/changes/<requestId>/reject -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"reason\":\"payload needs revision\"}"
+- 查看主数据版本与审计样例：
+   - H2 Console / PostgreSQL 中执行 `SELECT * FROM master_change_request ORDER BY created_at DESC;`
+   - H2 Console / PostgreSQL 中执行 `SELECT * FROM object_version ORDER BY created_at DESC;`
+   - H2 Console / PostgreSQL 中执行 `SELECT * FROM master_data_audit ORDER BY created_at DESC;`
 - 查询 GIS 字段规范：
    - curl -s http://localhost:8080/api/gis/field-spec
 - 坐标转换：
@@ -748,6 +836,6 @@
    - H2 Console / PostgreSQL 中执行 `SELECT * FROM gateway_risk_audit ORDER BY created_at DESC;`
 
 ## 下一步建议
-- 在 B-09 上补主数据 optimistic lock、版本号与变更审计。
+- 在 B-10 上补主数据写接口的批量导入/导出与更完整的审批联动。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

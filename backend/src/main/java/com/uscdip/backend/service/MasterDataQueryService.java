@@ -280,6 +280,7 @@ public class MasterDataQueryService {
                 related("segmentIds", segmentIds, "facilityIds", facilityIds, "deviceIds", deviceIds),
                 attributes(
                         "nodeType", node.getNodeType(),
+                        "versionNo", node.getVersionNo(),
                         "authoritySrid", node.getAuthoritySrid(),
                         "displaySrid", node.getDisplaySrid(),
                         "geometry2d", node.getGeometry2d(),
@@ -310,6 +311,7 @@ public class MasterDataQueryService {
                 ),
                 attributes(
                         "segmentType", segment.getSegmentType(),
+                        "versionNo", segment.getVersionNo(),
                         "startNodeId", segment.getStartNodeId(),
                         "endNodeId", segment.getEndNodeId(),
                         "lengthMeter", segment.getLengthMeter()
@@ -334,6 +336,7 @@ public class MasterDataQueryService {
                 ),
                 attributes(
                         "facilityType", facility.getFacilityType(),
+                        "versionNo", facility.getVersionNo(),
                         "positionMeter", facility.getPositionMeter()
                 )
         );
@@ -356,6 +359,7 @@ public class MasterDataQueryService {
                 ),
                 attributes(
                         "protocolType", device.getProtocolType(),
+                        "versionNo", device.getVersionNo(),
                         "lastHeartbeat", device.getLastHeartbeat()
                 )
         );

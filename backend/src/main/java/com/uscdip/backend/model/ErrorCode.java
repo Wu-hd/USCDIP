@@ -33,6 +33,11 @@ public enum ErrorCode {
     TOKEN_REFRESH_REPLAY_DETECTED("TOKEN_REFRESH_REPLAY_DETECTED", "Refresh token replay detected"),
     TOKEN_REFRESH_REVOKED("TOKEN_REFRESH_REVOKED", "Refresh token is revoked"),
     TOKEN_ISSUE_FAILED("TOKEN_ISSUE_FAILED", "Token issue failed"),
+    MASTER_DATA_VERSION_CONFLICT("MASTER_DATA_VERSION_CONFLICT", "Master data version conflict"),
+    MASTER_CHANGE_PENDING("MASTER_CHANGE_PENDING", "Master data change is pending"),
+    MASTER_CHANGE_NOT_FOUND("MASTER_CHANGE_NOT_FOUND", "Master data change was not found"),
+    MASTER_CHANGE_INVALID_STATE("MASTER_CHANGE_INVALID_STATE", "Master data change state is invalid"),
+    MASTER_CHANGE_APPROVAL_REQUIRED("MASTER_CHANGE_APPROVAL_REQUIRED", "Master data change approval is required"),
     INTERNAL_ERROR("INTERNAL_ERROR", "Internal server error");
 
     private final String code;

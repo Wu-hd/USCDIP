@@ -15,4 +15,12 @@ public interface ObjectRelationRepository extends JpaRepository<ObjectRelationEn
     List<ObjectRelationEntity> findByChildObjectTypeAndChildObjectIdAndActiveTrue(String childObjectType, String childObjectId);
 
     List<ObjectRelationEntity> findByChildObjectTypeAndChildObjectIdInAndActiveTrue(String childObjectType, Collection<String> childObjectIds);
+
+    List<ObjectRelationEntity> findByParentObjectTypeAndParentObjectId(String parentObjectType, String parentObjectId);
+
+    List<ObjectRelationEntity> findByChildObjectTypeAndChildObjectId(String childObjectType, String childObjectId);
+
+    void deleteByParentObjectTypeAndParentObjectIdAndRelationTypeIn(String parentObjectType, String parentObjectId, Collection<String> relationTypes);
+
+    void deleteByChildObjectTypeAndChildObjectIdAndRelationTypeIn(String childObjectType, String childObjectId, Collection<String> relationTypes);
 }

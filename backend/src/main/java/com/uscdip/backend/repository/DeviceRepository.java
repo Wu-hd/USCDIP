@@ -7,6 +7,8 @@ import java.util.List;
 
 public interface DeviceRepository extends JpaRepository<DeviceEntity, String> {
 
+    java.util.List<DeviceEntity> findByFacilityId(String facilityId);
+
     List<DeviceEntity> findBySegmentId(String segmentId);
 
     List<DeviceEntity> findByNodeId(String nodeId);

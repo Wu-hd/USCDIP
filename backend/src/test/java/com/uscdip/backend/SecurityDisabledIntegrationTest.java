@@ -49,6 +49,26 @@ class SecurityDisabledIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(get("/api/master/changes"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(post("/api/master/changes")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "objectType":"DEVICE",
+                                  "objectId":"DEV-001",
+                                  "baseVersionNo":1,
+                                  "reason":"security-disabled-test",
+                                  "payload":{"deviceName":"ignored"}
+                                }
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
     }
 
     @Test

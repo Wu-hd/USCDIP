@@ -1,21 +1,21 @@
-INSERT INTO node (node_id, node_name, node_type, status, authority_srid, display_srid, geometry_2d, z_top, z_bottom, bury_depth, elevation_ref, created_at, updated_at) VALUES
-('NODE-001', '北区入口节点', 'inlet', 'ACTIVE', 'EPSG:4490', 'EPSG:3857', 'POINT(120.1533 30.2741)', 2.50, -1.20, 3.70, 'MSL', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('NODE-002', '主干分流节点', 'junction', 'ACTIVE', 'EPSG:4490', 'EPSG:3857', 'POINT(120.1634 30.2842)', 2.30, -1.40, 3.70, 'MSL', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('NODE-003', '东区泵站节点', 'pump_station', 'ACTIVE', 'EPSG:4490', 'EPSG:3857', 'POINT(120.1735 30.2943)', 2.10, -1.70, 3.80, 'MSL', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO node (node_id, node_name, node_type, status, authority_srid, display_srid, geometry_2d, z_top, z_bottom, bury_depth, elevation_ref, created_at, updated_at, version_no) VALUES
+('NODE-001', '北区入口节点', 'inlet', 'ACTIVE', 'EPSG:4490', 'EPSG:3857', 'POINT(120.1533 30.2741)', 2.50, -1.20, 3.70, 'MSL', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1),
+('NODE-002', '主干分流节点', 'junction', 'ACTIVE', 'EPSG:4490', 'EPSG:3857', 'POINT(120.1634 30.2842)', 2.30, -1.40, 3.70, 'MSL', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1),
+('NODE-003', '东区泵站节点', 'pump_station', 'ACTIVE', 'EPSG:4490', 'EPSG:3857', 'POINT(120.1735 30.2943)', 2.10, -1.70, 3.80, 'MSL', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1);
 
-INSERT INTO segment (segment_id, segment_name, start_node_id, end_node_id, segment_type, length_meter, status, created_at, updated_at) VALUES
-('SEG-001', '北区主干一段', 'NODE-001', 'NODE-002', 'trunk', 520.40, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('SEG-002', '东区分支一段', 'NODE-002', 'NODE-003', 'branch', 310.80, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO segment (segment_id, segment_name, start_node_id, end_node_id, segment_type, length_meter, status, created_at, updated_at, version_no) VALUES
+('SEG-001', '北区主干一段', 'NODE-001', 'NODE-002', 'trunk', 520.40, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1),
+('SEG-002', '东区分支一段', 'NODE-002', 'NODE-003', 'branch', 310.80, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1);
 
-INSERT INTO facility (facility_id, facility_name, segment_id, node_id, facility_type, position_meter, status, created_at, updated_at) VALUES
-('FAC-001', '阀门井-01', 'SEG-001', 'NODE-001', 'valve_well', 80.00, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('FAC-002', '检测井-02', 'SEG-001', 'NODE-002', 'inspection_well', 250.00, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('FAC-003', '阀门井-03', 'SEG-002', 'NODE-003', 'valve_well', 120.00, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO facility (facility_id, facility_name, segment_id, node_id, facility_type, position_meter, status, created_at, updated_at, version_no) VALUES
+('FAC-001', '阀门井-01', 'SEG-001', 'NODE-001', 'valve_well', 80.00, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1),
+('FAC-002', '检测井-02', 'SEG-001', 'NODE-002', 'inspection_well', 250.00, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1),
+('FAC-003', '阀门井-03', 'SEG-002', 'NODE-003', 'valve_well', 120.00, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1);
 
-INSERT INTO device (device_id, device_name, facility_id, segment_id, node_id, protocol_type, last_heartbeat, status, created_at, updated_at) VALUES
-('DEV-001', '压力传感器-01', 'FAC-001', 'SEG-001', 'NODE-001', 'MQTT', CURRENT_TIMESTAMP, 'ONLINE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('DEV-002', '流量计-02', 'FAC-002', 'SEG-001', 'NODE-002', 'MODBUS', CURRENT_TIMESTAMP, 'ONLINE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('DEV-003', '振动传感器-03', 'FAC-003', 'SEG-002', 'NODE-003', 'MQTT', CURRENT_TIMESTAMP, 'ONLINE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO device (device_id, device_name, facility_id, segment_id, node_id, protocol_type, last_heartbeat, status, created_at, updated_at, version_no) VALUES
+('DEV-001', '压力传感器-01', 'FAC-001', 'SEG-001', 'NODE-001', 'MQTT', CURRENT_TIMESTAMP, 'ONLINE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1),
+('DEV-002', '流量计-02', 'FAC-002', 'SEG-001', 'NODE-002', 'MODBUS', CURRENT_TIMESTAMP, 'ONLINE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1),
+('DEV-003', '振动传感器-03', 'FAC-003', 'SEG-002', 'NODE-003', 'MQTT', CURRENT_TIMESTAMP, 'ONLINE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1);
 
 INSERT INTO incident (incident_id, segment_id, node_id, title, severity, status, created_at, updated_at) VALUES
 ('INC-001', 'SEG-001', 'NODE-002', '压力异常升高', 'HIGH', 'OPEN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -218,11 +218,48 @@ INSERT INTO object_relation (
 ('OR-FAC-002-DEV-002', 'FACILITY', 'FAC-002', 'DEVICE', 'DEV-002', 'FACILITY_DEVICE', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('OR-FAC-003-DEV-003', 'FACILITY', 'FAC-003', 'DEVICE', 'DEV-003', 'FACILITY_DEVICE', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
+INSERT INTO master_change_request (
+    request_id, object_type, object_id, request_status, requested_by, approved_by, request_payload_json,
+    base_version_no, effective_version_no, reason, created_at, approved_at, updated_at
+) VALUES
+('MCR-SEED-PENDING-001', 'SEGMENT', 'SEG-001', 'PENDING', 'U-ADMIN-001', NULL, '{"segmentName":"北区主干一段-待审批","lengthMeter":530.40}', 1, NULL, 'Seed pending segment change', CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP),
+('MCR-SEED-QUEUED-001', 'SEGMENT', 'SEG-001', 'QUEUED', 'U-ADMIN-001', NULL, '{"segmentName":"北区主干一段-排队变更","lengthMeter":540.40}', 1, NULL, 'Seed queued segment change', CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP),
+('MCR-SEED-APPROVED-001', 'DEVICE', 'DEV-001', 'APPROVED', 'U-ADMIN-001', 'U-ADMIN-001', '{"deviceName":"压力传感器-01-归档版","protocolType":"MQTT"}', 1, 1, 'Seed approved device change', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('MCR-SEED-REJECTED-001', 'FACILITY', 'FAC-003', 'REJECTED', 'U-ADMIN-001', 'U-ADMIN-001', '{"facilityName":"阀门井-03-驳回版","positionMeter":150.00}', 1, NULL, 'Seed rejected facility change', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO object_version (
+    version_id, object_type, object_id, version_no, change_request_id, snapshot_json, created_at, created_by
+) VALUES
+('OV-NODE-001-V1', 'NODE', 'NODE-001', 1, NULL, '{"nodeId":"NODE-001","nodeName":"北区入口节点","nodeType":"inlet","status":"ACTIVE","versionNo":1}', CURRENT_TIMESTAMP, 'U-ADMIN-001'),
+('OV-NODE-002-V1', 'NODE', 'NODE-002', 1, NULL, '{"nodeId":"NODE-002","nodeName":"主干分流节点","nodeType":"junction","status":"ACTIVE","versionNo":1}', CURRENT_TIMESTAMP, 'U-ADMIN-001'),
+('OV-NODE-003-V1', 'NODE', 'NODE-003', 1, NULL, '{"nodeId":"NODE-003","nodeName":"东区泵站节点","nodeType":"pump_station","status":"ACTIVE","versionNo":1}', CURRENT_TIMESTAMP, 'U-ADMIN-001'),
+('OV-SEG-001-V1', 'SEGMENT', 'SEG-001', 1, NULL, '{"segmentId":"SEG-001","segmentName":"北区主干一段","startNodeId":"NODE-001","endNodeId":"NODE-002","status":"ACTIVE","versionNo":1}', CURRENT_TIMESTAMP, 'U-ADMIN-001'),
+('OV-SEG-002-V1', 'SEGMENT', 'SEG-002', 1, NULL, '{"segmentId":"SEG-002","segmentName":"东区分支一段","startNodeId":"NODE-002","endNodeId":"NODE-003","status":"ACTIVE","versionNo":1}', CURRENT_TIMESTAMP, 'U-ADMIN-001'),
+('OV-FAC-001-V1', 'FACILITY', 'FAC-001', 1, NULL, '{"facilityId":"FAC-001","facilityName":"阀门井-01","segmentId":"SEG-001","nodeId":"NODE-001","status":"ACTIVE","versionNo":1}', CURRENT_TIMESTAMP, 'U-ADMIN-001'),
+('OV-FAC-002-V1', 'FACILITY', 'FAC-002', 1, NULL, '{"facilityId":"FAC-002","facilityName":"检测井-02","segmentId":"SEG-001","nodeId":"NODE-002","status":"ACTIVE","versionNo":1}', CURRENT_TIMESTAMP, 'U-ADMIN-001'),
+('OV-FAC-003-V1', 'FACILITY', 'FAC-003', 1, NULL, '{"facilityId":"FAC-003","facilityName":"阀门井-03","segmentId":"SEG-002","nodeId":"NODE-003","status":"ACTIVE","versionNo":1}', CURRENT_TIMESTAMP, 'U-ADMIN-001'),
+('OV-DEV-001-V1', 'DEVICE', 'DEV-001', 1, 'MCR-SEED-APPROVED-001', '{"deviceId":"DEV-001","deviceName":"压力传感器-01","facilityId":"FAC-001","segmentId":"SEG-001","nodeId":"NODE-001","status":"ONLINE","versionNo":1}', CURRENT_TIMESTAMP, 'U-ADMIN-001'),
+('OV-DEV-002-V1', 'DEVICE', 'DEV-002', 1, NULL, '{"deviceId":"DEV-002","deviceName":"流量计-02","facilityId":"FAC-002","segmentId":"SEG-001","nodeId":"NODE-002","status":"ONLINE","versionNo":1}', CURRENT_TIMESTAMP, 'U-ADMIN-001'),
+('OV-DEV-003-V1', 'DEVICE', 'DEV-003', 1, NULL, '{"deviceId":"DEV-003","deviceName":"振动传感器-03","facilityId":"FAC-003","segmentId":"SEG-002","nodeId":"NODE-003","status":"ONLINE","versionNo":1}', CURRENT_TIMESTAMP, 'U-ADMIN-001');
+
+INSERT INTO master_data_audit (
+    object_type, object_id, change_request_id, action, outcome, operator_user_id,
+    before_snapshot_json, after_snapshot_json, trace_id, created_at
+) VALUES
+('SEGMENT', 'SEG-001', 'MCR-SEED-PENDING-001', 'SUBMIT', 'SUCCESS', 'U-ADMIN-001', '{"segmentId":"SEG-001","versionNo":1}', NULL, 'TRACE-MASTER-SEED-001', CURRENT_TIMESTAMP),
+('DEVICE', 'DEV-001', 'MCR-SEED-APPROVED-001', 'APPROVE', 'SUCCESS', 'U-ADMIN-001', '{"deviceId":"DEV-001","deviceName":"压力传感器-01","versionNo":1}', '{"deviceId":"DEV-001","deviceName":"压力传感器-01-归档版","versionNo":1}', 'TRACE-MASTER-SEED-002', CURRENT_TIMESTAMP),
+('FACILITY', 'FAC-003', 'MCR-SEED-REJECTED-001', 'REJECT', 'SUCCESS', 'U-ADMIN-001', '{"facilityId":"FAC-003","facilityName":"阀门井-03","versionNo":1}', NULL, 'TRACE-MASTER-SEED-003', CURRENT_TIMESTAMP);
+
 INSERT INTO gateway_route_policy (
     policy_id, route_code, path_pattern, http_method, auth_required, risk_level, validation_profile,
     rate_limit_scope, rate_limit_capacity, rate_limit_window_seconds, audit_enabled, enabled, created_at, updated_at
 ) VALUES
 ('GWP-PUBLIC-MENU-001', 'PUBLIC_MENU_BOUNDARIES', '/api/menu-boundaries', 'GET', FALSE, 'LOW', 'NONE', 'IP', 120, 60, FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MASTER-CHANGES-001', 'MASTER_CHANGES', '/api/master/changes', 'GET', TRUE, 'MEDIUM', 'PAGE_QUERY', 'USER_OR_IP', 60, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MASTER-CHANGES-DETAIL-001', 'MASTER_CHANGE_DETAIL', '/api/master/changes/*', 'GET', TRUE, 'MEDIUM', 'NONE', 'USER_OR_IP', 60, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MASTER-CHANGES-CREATE-001', 'MASTER_CHANGE_CREATE', '/api/master/changes', 'POST', TRUE, 'HIGH', 'JSON_BODY', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MASTER-CHANGES-APPROVE-001', 'MASTER_CHANGE_APPROVE', '/api/master/changes/*/approve', 'POST', TRUE, 'CRITICAL', 'NONE', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MASTER-CHANGES-REJECT-001', 'MASTER_CHANGE_REJECT', '/api/master/changes/*/reject', 'POST', TRUE, 'CRITICAL', 'NONE', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('GWP-PROTECTED-MASTER-NODES-001', 'MASTER_NODES', '/api/master/nodes', 'GET', TRUE, 'MEDIUM', 'PAGE_QUERY', 'USER_OR_IP', 120, 60, FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('GWP-PROTECTED-MASTER-NODE-DETAIL-001', 'MASTER_NODE_DETAIL', '/api/master/nodes/*', 'GET', TRUE, 'MEDIUM', 'NONE', 'USER_OR_IP', 120, 60, FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('GWP-PROTECTED-MASTER-SEGMENTS-001', 'MASTER_SEGMENTS', '/api/master/segments', 'GET', TRUE, 'MEDIUM', 'PAGE_QUERY', 'USER_OR_IP', 120, 60, FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

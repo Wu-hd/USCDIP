@@ -148,14 +148,20 @@
 - POST /api/auth/callback：前端回调页携带 code/state/redirectUri 调后端，交换本地 access/refresh token
 - POST /api/auth/refresh：携带 refresh token 执行 rotation，返回新的 access/refresh token
 - GET /api/auth/me：OIDC 开启后返回当前登录用户权限快照；OIDC 关闭时返回 OIDC_DISABLED
-- POST /api/auth/logout：OIDC 开启后吊销当前 session 并返回 providerLogoutUrl；OIDC 关闭时返回 OIDC_DISABLED
+- POST /api/auth/logout：标准会话与应急旁路会话都支持吊销当前 session；OIDC 会话额外返回 providerLogoutUrl
+- POST /api/auth/emergency/login：应急旁路账号登录，返回短期 access/refresh token
+- POST /api/auth/emergency/accounts/{accountId}/activate：管理员激活应急旁路账号
+- POST /api/auth/emergency/accounts/{accountId}/revoke：管理员撤销应急旁路账号
+- GET /api/auth/emergency/audit：管理员查询独立应急审计记录
 
 ### 5) 默认本地模式
 - 默认 `BACKEND_OIDC_ENABLED=false`，不会触发 OIDC issuer discovery。
 - 此模式下，A-01/A-02/A-03/A-04 的规范与演示接口保持匿名可访问，便于本地开发与联调。
 - 此模式下：
    - GET /api/auth/login 与 GET /api/auth/login-url 返回 `enabled=false`
-   - GET /api/auth/me 与 POST /api/auth/logout 返回 `503 + OIDC_DISABLED`
+   - 未携带本地 access token 时，GET /api/auth/me 与 POST /api/auth/logout 返回 `503 + OIDC_DISABLED`
+   - 携带失效的本地 access token 时，GET /api/auth/me 与 POST /api/auth/logout 返回 `401`
+   - `POST /api/auth/emergency/login` 仍可独立使用，不依赖 OIDC provider
 
 ### 6) 启用 OIDC 联调
 - 启动示例：
@@ -259,6 +265,48 @@
 - 当前版本无 Redis / Caffeine / 独立权限缓存依赖。
 - B-04 以数据库中的 `auth_session` 与 `user_account.token_valid_after` 作为收敛真值。
 
+## B-05 应急旁路账号与审计说明
+
+### 1) 目标能力
+- 提供独立于 OIDC 的本地应急旁路账号登录能力，适用于 OIDC 不可用或演练场景。
+- 旁路 token 使用更短 TTL：
+   - access token 默认 600 秒
+   - refresh token 默认 1800 秒
+- 旁路账号支持激活、自动到期、人工撤销，并单独写入 `BREAK_GLASS_*` 审计事件。
+
+### 2) 最小权限边界
+- 新增角色 `BREAK_GLASS_COMMAND`，仅开放：
+   - ENTRY:EMGC
+   - MENU:DASHBOARD:READ
+   - MENU:WORKORDER:READ
+   - MENU:WORKORDER:DISPATCH
+   - MENU:ASSET:READ
+- 默认不开放：
+   - ENTRY:MGMT / ENTRY:DIAG / ENTRY:SUPPORT
+   - MENU:ASSET:WRITE / MENU:MODEL:WRITE
+- 数据范围继续沿用 `user_data_scope`，测试数据里旁路用户仅绑定 `REGION-EMGC-HZ`。
+
+### 3) 数据模型
+- `emergency_account`：应急旁路账号表，记录账号状态、到期时间、激活人、撤销原因和 BCrypt 口令哈希。
+- `auth_session.auth_mode`：区分 `STANDARD` 与 `BREAK_GLASS` 会话。
+- `auth_session.emergency_account_id`：旁路 session 对应的应急账号。
+- `auth_refresh_token.auth_mode / emergency_account_id`：旁路 refresh token 标记。
+- `security_audit.auth_mode / emergency_account_id`：独立审计查询所需的旁路事件标识。
+
+### 4) B-05 接口
+- POST /api/auth/emergency/login：请求体
+   - {"username":"<emergency_username>","password":"<plaintext_password>"}
+- POST /api/auth/emergency/accounts/{accountId}/activate：请求体
+   - {"password":"<new_password>","expiresAt":"2026-12-31T23:59:59","reason":"drill"}
+- POST /api/auth/emergency/accounts/{accountId}/revoke：请求体
+   - {"reason":"incident closed"}
+- GET /api/auth/emergency/audit：支持 `from / to / username / outcome / page / pageSize`
+
+### 5) 审计与收敛规则
+- 旁路登录成功、失败、激活、撤销、refresh、拒绝访问都会写入 `security_audit`。
+- 旁路账号一旦 `EXPIRED / REVOKED / INACTIVE`，对应活跃 session 与 refresh token 会被收敛。
+- 旁路会话调用 `POST /api/auth/logout` 时不会返回 OIDC provider 跳转地址，但会返回 `authMode=BREAK_GLASS`。
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -281,6 +329,7 @@
    - BACKEND_OIDC_ENABLED（默认 false）
    - OIDC_ISSUER_URI / OIDC_CLIENT_ID / OIDC_CLIENT_SECRET
    - LOCAL_ACCESS_TOKEN_SECRET / LOCAL_ACCESS_TOKEN_TTL_SECONDS / LOCAL_REFRESH_TOKEN_TTL_SECONDS
+   - EMERGENCY_ACCESS_TOKEN_TTL_SECONDS / EMERGENCY_REFRESH_TOKEN_TTL_SECONDS / EMERGENCY_PASSWORD_HASH_STRENGTH
    - OIDC_STATE_TTL_SECONDS / REFRESH_TOKEN_HASH_ALGORITHM / LOCAL_TOKEN_ISSUER
 
 ### A-04 数据库存储（本轮新增）
@@ -298,6 +347,15 @@
    - auth_refresh_token
    - auth_session
    - security_audit
+- B-05 新增：
+   - emergency_account
+- B-05 在认证链路上新增字段：
+   - auth_session.auth_mode
+   - auth_session.emergency_account_id
+   - auth_refresh_token.auth_mode
+   - auth_refresh_token.emergency_account_id
+   - security_audit.auth_mode
+   - security_audit.emergency_account_id
 - B-04 在 `user_account` 上新增：
    - token_valid_after
    - disabled_at
@@ -313,13 +371,13 @@
    - work_order：2 条
    - model_result：2 条
 - 已生成 A-04 权限联调数据：
-   - user_account：8 条（含静态权限样例用户、B-04 禁用用户样例、B-04 权限收敛样例）
-   - rbac_role：5 条
+   - user_account：9 条（含静态权限样例用户、B-04 禁用用户样例、B-04 权限收敛样例、B-05 应急用户样例）
+   - rbac_role：6 条
    - rbac_permission：12 条
-   - rbac_user_role：8 条
-   - rbac_role_permission：24 条
-   - user_data_scope：9 条
-   - topic_scope_rule：6 条
+   - rbac_user_role：9 条
+   - rbac_role_permission：29 条
+   - user_data_scope：10 条
+   - topic_scope_rule：8 条
 - 已保留 B-02 静态权限样例：
    - user_account: U-OIDC-001 / oidc_static_sample
    - rbac_user_role: U-OIDC-001 -> REGIONAL_DISPATCHER
@@ -336,6 +394,14 @@
    - auth_session: ACTIVE / REVOKED 两类 session 状态样例，并包含 `ACCOUNT_DISABLED` / `PERMISSION_CHANGED` 吊销原因样例
    - user_account: `token_valid_after` 与 `disabled_at` 字段样例
    - auth_refresh_token: disabled user / permission convergence 对应的 `REVOKED` 样例记录
+- 已新增 B-05 应急旁路联调样例：
+   - emergency_account: ACTIVE / INACTIVE / EXPIRED 三类旁路账号
+   - user_account: `U-B05-COMMAND-001` 绑定 `BREAK_GLASS_COMMAND`
+   - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
+   - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
+- 说明：
+   - 仓库不保存旁路账号明文口令
+   - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令
 - 可直接用于 B-01 分页联调：
    - /api/object-dictionary/page?page=1&pageSize=3
    - /api/object-dictionary/page?page=2&pageSize=3
@@ -389,8 +455,16 @@
    - curl -s -X POST http://localhost:8080/api/auth/admin/users/U-INSPECT-001/disable -H "Authorization: Bearer <admin_access_token>"
 - 以平台管理员身份触发权限重大变更收敛：
    - curl -s -X POST http://localhost:8080/api/auth/admin/users/U-OIDC-001/permissions/revoke -H "Authorization: Bearer <admin_access_token>"
+- 激活应急旁路账号并设置临时口令：
+   - curl -s -X POST http://localhost:8080/api/auth/emergency/accounts/EA-B05-INACTIVE-001/activate -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"password\":\"Temp#2026\",\"expiresAt\":\"2026-12-31T23:59:59\",\"reason\":\"drill\"}"
+- 使用应急旁路账号登录：
+   - curl -s -X POST http://localhost:8080/api/auth/emergency/login -H "Content-Type: application/json" -d "{\"username\":\"bg_inactive_hz\",\"password\":\"Temp#2026\"}"
+- 撤销应急旁路账号：
+   - curl -s -X POST http://localhost:8080/api/auth/emergency/accounts/EA-B05-INACTIVE-001/revoke -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"reason\":\"drill finished\"}"
+- 查询应急旁路独立审计：
+   - curl -s "http://localhost:8080/api/auth/emergency/audit?page=0&pageSize=20" -H "Authorization: Bearer <admin_access_token>"
 
 ## 下一步建议
-- 基于当前认证骨架继续落地 B-05（应急旁路账号与审计）与 B-06（Gateway 校验与限流）。
+- 基于当前认证骨架继续落地 B-06（Gateway 校验与限流）。
 - 接入 Flyway，落地版本化迁移脚本。
 - 在网关层增加限流、审计、风险接口单独策略。

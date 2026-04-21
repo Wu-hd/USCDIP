@@ -38,6 +38,12 @@ public class SecurityAuditEntity {
     @Column(name = "session_id", length = 64)
     private String sessionId;
 
+    @Column(name = "auth_mode", length = 32)
+    private String authMode;
+
+    @Column(name = "emergency_account_id", length = 64)
+    private String emergencyAccountId;
+
     @Column(name = "outcome", nullable = false, length = 32)
     private String outcome;
 

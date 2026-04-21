@@ -3,10 +3,13 @@ package com.uscdip.backend.service;
 import com.uscdip.backend.config.BackendOidcProperties;
 import com.uscdip.backend.dto.TokenPairResponse;
 import com.uscdip.backend.entity.AuthRefreshTokenEntity;
+import com.uscdip.backend.entity.EmergencyAccountEntity;
 import com.uscdip.backend.entity.UserAccountEntity;
 import com.uscdip.backend.exception.AuthFlowException;
+import com.uscdip.backend.model.AuthMode;
 import com.uscdip.backend.model.ErrorCode;
 import com.uscdip.backend.repository.AuthRefreshTokenRepository;
+import com.uscdip.backend.repository.EmergencyAccountRepository;
 import com.uscdip.backend.repository.UserAccountRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -17,7 +20,7 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +38,7 @@ public class LocalTokenService {
 
     private final BackendOidcProperties oidcProperties;
     private final AuthRefreshTokenRepository authRefreshTokenRepository;
+    private final EmergencyAccountRepository emergencyAccountRepository;
     private final UserAccountRepository userAccountRepository;
     private final AuthorizationService authorizationService;
     private final LocalAccessTokenService localAccessTokenService;
@@ -44,6 +48,7 @@ public class LocalTokenService {
     public LocalTokenService(
             BackendOidcProperties oidcProperties,
             AuthRefreshTokenRepository authRefreshTokenRepository,
+            EmergencyAccountRepository emergencyAccountRepository,
             UserAccountRepository userAccountRepository,
             AuthorizationService authorizationService,
             LocalAccessTokenService localAccessTokenService,
@@ -52,6 +57,7 @@ public class LocalTokenService {
     ) {
         this.oidcProperties = oidcProperties;
         this.authRefreshTokenRepository = authRefreshTokenRepository;
+        this.emergencyAccountRepository = emergencyAccountRepository;
         this.userAccountRepository = userAccountRepository;
         this.authorizationService = authorizationService;
         this.localAccessTokenService = localAccessTokenService;
@@ -66,7 +72,33 @@ public class LocalTokenService {
         if (!"ACTIVE".equalsIgnoreCase(userAccount.getStatus())) {
             throw new AuthFlowException(ErrorCode.ACCOUNT_DISABLED, HttpStatus.UNAUTHORIZED, ErrorCode.ACCOUNT_DISABLED.defaultMessage());
         }
-        return createTokenPair(userAccount, UUID.randomUUID().toString(), null, clientIp, userAgent);
+        return createTokenPair(
+                userAccount,
+                UUID.randomUUID().toString(),
+                null,
+                clientIp,
+                userAgent,
+                AuthMode.STANDARD,
+                null
+        );
+    }
+
+    @Transactional
+    public TokenPairResponse issueForEmergencyAccount(EmergencyAccountEntity emergencyAccount, String clientIp, String userAgent) {
+        UserAccountEntity userAccount = userAccountRepository.findById(emergencyAccount.getLinkedUserId())
+                .orElseThrow(() -> new AuthFlowException(ErrorCode.USER_NOT_FOUND, HttpStatus.NOT_FOUND, "User not found: " + emergencyAccount.getLinkedUserId()));
+        if (!"ACTIVE".equalsIgnoreCase(userAccount.getStatus())) {
+            throw new AuthFlowException(ErrorCode.ACCOUNT_DISABLED, HttpStatus.UNAUTHORIZED, ErrorCode.ACCOUNT_DISABLED.defaultMessage());
+        }
+        return createTokenPair(
+                userAccount,
+                UUID.randomUUID().toString(),
+                null,
+                clientIp,
+                userAgent,
+                AuthMode.BREAK_GLASS,
+                emergencyAccount.getAccountId()
+        );
     }
 
     @Transactional
@@ -145,13 +177,25 @@ public class LocalTokenService {
 
         currentToken.setStatus(STATUS_ROTATED);
         currentToken.setUpdatedAt(now);
-        TokenPairResponse tokenPairResponse = createTokenPair(userAccount, currentToken.getSessionId(), currentToken, clientIp, userAgent);
+        TokenPairResponse tokenPairResponse = createTokenPair(
+                userAccount,
+                currentToken.getSessionId(),
+                currentToken,
+                clientIp,
+                userAgent,
+                currentToken.getAuthMode(),
+                currentToken.getEmergencyAccountId()
+        );
         authRefreshTokenRepository.save(currentToken);
         securityAuditService.log(
-                SecurityAuditService.EVENT_REFRESH_SUCCESS,
+                AuthMode.BREAK_GLASS.equals(currentToken.getAuthMode())
+                        ? SecurityAuditService.EVENT_BREAK_GLASS_TOKEN_REFRESH
+                        : SecurityAuditService.EVENT_REFRESH_SUCCESS,
                 currentToken.getUserId(),
                 currentToken.getTokenId(),
                 currentToken.getSessionId(),
+                currentToken.getAuthMode(),
+                currentToken.getEmergencyAccountId(),
                 SecurityAuditService.OUTCOME_SUCCESS,
                 "Refresh token rotated successfully",
                 clientIp,
@@ -165,27 +209,47 @@ public class LocalTokenService {
             String sessionId,
             AuthRefreshTokenEntity rotatedFrom,
             String clientIp,
-            String userAgent
+            String userAgent,
+            String authMode,
+            String emergencyAccountId
     ) {
         LocalAccessTokenService.AccessTokenIssueResult accessToken = localAccessTokenService.issue(
                 userAccount.getUserId(),
                 userAccount.getUsername(),
-                sessionId
+                sessionId,
+                authMode,
+                emergencyAccountId,
+                AuthMode.BREAK_GLASS.equals(authMode)
+                        ? oidcProperties.getEmergencyAccessTokenTtlSeconds()
+                        : oidcProperties.getAccessTokenTtlSeconds()
         );
 
         String plainRefreshToken = generateRefreshToken();
         String refreshTokenId = UUID.randomUUID().toString();
-        Instant refreshTokenExpiresAt = Instant.now().plusSeconds(oidcProperties.getRefreshTokenTtlSeconds());
+        Instant refreshTokenExpiresAt = Instant.now().plusSeconds(
+                AuthMode.BREAK_GLASS.equals(authMode)
+                        ? oidcProperties.getEmergencyRefreshTokenTtlSeconds()
+                        : oidcProperties.getRefreshTokenTtlSeconds()
+        );
         LocalDateTime now = LocalDateTime.now();
-        tokenRevocationService.ensureSessionRecorded(userAccount.getUserId(), sessionId, clientIp, userAgent);
+        tokenRevocationService.ensureSessionRecorded(
+                userAccount.getUserId(),
+                sessionId,
+                authMode,
+                emergencyAccountId,
+                clientIp,
+                userAgent
+        );
 
         AuthRefreshTokenEntity refreshTokenEntity = new AuthRefreshTokenEntity(
                 refreshTokenId,
                 userAccount.getUserId(),
                 hashRefreshToken(plainRefreshToken),
                 sessionId,
+                authMode,
+                emergencyAccountId,
                 now,
-                LocalDateTime.ofInstant(refreshTokenExpiresAt, ZoneOffset.UTC),
+                LocalDateTime.ofInstant(refreshTokenExpiresAt, ZoneId.systemDefault()),
                 rotatedFrom == null ? null : rotatedFrom.getTokenId(),
                 null,
                 STATUS_ACTIVE,

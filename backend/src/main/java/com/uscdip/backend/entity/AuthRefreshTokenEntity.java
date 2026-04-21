@@ -32,6 +32,12 @@ public class AuthRefreshTokenEntity {
     @Column(name = "session_id", nullable = false, length = 64)
     private String sessionId;
 
+    @Column(name = "auth_mode", nullable = false, length = 32)
+    private String authMode;
+
+    @Column(name = "emergency_account_id", length = 64)
+    private String emergencyAccountId;
+
     @Column(name = "issued_at", nullable = false)
     private LocalDateTime issuedAt;
 

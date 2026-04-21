@@ -6,6 +6,7 @@ import com.uscdip.backend.dto.AuthLoginDescriptor;
 import com.uscdip.backend.dto.TokenPairResponse;
 import com.uscdip.backend.dto.TokenRevocationResponse;
 import com.uscdip.backend.dto.TokenRefreshRequest;
+import com.uscdip.backend.model.AuthMode;
 import com.uscdip.backend.model.ApiResponse;
 import com.uscdip.backend.model.ErrorCode;
 import com.uscdip.backend.service.AuthorizationService;
@@ -129,7 +130,16 @@ public class AuthController {
 
     @GetMapping("/me")
     @Operation(summary = "获取当前登录用户快照")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> me(Authentication authentication) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> me(Authentication authentication, HttpServletRequest request) {
+        if (authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getPrincipal() instanceof LocalAccessTokenService.AccessTokenPrincipal) {
+            return buildLocalSnapshotResponse(authentication);
+        }
+        if (hasBearerToken(request)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.failure(ErrorCode.UNAUTHORIZED, ErrorCode.UNAUTHORIZED.defaultMessage()));
+        }
         if (!oidcProperties.isEnabled()) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(ApiResponse.failure(ErrorCode.OIDC_DISABLED, ErrorCode.OIDC_DISABLED.defaultMessage()));
@@ -171,6 +181,36 @@ public class AuthController {
             HttpServletRequest request,
             HttpServletResponse response
     ) {
+        if (authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getPrincipal() instanceof LocalAccessTokenService.AccessTokenPrincipal accessTokenPrincipal) {
+            try {
+                TokenRevocationResponse revocation = tokenRevocationService.revokeCurrentSession(
+                        accessTokenPrincipal.userId(),
+                        accessTokenPrincipal.sessionId(),
+                        resolveClientIp(request),
+                        request.getHeader("User-Agent")
+                );
+                new SecurityContextLogoutHandler().logout(request, response, authentication);
+                SecurityContextHolder.clearContext();
+
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("loggedOut", true);
+                payload.put("providerLogoutUrl", null);
+                payload.put("postLogoutRedirectUri", null);
+                payload.put("revokedSessionCount", revocation.revokedSessionCount());
+                payload.put("revokedRefreshTokenCount", revocation.revokedRefreshTokenCount());
+                payload.put("authMode", accessTokenPrincipal.authMode());
+                return ResponseEntity.ok(ApiResponse.success(payload));
+            } catch (Exception ex) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(ApiResponse.failure(ErrorCode.OIDC_LOGOUT_FAILED, ex.getMessage()));
+            }
+        }
+        if (hasBearerToken(request)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.failure(ErrorCode.UNAUTHORIZED, ErrorCode.UNAUTHORIZED.defaultMessage()));
+        }
         if (!oidcProperties.isEnabled()) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(ApiResponse.failure(ErrorCode.OIDC_DISABLED, ErrorCode.OIDC_DISABLED.defaultMessage()));
@@ -200,6 +240,7 @@ public class AuthController {
             payload.put("postLogoutRedirectUri", oidcProperties.getPostLogoutRedirectUri());
             payload.put("revokedSessionCount", revocation.revokedSessionCount());
             payload.put("revokedRefreshTokenCount", revocation.revokedRefreshTokenCount());
+            payload.put("authMode", AuthMode.OIDC);
             return ResponseEntity.ok(ApiResponse.success(payload));
         } catch (Exception ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -227,6 +268,35 @@ public class AuthController {
             return accessTokenPrincipal.sessionId();
         }
         return null;
+    }
+
+    private ResponseEntity<ApiResponse<Map<String, Object>>> buildLocalSnapshotResponse(Authentication authentication) {
+        String userId = resolveOrSyncUserId(authentication);
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.failure(ErrorCode.UNAUTHORIZED, ErrorCode.UNAUTHORIZED.defaultMessage()));
+        }
+        Optional<Map<String, Object>> snapshot = authorizationService.getUserSnapshot(userId);
+        if (snapshot.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.failure(ErrorCode.USER_NOT_FOUND, "User not found: " + userId));
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("userId", userId);
+        payload.put("authenticationType", authentication.getClass().getSimpleName());
+        payload.put("snapshot", snapshot.get());
+        if (authentication.getPrincipal() instanceof LocalAccessTokenService.AccessTokenPrincipal accessTokenPrincipal) {
+            payload.put("authMode", accessTokenPrincipal.authMode());
+        }
+        return ResponseEntity.ok(ApiResponse.success(payload));
+    }
+
+    private boolean hasBearerToken(HttpServletRequest request) {
+        if (request == null) {
+            return false;
+        }
+        String authorization = request.getHeader("Authorization");
+        return authorization != null && authorization.startsWith("Bearer ");
     }
 
     private String buildProviderLogoutUrl(Authentication authentication) {

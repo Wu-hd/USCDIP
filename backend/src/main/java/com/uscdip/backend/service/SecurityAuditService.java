@@ -1,6 +1,7 @@
 package com.uscdip.backend.service;
 
 import com.uscdip.backend.entity.SecurityAuditEntity;
+import com.uscdip.backend.model.AuthMode;
 import com.uscdip.backend.repository.SecurityAuditRepository;
 import com.uscdip.backend.support.TraceIdContext;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,12 @@ public class SecurityAuditService {
     public static final String EVENT_USER_DISABLED = "TOKEN_USER_DISABLED";
     public static final String EVENT_PERMISSION_REVOKED = "TOKEN_PERMISSION_REVOKED";
     public static final String EVENT_ACCESS_REJECTED = "TOKEN_ACCESS_REJECTED";
+    public static final String EVENT_BREAK_GLASS_LOGIN_SUCCESS = "BREAK_GLASS_LOGIN_SUCCESS";
+    public static final String EVENT_BREAK_GLASS_LOGIN_FAILED = "BREAK_GLASS_LOGIN_FAILED";
+    public static final String EVENT_BREAK_GLASS_ACCOUNT_ACTIVATED = "BREAK_GLASS_ACCOUNT_ACTIVATED";
+    public static final String EVENT_BREAK_GLASS_ACCOUNT_REVOKED = "BREAK_GLASS_ACCOUNT_REVOKED";
+    public static final String EVENT_BREAK_GLASS_TOKEN_REFRESH = "BREAK_GLASS_TOKEN_REFRESH";
+    public static final String EVENT_BREAK_GLASS_ACCESS_REJECTED = "BREAK_GLASS_ACCESS_REJECTED";
 
     private final SecurityAuditRepository securityAuditRepository;
 
@@ -40,12 +47,29 @@ public class SecurityAuditService {
             String clientIp,
             String userAgent
     ) {
+        log(eventType, userId, tokenId, sessionId, null, null, outcome, detail, clientIp, userAgent);
+    }
+
+    public void log(
+            String eventType,
+            String userId,
+            String tokenId,
+            String sessionId,
+            String authMode,
+            String emergencyAccountId,
+            String outcome,
+            String detail,
+            String clientIp,
+            String userAgent
+    ) {
         securityAuditRepository.save(new SecurityAuditEntity(
                 null,
                 eventType,
                 userId,
                 tokenId,
                 sessionId,
+                authMode == null ? AuthMode.STANDARD : authMode,
+                emergencyAccountId,
                 outcome,
                 detail,
                 clientIp,

@@ -3,11 +3,14 @@ package com.uscdip.backend.service;
 import com.uscdip.backend.dto.TokenRevocationResponse;
 import com.uscdip.backend.entity.AuthRefreshTokenEntity;
 import com.uscdip.backend.entity.AuthSessionEntity;
+import com.uscdip.backend.entity.EmergencyAccountEntity;
 import com.uscdip.backend.entity.UserAccountEntity;
 import com.uscdip.backend.exception.AuthFlowException;
+import com.uscdip.backend.model.AuthMode;
 import com.uscdip.backend.model.ErrorCode;
 import com.uscdip.backend.repository.AuthRefreshTokenRepository;
 import com.uscdip.backend.repository.AuthSessionRepository;
+import com.uscdip.backend.repository.EmergencyAccountRepository;
 import com.uscdip.backend.repository.UserAccountRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -27,28 +30,45 @@ public class TokenRevocationService {
 
     private final AuthSessionRepository authSessionRepository;
     private final AuthRefreshTokenRepository authRefreshTokenRepository;
+    private final EmergencyAccountRepository emergencyAccountRepository;
     private final UserAccountRepository userAccountRepository;
     private final SecurityAuditService securityAuditService;
 
     public TokenRevocationService(
             AuthSessionRepository authSessionRepository,
             AuthRefreshTokenRepository authRefreshTokenRepository,
+            EmergencyAccountRepository emergencyAccountRepository,
             UserAccountRepository userAccountRepository,
             SecurityAuditService securityAuditService
     ) {
         this.authSessionRepository = authSessionRepository;
         this.authRefreshTokenRepository = authRefreshTokenRepository;
+        this.emergencyAccountRepository = emergencyAccountRepository;
         this.userAccountRepository = userAccountRepository;
         this.securityAuditService = securityAuditService;
     }
 
     @Transactional
     public void ensureSessionRecorded(String userId, String sessionId, String clientIp, String userAgent) {
+        ensureSessionRecorded(userId, sessionId, AuthMode.STANDARD, null, clientIp, userAgent);
+    }
+
+    @Transactional
+    public void ensureSessionRecorded(
+            String userId,
+            String sessionId,
+            String authMode,
+            String emergencyAccountId,
+            String clientIp,
+            String userAgent
+    ) {
         LocalDateTime now = LocalDateTime.now();
         AuthSessionEntity session = authSessionRepository.findById(sessionId)
                 .orElseGet(() -> new AuthSessionEntity(
                         sessionId,
                         userId,
+                        authMode,
+                        emergencyAccountId,
                         SESSION_STATUS_ACTIVE,
                         null,
                         null,
@@ -58,6 +78,8 @@ public class TokenRevocationService {
                         now
                 ));
         session.setUserId(userId);
+        session.setAuthMode(authMode);
+        session.setEmergencyAccountId(emergencyAccountId);
         session.setStatus(SESSION_STATUS_ACTIVE);
         session.setClientIp(clientIp);
         session.setUserAgent(truncate(userAgent, 512));
@@ -80,6 +102,15 @@ public class TokenRevocationService {
         if (!SESSION_STATUS_ACTIVE.equals(session.getStatus())) {
             throw accessRejected(principal.userId(), principal.tokenId(), principal.sessionId(), "Session is revoked", clientIp, userAgent);
         }
+        ensureEmergencyAccountAllowsToken(
+                principal.authMode(),
+                principal.emergencyAccountId(),
+                principal.userId(),
+                principal.tokenId(),
+                principal.sessionId(),
+                clientIp,
+                userAgent
+        );
     }
 
     @Transactional
@@ -90,6 +121,7 @@ public class TokenRevocationService {
         if (!SESSION_STATUS_ACTIVE.equals(session.getStatus())) {
             throw refreshRejected(refreshToken, "Session is revoked", clientIp, userAgent);
         }
+        ensureEmergencyAccountAllowsRefreshToken(refreshToken, clientIp, userAgent);
     }
 
     @Transactional
@@ -101,6 +133,8 @@ public class TokenRevocationService {
                 userId,
                 null,
                 sessionId,
+                resolveSessionAuthMode(sessionId),
+                resolveSessionEmergencyAccountId(sessionId),
                 SecurityAuditService.OUTCOME_SUCCESS,
                 "Current session logout completed",
                 clientIp,
@@ -179,6 +213,30 @@ public class TokenRevocationService {
         }
     }
 
+    private void ensureEmergencyAccountAllowsToken(
+            String authMode,
+            String emergencyAccountId,
+            String userId,
+            String tokenId,
+            String sessionId,
+            String clientIp,
+            String userAgent
+    ) {
+        if (!AuthMode.BREAK_GLASS.equals(authMode)) {
+            return;
+        }
+        EmergencyAccountEntity emergencyAccount = loadEmergencyAccount(emergencyAccountId, userId, tokenId, sessionId, clientIp, userAgent);
+        if (!isEmergencyAccountActive(emergencyAccount)) {
+            revokeEmergencyAccountTokens(emergencyAccount.getAccountId(), "ACCOUNT_NOT_AVAILABLE");
+            throw accessRejected(userId, tokenId, sessionId, "Emergency account is not active", clientIp, userAgent, authMode, emergencyAccountId);
+        }
+        if (isEmergencyAccountExpired(emergencyAccount)) {
+            expireEmergencyAccount(emergencyAccount);
+            revokeEmergencyAccountTokens(emergencyAccount.getAccountId(), "ACCOUNT_EXPIRED");
+            throw accessRejected(userId, tokenId, sessionId, "Emergency account is expired", clientIp, userAgent, authMode, emergencyAccountId);
+        }
+    }
+
     private void ensureUserAllowsRefreshToken(
             UserAccountEntity user,
             AuthRefreshTokenEntity refreshToken,
@@ -194,6 +252,27 @@ public class TokenRevocationService {
         }
     }
 
+    private void ensureEmergencyAccountAllowsRefreshToken(
+            AuthRefreshTokenEntity refreshToken,
+            String clientIp,
+            String userAgent
+    ) {
+        if (!AuthMode.BREAK_GLASS.equals(refreshToken.getAuthMode())) {
+            return;
+        }
+        EmergencyAccountEntity emergencyAccount = emergencyAccountRepository.findById(refreshToken.getEmergencyAccountId())
+                .orElseThrow(() -> refreshRejected(refreshToken, "Emergency account not found", clientIp, userAgent));
+        if (!isEmergencyAccountActive(emergencyAccount)) {
+            revokeEmergencyAccountTokens(emergencyAccount.getAccountId(), "ACCOUNT_NOT_AVAILABLE");
+            throw refreshRejected(refreshToken, "Emergency account is not active", clientIp, userAgent);
+        }
+        if (isEmergencyAccountExpired(emergencyAccount)) {
+            expireEmergencyAccount(emergencyAccount);
+            revokeEmergencyAccountTokens(emergencyAccount.getAccountId(), "ACCOUNT_EXPIRED");
+            throw refreshRejected(refreshToken, "Emergency account is expired", clientIp, userAgent);
+        }
+    }
+
     private AuthFlowException accessRejected(
             String userId,
             String tokenId,
@@ -202,11 +281,28 @@ public class TokenRevocationService {
             String clientIp,
             String userAgent
     ) {
+        return accessRejected(userId, tokenId, sessionId, detail, clientIp, userAgent, AuthMode.STANDARD, null);
+    }
+
+    private AuthFlowException accessRejected(
+            String userId,
+            String tokenId,
+            String sessionId,
+            String detail,
+            String clientIp,
+            String userAgent,
+            String authMode,
+            String emergencyAccountId
+    ) {
         securityAuditService.log(
-                SecurityAuditService.EVENT_ACCESS_REJECTED,
+                AuthMode.BREAK_GLASS.equals(authMode)
+                        ? SecurityAuditService.EVENT_BREAK_GLASS_ACCESS_REJECTED
+                        : SecurityAuditService.EVENT_ACCESS_REJECTED,
                 userId,
                 tokenId,
                 sessionId,
+                authMode,
+                emergencyAccountId,
                 SecurityAuditService.OUTCOME_DENY,
                 detail,
                 clientIp,
@@ -222,10 +318,14 @@ public class TokenRevocationService {
             String userAgent
     ) {
         securityAuditService.log(
-                SecurityAuditService.EVENT_REFRESH_REVOKED,
+                AuthMode.BREAK_GLASS.equals(refreshToken.getAuthMode())
+                        ? SecurityAuditService.EVENT_BREAK_GLASS_ACCESS_REJECTED
+                        : SecurityAuditService.EVENT_REFRESH_REVOKED,
                 refreshToken.getUserId(),
                 refreshToken.getTokenId(),
                 refreshToken.getSessionId(),
+                refreshToken.getAuthMode(),
+                refreshToken.getEmergencyAccountId(),
                 SecurityAuditService.OUTCOME_DENY,
                 detail,
                 clientIp,
@@ -271,6 +371,8 @@ public class TokenRevocationService {
                 session.getUserId(),
                 null,
                 session.getSessionId(),
+                session.getAuthMode(),
+                session.getEmergencyAccountId(),
                 SecurityAuditService.OUTCOME_SUCCESS,
                 "Session revoked due to " + reason,
                 session.getClientIp(),
@@ -303,6 +405,78 @@ public class TokenRevocationService {
             }
         }
         return revokedCount;
+    }
+
+    @Transactional
+    public int revokeEmergencyAccountTokens(String emergencyAccountId, String reason) {
+        int revokedSessions = revokeSessionsByEmergencyAccount(emergencyAccountId, reason);
+        int revokedRefreshTokens = revokeRefreshTokensByEmergencyAccount(emergencyAccountId, reason);
+        return revokedSessions + revokedRefreshTokens;
+    }
+
+    private int revokeSessionsByEmergencyAccount(String emergencyAccountId, String reason) {
+        int revokedCount = 0;
+        for (AuthSessionEntity session : authSessionRepository.findByEmergencyAccountId(emergencyAccountId)) {
+            revokedCount += revokeSession(session, reason);
+        }
+        return revokedCount;
+    }
+
+    private int revokeRefreshTokensByEmergencyAccount(String emergencyAccountId, String reason) {
+        return revokeRefreshTokens(authRefreshTokenRepository.findByEmergencyAccountId(emergencyAccountId), reason);
+    }
+
+    private EmergencyAccountEntity loadEmergencyAccount(
+            String emergencyAccountId,
+            String userId,
+            String tokenId,
+            String sessionId,
+            String clientIp,
+            String userAgent
+    ) {
+        if (emergencyAccountId == null || emergencyAccountId.isBlank()) {
+            throw accessRejected(userId, tokenId, sessionId, "Emergency account is missing", clientIp, userAgent, AuthMode.BREAK_GLASS, null);
+        }
+        return emergencyAccountRepository.findById(emergencyAccountId)
+                .orElseThrow(() -> accessRejected(
+                        userId,
+                        tokenId,
+                        sessionId,
+                        "Emergency account not found",
+                        clientIp,
+                        userAgent,
+                        AuthMode.BREAK_GLASS,
+                        emergencyAccountId
+                ));
+    }
+
+    private boolean isEmergencyAccountActive(EmergencyAccountEntity emergencyAccount) {
+        return "ACTIVE".equalsIgnoreCase(emergencyAccount.getStatus());
+    }
+
+    private boolean isEmergencyAccountExpired(EmergencyAccountEntity emergencyAccount) {
+        return emergencyAccount.getExpiresAt() != null && emergencyAccount.getExpiresAt().isBefore(LocalDateTime.now());
+    }
+
+    private void expireEmergencyAccount(EmergencyAccountEntity emergencyAccount) {
+        if ("EXPIRED".equalsIgnoreCase(emergencyAccount.getStatus())) {
+            return;
+        }
+        emergencyAccount.setStatus("EXPIRED");
+        emergencyAccount.setUpdatedAt(LocalDateTime.now());
+        emergencyAccountRepository.save(emergencyAccount);
+    }
+
+    private String resolveSessionAuthMode(String sessionId) {
+        return authSessionRepository.findById(sessionId)
+                .map(AuthSessionEntity::getAuthMode)
+                .orElse(AuthMode.STANDARD);
+    }
+
+    private String resolveSessionEmergencyAccountId(String sessionId) {
+        return authSessionRepository.findById(sessionId)
+                .map(AuthSessionEntity::getEmergencyAccountId)
+                .orElse(null);
     }
 
     private String truncate(String value, int maxLength) {

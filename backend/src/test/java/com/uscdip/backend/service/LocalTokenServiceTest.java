@@ -5,7 +5,9 @@ import com.uscdip.backend.dto.TokenPairResponse;
 import com.uscdip.backend.entity.AuthRefreshTokenEntity;
 import com.uscdip.backend.entity.UserAccountEntity;
 import com.uscdip.backend.exception.AuthFlowException;
+import com.uscdip.backend.model.AuthMode;
 import com.uscdip.backend.repository.AuthRefreshTokenRepository;
+import com.uscdip.backend.repository.EmergencyAccountRepository;
 import com.uscdip.backend.repository.UserAccountRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,6 +41,9 @@ class LocalTokenServiceTest {
 
     @Mock
     private UserAccountRepository userAccountRepository;
+
+    @Mock
+    private EmergencyAccountRepository emergencyAccountRepository;
 
     @Mock
     private AuthorizationService authorizationService;
@@ -62,6 +68,7 @@ class LocalTokenServiceTest {
         localTokenService = new LocalTokenService(
                 oidcProperties,
                 authRefreshTokenRepository,
+                emergencyAccountRepository,
                 userAccountRepository,
                 authorizationService,
                 localAccessTokenService,
@@ -97,6 +104,8 @@ class LocalTokenServiceTest {
                 "U-DISPATCH-001",
                 localTokenService.hashRefreshToken(oldRefreshToken),
                 "SESSION-001",
+                AuthMode.STANDARD,
+                null,
                 LocalDateTime.now(),
                 LocalDateTime.now().plusDays(7),
                 null,
@@ -137,6 +146,8 @@ class LocalTokenServiceTest {
                 "U-OIDC-001",
                 localTokenService.hashRefreshToken(replayedToken),
                 "SESSION-ROTATE-001",
+                AuthMode.STANDARD,
+                null,
                 LocalDateTime.now(),
                 LocalDateTime.now().plusDays(7),
                 null,
@@ -152,6 +163,8 @@ class LocalTokenServiceTest {
                 "U-OIDC-001",
                 localTokenService.hashRefreshToken("sample-refresh-rotated-new-001"),
                 "SESSION-ROTATE-001",
+                AuthMode.STANDARD,
+                null,
                 LocalDateTime.now(),
                 LocalDateTime.now().plusDays(7),
                 "RT-OLD-001",
@@ -189,7 +202,7 @@ class LocalTokenServiceTest {
 
     private void stubTokenIssuance() {
         when(authRefreshTokenRepository.save(any(AuthRefreshTokenEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(localAccessTokenService.issue(any(), any(), any())).thenReturn(
+        when(localAccessTokenService.issue(any(), any(), any(), any(), any(), anyLong())).thenReturn(
                 new LocalAccessTokenService.AccessTokenIssueResult(
                         "access-token",
                         Instant.parse("2099-01-01T00:00:00Z"),

@@ -8,6 +8,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -43,8 +45,23 @@ public class SecurityConfig {
             "/api/auth/login",
             "/api/auth/login-url",
             "/api/auth/callback",
-            "/api/auth/refresh"
+            "/api/auth/refresh",
+            "/api/auth/emergency/login"
     };
+
+    @Bean
+    LocalAccessTokenAuthenticationFilter localAccessTokenAuthenticationFilter(
+            com.uscdip.backend.service.LocalAccessTokenService localAccessTokenService,
+            com.uscdip.backend.service.TokenRevocationService tokenRevocationService,
+            org.springframework.beans.factory.ObjectProvider<JwtDecoder> jwtDecoderProvider
+    ) {
+        return new LocalAccessTokenAuthenticationFilter(localAccessTokenService, tokenRevocationService, jwtDecoderProvider);
+    }
+
+    @Bean
+    PasswordEncoder passwordEncoder(BackendOidcProperties oidcProperties) {
+        return new BCryptPasswordEncoder(oidcProperties.getEmergencyPasswordHashStrength());
+    }
 
     private static final String[] DEMO_ENDPOINTS = {
             "/api/menu-boundaries",
@@ -94,15 +111,6 @@ public class SecurityConfig {
             return NimbusJwtDecoder.withJwkSetUri(oidcProperties.getIssuerUri() + "/protocol/openid-connect/certs").build();
         }
 
-        @Bean
-        LocalAccessTokenAuthenticationFilter localAccessTokenAuthenticationFilter(
-                com.uscdip.backend.service.LocalAccessTokenService localAccessTokenService,
-                com.uscdip.backend.service.TokenRevocationService tokenRevocationService,
-                org.springframework.beans.factory.ObjectProvider<JwtDecoder> jwtDecoderProvider
-        ) {
-            return new LocalAccessTokenAuthenticationFilter(localAccessTokenService, tokenRevocationService, jwtDecoderProvider);
-        }
-
         private ClientRegistration buildClientRegistration(BackendOidcProperties oidcProperties) {
             String issuerUri = oidcProperties.getIssuerUri();
             return ClientRegistration.withRegistrationId(oidcProperties.getRegistrationId())
@@ -131,7 +139,11 @@ public class SecurityConfig {
     static class OidcDisabledSecurityConfiguration {
 
         @Bean
-        SecurityFilterChain localSecurityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
+        SecurityFilterChain localSecurityFilterChain(
+                HttpSecurity http,
+                ObjectMapper objectMapper,
+                LocalAccessTokenAuthenticationFilter localAccessTokenAuthenticationFilter
+        ) throws Exception {
             http
                     .csrf(csrf -> csrf.disable())
                     .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
@@ -142,6 +154,7 @@ public class SecurityConfig {
                             .requestMatchers(DEMO_ENDPOINTS).permitAll()
                             .anyRequest().authenticated()
                     )
+                    .addFilterBefore(localAccessTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                     .exceptionHandling(ex -> configureExceptionHandling(ex, objectMapper));
 
             return http.build();

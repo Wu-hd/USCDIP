@@ -13,6 +13,9 @@ public class BackendOidcProperties {
     private String accessTokenSecret = "change-me-local-access-token-secret";
     private long accessTokenTtlSeconds = 1800;
     private long refreshTokenTtlSeconds = 1209600;
+    private long emergencyAccessTokenTtlSeconds = 600;
+    private long emergencyRefreshTokenTtlSeconds = 1800;
+    private int emergencyPasswordHashStrength = 10;
     private long stateTtlSeconds = 300;
     private String refreshTokenHashAlgorithm = "SHA-256";
     private String localTokenIssuer = "uscdip-backend";
@@ -82,6 +85,30 @@ public class BackendOidcProperties {
 
     public void setRefreshTokenTtlSeconds(long refreshTokenTtlSeconds) {
         this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
+    }
+
+    public long getEmergencyAccessTokenTtlSeconds() {
+        return emergencyAccessTokenTtlSeconds;
+    }
+
+    public void setEmergencyAccessTokenTtlSeconds(long emergencyAccessTokenTtlSeconds) {
+        this.emergencyAccessTokenTtlSeconds = emergencyAccessTokenTtlSeconds;
+    }
+
+    public long getEmergencyRefreshTokenTtlSeconds() {
+        return emergencyRefreshTokenTtlSeconds;
+    }
+
+    public void setEmergencyRefreshTokenTtlSeconds(long emergencyRefreshTokenTtlSeconds) {
+        this.emergencyRefreshTokenTtlSeconds = emergencyRefreshTokenTtlSeconds;
+    }
+
+    public int getEmergencyPasswordHashStrength() {
+        return emergencyPasswordHashStrength;
+    }
+
+    public void setEmergencyPasswordHashStrength(int emergencyPasswordHashStrength) {
+        this.emergencyPasswordHashStrength = emergencyPasswordHashStrength;
     }
 
     public long getStateTtlSeconds() {

@@ -26,6 +26,12 @@ public class AuthSessionEntity {
     @Column(name = "user_id", nullable = false, length = 64)
     private String userId;
 
+    @Column(name = "auth_mode", nullable = false, length = 32)
+    private String authMode;
+
+    @Column(name = "emergency_account_id", length = 64)
+    private String emergencyAccountId;
+
     @Column(name = "status", nullable = false, length = 32)
     private String status;
 

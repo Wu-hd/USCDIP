@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uscdip.backend.config.BackendOidcProperties;
 import com.uscdip.backend.exception.AuthFlowException;
+import com.uscdip.backend.model.AuthMode;
 import com.uscdip.backend.model.ErrorCode;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -32,8 +33,19 @@ public class LocalAccessTokenService {
     }
 
     public AccessTokenIssueResult issue(String userId, String username, String sessionId) {
+        return issue(userId, username, sessionId, AuthMode.STANDARD, null, oidcProperties.getAccessTokenTtlSeconds());
+    }
+
+    public AccessTokenIssueResult issue(
+            String userId,
+            String username,
+            String sessionId,
+            String authMode,
+            String emergencyAccountId,
+            long ttlSeconds
+    ) {
         Instant issuedAt = Instant.now();
-        Instant expiresAt = issuedAt.plusSeconds(oidcProperties.getAccessTokenTtlSeconds());
+        Instant expiresAt = issuedAt.plusSeconds(ttlSeconds);
         String tokenId = UUID.randomUUID().toString();
 
         Map<String, Object> header = Map.of(
@@ -46,6 +58,10 @@ public class LocalAccessTokenService {
         payload.put("username", username);
         payload.put("sid", sessionId);
         payload.put("jti", tokenId);
+        payload.put("auth_mode", authMode == null ? AuthMode.STANDARD : authMode);
+        if (emergencyAccountId != null && !emergencyAccountId.isBlank()) {
+            payload.put("emergency_account_id", emergencyAccountId);
+        }
         payload.put("token_use", "access");
         payload.put("iat", issuedAt.getEpochSecond());
         payload.put("exp", expiresAt.getEpochSecond());
@@ -82,6 +98,8 @@ public class LocalAccessTokenService {
                     asString(claims.get("username")),
                     asString(claims.get("sid")),
                     asString(claims.get("jti")),
+                    asString(claims.getOrDefault("auth_mode", AuthMode.STANDARD)),
+                    asString(claims.get("emergency_account_id")),
                     issuedAt,
                     expiresAt,
                     claims
@@ -149,6 +167,8 @@ public class LocalAccessTokenService {
             String username,
             String sessionId,
             String tokenId,
+            String authMode,
+            String emergencyAccountId,
             Instant issuedAt,
             Instant expiresAt,
             Map<String, Object> claims

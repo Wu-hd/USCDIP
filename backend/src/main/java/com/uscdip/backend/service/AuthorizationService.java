@@ -35,6 +35,7 @@ public class AuthorizationService {
     private static final String ROLE_INSPECTOR = "INSPECTOR";
     private static final String ROLE_ALGORITHM_ENGINEER = "ALGORITHM_ENGINEER";
     private static final String ROLE_LEADER_READONLY = "LEADER_READONLY";
+    private static final String ROLE_BREAK_GLASS_COMMAND = "BREAK_GLASS_COMMAND";
 
     private final UserAccountRepository userAccountRepository;
     private final UserRoleRepository userRoleRepository;
@@ -288,6 +289,9 @@ public class AuthorizationService {
             if (ROLE_REGIONAL_DISPATCHER.equals(roleCode) && !isBlank(regionId) && regionScopes.contains(regionId)) {
                 return true;
             }
+            if (ROLE_BREAK_GLASS_COMMAND.equals(roleCode) && !isBlank(regionId) && regionScopes.contains(regionId)) {
+                return true;
+            }
             if (ROLE_INSPECTOR.equals(roleCode) && !isBlank(assignee)
                     && (assignee.equalsIgnoreCase(normalize(user.getUsername()))
                     || assignee.equalsIgnoreCase(normalize(user.getUserId())))) {
@@ -376,6 +380,7 @@ public class AuthorizationService {
         return switch (roleCode) {
             case ROLE_PLATFORM_ADMIN -> "ALL";
             case ROLE_REGIONAL_DISPATCHER -> "REGION_ONLY";
+            case ROLE_BREAK_GLASS_COMMAND -> "REGION_ONLY";
             case ROLE_INSPECTOR -> "ASSIGNEE_ONLY";
             case ROLE_ALGORITHM_ENGINEER -> "MASKED_FEATURE_ONLY";
             case ROLE_LEADER_READONLY -> "AGGREGATED_READ_ONLY";

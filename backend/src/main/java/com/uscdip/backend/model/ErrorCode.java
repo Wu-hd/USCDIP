@@ -16,6 +16,7 @@ public enum ErrorCode {
     OIDC_LOGIN_REQUIRED("OIDC_LOGIN_REQUIRED", "OIDC login is required"),
     OIDC_USER_SYNC_FAILED("OIDC_USER_SYNC_FAILED", "OIDC user synchronization failed"),
     OIDC_LOGOUT_FAILED("OIDC_LOGOUT_FAILED", "OIDC logout failed"),
+    ACCOUNT_DISABLED("ACCOUNT_DISABLED", "User account is disabled"),
     TOKEN_REFRESH_INVALID("TOKEN_REFRESH_INVALID", "Refresh token is invalid"),
     TOKEN_REFRESH_EXPIRED("TOKEN_REFRESH_EXPIRED", "Refresh token is expired"),
     TOKEN_REFRESH_REPLAY_DETECTED("TOKEN_REFRESH_REPLAY_DETECTED", "Refresh token replay detected"),

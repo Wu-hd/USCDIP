@@ -48,6 +48,9 @@ class LocalTokenServiceTest {
     @Mock
     private SecurityAuditService securityAuditService;
 
+    @Mock
+    private TokenRevocationService tokenRevocationService;
+
     private LocalTokenService localTokenService;
 
     @BeforeEach
@@ -62,7 +65,8 @@ class LocalTokenServiceTest {
                 userAccountRepository,
                 authorizationService,
                 localAccessTokenService,
-                securityAuditService
+                securityAuditService,
+                tokenRevocationService
         );
     }
 
@@ -70,7 +74,7 @@ class LocalTokenServiceTest {
     void issueForUserStoresRefreshTokenHashInsteadOfPlaintext() {
         stubTokenIssuance();
         when(userAccountRepository.findById("U-DISPATCH-001")).thenReturn(Optional.of(
-                new UserAccountEntity("U-DISPATCH-001", "hz_dispatcher", "杭州区域调度员", "REGION-HZ", "ACTIVE", LocalDateTime.now(), LocalDateTime.now())
+                new UserAccountEntity("U-DISPATCH-001", "hz_dispatcher", "杭州区域调度员", "REGION-HZ", "ACTIVE", null, null, LocalDateTime.now(), LocalDateTime.now())
         ));
         when(authorizationService.getUserSnapshot("U-DISPATCH-001")).thenReturn(Optional.of(Map.of("userId", "U-DISPATCH-001")));
 
@@ -107,7 +111,7 @@ class LocalTokenServiceTest {
         when(authRefreshTokenRepository.findByTokenHash(localTokenService.hashRefreshToken(oldRefreshToken)))
                 .thenReturn(Optional.of(currentToken));
         when(userAccountRepository.findById("U-DISPATCH-001")).thenReturn(Optional.of(
-                new UserAccountEntity("U-DISPATCH-001", "hz_dispatcher", "杭州区域调度员", "REGION-HZ", "ACTIVE", LocalDateTime.now(), LocalDateTime.now())
+                new UserAccountEntity("U-DISPATCH-001", "hz_dispatcher", "杭州区域调度员", "REGION-HZ", "ACTIVE", null, null, LocalDateTime.now(), LocalDateTime.now())
         ));
         when(authorizationService.getUserSnapshot("U-DISPATCH-001")).thenReturn(Optional.of(Map.of("userId", "U-DISPATCH-001")));
 

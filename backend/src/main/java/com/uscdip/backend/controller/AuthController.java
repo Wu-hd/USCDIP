@@ -4,6 +4,7 @@ import com.uscdip.backend.config.BackendOidcProperties;
 import com.uscdip.backend.dto.AuthCallbackRequest;
 import com.uscdip.backend.dto.AuthLoginDescriptor;
 import com.uscdip.backend.dto.TokenPairResponse;
+import com.uscdip.backend.dto.TokenRevocationResponse;
 import com.uscdip.backend.dto.TokenRefreshRequest;
 import com.uscdip.backend.model.ApiResponse;
 import com.uscdip.backend.model.ErrorCode;
@@ -12,6 +13,7 @@ import com.uscdip.backend.service.LocalAccessTokenService;
 import com.uscdip.backend.service.LocalTokenService;
 import com.uscdip.backend.service.OidcAuthorizationService;
 import com.uscdip.backend.service.OidcUserSyncService;
+import com.uscdip.backend.service.TokenRevocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -51,6 +53,7 @@ public class AuthController {
     private final AuthorizationService authorizationService;
     private final OidcAuthorizationService oidcAuthorizationService;
     private final LocalTokenService localTokenService;
+    private final TokenRevocationService tokenRevocationService;
 
     public AuthController(
             BackendOidcProperties oidcProperties,
@@ -58,7 +61,8 @@ public class AuthController {
             OidcUserSyncService oidcUserSyncService,
             AuthorizationService authorizationService,
             OidcAuthorizationService oidcAuthorizationService,
-            LocalTokenService localTokenService
+            LocalTokenService localTokenService,
+            TokenRevocationService tokenRevocationService
     ) {
         this.oidcProperties = oidcProperties;
         this.clientRegistrationRepositoryProvider = clientRegistrationRepositoryProvider;
@@ -66,6 +70,7 @@ public class AuthController {
         this.authorizationService = authorizationService;
         this.oidcAuthorizationService = oidcAuthorizationService;
         this.localTokenService = localTokenService;
+        this.tokenRevocationService = tokenRevocationService;
     }
 
     @GetMapping("/login")
@@ -177,19 +182,29 @@ public class AuthController {
 
         String providerLogoutUrl;
         try {
+            String currentUserId = resolveOrSyncUserId(authentication);
+            String sessionId = resolveSessionId(authentication);
             providerLogoutUrl = buildProviderLogoutUrl(authentication);
+            TokenRevocationResponse revocation = tokenRevocationService.revokeCurrentSession(
+                    currentUserId,
+                    sessionId,
+                    resolveClientIp(request),
+                    request.getHeader("User-Agent")
+            );
             new SecurityContextLogoutHandler().logout(request, response, authentication);
             SecurityContextHolder.clearContext();
+
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("loggedOut", true);
+            payload.put("providerLogoutUrl", providerLogoutUrl);
+            payload.put("postLogoutRedirectUri", oidcProperties.getPostLogoutRedirectUri());
+            payload.put("revokedSessionCount", revocation.revokedSessionCount());
+            payload.put("revokedRefreshTokenCount", revocation.revokedRefreshTokenCount());
+            return ResponseEntity.ok(ApiResponse.success(payload));
         } catch (Exception ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.failure(ErrorCode.OIDC_LOGOUT_FAILED, ex.getMessage()));
         }
-
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("loggedOut", true);
-        payload.put("providerLogoutUrl", providerLogoutUrl);
-        payload.put("postLogoutRedirectUri", oidcProperties.getPostLogoutRedirectUri());
-        return ResponseEntity.ok(ApiResponse.success(payload));
     }
 
     private String resolveOrSyncUserId(Authentication authentication) {
@@ -202,6 +217,14 @@ public class AuthController {
         }
         if (principal instanceof Jwt jwt) {
             return oidcUserSyncService.syncJwtClaims(jwt.getClaims());
+        }
+        return null;
+    }
+
+    private String resolveSessionId(Authentication authentication) {
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof LocalAccessTokenService.AccessTokenPrincipal accessTokenPrincipal) {
+            return accessTokenPrincipal.sessionId();
         }
         return null;
     }

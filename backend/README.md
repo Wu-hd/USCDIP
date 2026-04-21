@@ -16,6 +16,8 @@
    - GET /api/auth/login-url
    - POST /api/auth/callback
    - POST /api/auth/refresh
+   - POST /api/auth/admin/users/{userId}/disable
+   - POST /api/auth/admin/users/{userId}/permissions/revoke
    - GET /api/menu-boundaries
    - GET /api/platforms
    - GET /api/platforms/{platformCode}
@@ -50,6 +52,7 @@
 - B-01 分页对象：PageResponse(items/total/page/pageSize/totalPages/hasNext)
 - B-02 OIDC 登录集成：默认本地可关闭 + 按需启用 OAuth2 Login + PKCE + 用户信息同步 + 统一登出
 - B-03 Access / Refresh Token 刷新轮换：本地 access token、refresh token rotation、重放检测、最小安全审计
+- B-04 Token 吊销与权限收敛：当前 session 登出吊销、账号禁用失效、权限重大变更全量收敛
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -145,7 +148,7 @@
 - POST /api/auth/callback：前端回调页携带 code/state/redirectUri 调后端，交换本地 access/refresh token
 - POST /api/auth/refresh：携带 refresh token 执行 rotation，返回新的 access/refresh token
 - GET /api/auth/me：OIDC 开启后返回当前登录用户权限快照；OIDC 关闭时返回 OIDC_DISABLED
-- POST /api/auth/logout：OIDC 开启后执行统一登出并返回 providerLogoutUrl；OIDC 关闭时返回 OIDC_DISABLED
+- POST /api/auth/logout：OIDC 开启后吊销当前 session 并返回 providerLogoutUrl；OIDC 关闭时返回 OIDC_DISABLED
 
 ### 5) 默认本地模式
 - 默认 `BACKEND_OIDC_ENABLED=false`，不会触发 OIDC issuer discovery。
@@ -219,6 +222,43 @@
 - 首次联调需手动导入：
    - psql -U postgres -d uscdip -f src/main/resources/data.sql
 
+## B-04 Token 吊销与权限收敛说明
+
+### 1) 目标能力
+- `POST /api/auth/logout` 只吊销当前 session，对应 access token 立即失效。
+- 账号禁用会更新 `user_account.status=DISABLED`，并让该用户全部旧 access/refresh token 失效。
+- 权限重大变更通过 `user_account.token_valid_after` 做用户级收敛，不依赖额外缓存中间件。
+
+### 2) 新增数据模型
+- `auth_session`：本地 session 真值表，记录 `session_id / user_id / status / revoked_at / revoke_reason`
+- `user_account.token_valid_after`：权限重大变更后的 access token 失效阈值
+- `user_account.disabled_at`：账号禁用时间
+
+### 3) 收敛规则
+- access token 验签后会追加校验：
+   - `user_account.status == ACTIVE`
+   - `token.iat >= user_account.token_valid_after`
+   - `auth_session.status == ACTIVE`
+- refresh token 刷新前会校验：
+   - 用户未禁用
+   - refresh token 签发时间未早于 `token_valid_after`
+   - 对应 `auth_session` 仍为 `ACTIVE`
+
+### 4) B-04 管理接口
+- POST /api/auth/admin/users/{userId}/disable
+- POST /api/auth/admin/users/{userId}/permissions/revoke
+- 两个接口都要求调用者具备 `PLATFORM_ADMIN` 角色。
+- 响应字段固定包含：
+   - `userId`
+   - `action`
+   - `tokenValidAfter`
+   - `revokedSessionCount`
+   - `revokedRefreshTokenCount`
+
+### 5) 缓存说明
+- 当前版本无 Redis / Caffeine / 独立权限缓存依赖。
+- B-04 以数据库中的 `auth_session` 与 `user_account.token_valid_after` 作为收敛真值。
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -253,10 +293,14 @@
    - rbac_role_permission
    - user_data_scope
    - topic_scope_rule
-- B-03 新增认证表：
+- B-03/B-04 认证表：
    - auth_oidc_state
    - auth_refresh_token
+   - auth_session
    - security_audit
+- B-04 在 `user_account` 上新增：
+   - token_valid_after
+   - disabled_at
 
 ## 测试数据说明
 - 文件：src/main/resources/data.sql
@@ -269,12 +313,12 @@
    - work_order：2 条
    - model_result：2 条
 - 已生成 A-04 权限联调数据：
-   - user_account：6 条（含静态权限样例用户）
+   - user_account：8 条（含静态权限样例用户、B-04 禁用用户样例、B-04 权限收敛样例）
    - rbac_role：5 条
    - rbac_permission：12 条
-   - rbac_user_role：6 条
+   - rbac_user_role：8 条
    - rbac_role_permission：24 条
-   - user_data_scope：7 条
+   - user_data_scope：9 条
    - topic_scope_rule：6 条
 - 已保留 B-02 静态权限样例：
    - user_account: U-OIDC-001 / oidc_static_sample
@@ -287,7 +331,11 @@
    - 明文 refresh token: sample-refresh-rotated-new-001 -> 状态 ACTIVE（同 session 新 token）
    - 明文 refresh token: sample-refresh-revoked-001 -> 状态 REVOKED
    - 明文 refresh token: sample-refresh-replay-blocked-001 -> 状态 REPLAY_BLOCKED
-   - security_audit: 3 条（刷新成功 / revoked reuse / replay reuse）
+   - security_audit: 5 条（刷新成功 / revoked reuse / replay reuse / disabled user / permission convergence）
+- 已新增 B-04 session / convergence 联调样例：
+   - auth_session: ACTIVE / REVOKED 两类 session 状态样例，并包含 `ACCOUNT_DISABLED` / `PERMISSION_CHANGED` 吊销原因样例
+   - user_account: `token_valid_after` 与 `disabled_at` 字段样例
+   - auth_refresh_token: disabled user / permission convergence 对应的 `REVOKED` 样例记录
 - 可直接用于 B-01 分页联调：
    - /api/object-dictionary/page?page=1&pageSize=3
    - /api/object-dictionary/page?page=2&pageSize=3
@@ -337,8 +385,12 @@
    - curl -s http://localhost:8080/api/auth/me -H "Authorization: Bearer <access_token>"
 - OIDC 开启且已登录后执行统一登出：
    - curl -s -X POST http://localhost:8080/api/auth/logout -H "Authorization: Bearer <access_token>"
+- 以平台管理员身份禁用用户并触发全量失效：
+   - curl -s -X POST http://localhost:8080/api/auth/admin/users/U-INSPECT-001/disable -H "Authorization: Bearer <admin_access_token>"
+- 以平台管理员身份触发权限重大变更收敛：
+   - curl -s -X POST http://localhost:8080/api/auth/admin/users/U-OIDC-001/permissions/revoke -H "Authorization: Bearer <admin_access_token>"
 
 ## 下一步建议
-- 基于 B-02 继续落地 B-03（Refresh Token 刷新轮换）与 B-04（Token 吊销收敛）。
+- 基于当前认证骨架继续落地 B-05（应急旁路账号与审计）与 B-06（Gateway 校验与限流）。
 - 接入 Flyway，落地版本化迁移脚本。
 - 在网关层增加限流、审计、风险接口单独策略。

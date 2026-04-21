@@ -29,13 +29,17 @@ INSERT INTO model_result (model_result_id, segment_id, node_id, model_code, mode
 ('MR-001', 'SEG-001', 'NODE-002', 'LEAK-RISK', 'v1.0.0', 'VALID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('MR-002', 'SEG-002', 'NODE-003', 'PRESSURE-ANOMALY', 'v1.0.0', 'VALID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
-INSERT INTO user_account (user_id, username, display_name, primary_region_id, status, created_at, updated_at) VALUES
-('U-ADMIN-001', 'admin', '平台管理员', 'GLOBAL', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('U-DISPATCH-001', 'hz_dispatcher', '杭州区域调度员', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('U-INSPECT-001', 'zhangsan', '巡检人员张三', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('U-ALGO-001', 'algo_user', '算法工程师', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('U-LEADER-001', 'leader_readonly', '领导只读', 'CITY-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('U-OIDC-001', 'oidc_static_sample', '静态权限样例用户', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO user_account (
+    user_id, username, display_name, primary_region_id, status, token_valid_after, disabled_at, created_at, updated_at
+) VALUES
+('U-ADMIN-001', 'admin', '平台管理员', 'GLOBAL', 'ACTIVE', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('U-DISPATCH-001', 'hz_dispatcher', '杭州区域调度员', 'REGION-HZ', 'ACTIVE', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('U-INSPECT-001', 'zhangsan', '巡检人员张三', 'REGION-HZ', 'ACTIVE', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('U-ALGO-001', 'algo_user', '算法工程师', 'REGION-HZ', 'ACTIVE', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('U-LEADER-001', 'leader_readonly', '领导只读', 'CITY-HZ', 'ACTIVE', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('U-OIDC-001', 'oidc_static_sample', '静态权限样例用户', 'REGION-HZ', 'ACTIVE', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('U-B04-DISABLED-001', 'disabled_demo', 'B04禁用用户样例', 'REGION-HZ', 'DISABLED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('U-B04-CONVERGED-001', 'converged_demo', 'B04权限收敛样例', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO rbac_role (role_code, role_name, description, read_only) VALUES
 ('PLATFORM_ADMIN', '平台管理员', '全平台管理权限', FALSE),
@@ -90,7 +94,9 @@ INSERT INTO rbac_user_role (user_id, role_code) VALUES
 ('U-INSPECT-001', 'INSPECTOR'),
 ('U-ALGO-001', 'ALGORITHM_ENGINEER'),
 ('U-LEADER-001', 'LEADER_READONLY'),
-('U-OIDC-001', 'REGIONAL_DISPATCHER');
+('U-OIDC-001', 'REGIONAL_DISPATCHER'),
+('U-B04-DISABLED-001', 'REGIONAL_DISPATCHER'),
+('U-B04-CONVERGED-001', 'REGIONAL_DISPATCHER');
 
 INSERT INTO user_data_scope (user_id, scope_type, scope_value) VALUES
 ('U-DISPATCH-001', 'REGION', 'REGION-HZ'),
@@ -99,7 +105,9 @@ INSERT INTO user_data_scope (user_id, scope_type, scope_value) VALUES
 ('U-INSPECT-001', 'ASSIGNEE', 'zhangsan'),
 ('U-ALGO-001', 'DATA_VIEW', 'MASKED_FEATURE'),
 ('U-LEADER-001', 'REGION_AGGREGATE', 'CITY-HZ'),
-('U-OIDC-001', 'REGION', 'REGION-HZ');
+('U-OIDC-001', 'REGION', 'REGION-HZ'),
+('U-B04-DISABLED-001', 'REGION', 'REGION-HZ'),
+('U-B04-CONVERGED-001', 'REGION', 'REGION-HZ');
 
 INSERT INTO topic_scope_rule (role_code, topic_pattern, description) VALUES
 ('PLATFORM_ADMIN', '#', '全量订阅'),
@@ -109,6 +117,16 @@ INSERT INTO topic_scope_rule (role_code, topic_pattern, description) VALUES
 ('ALGORITHM_ENGINEER', 'diag.model.#', '模型特征与结果订阅'),
 ('LEADER_READONLY', 'city.aggregate.#', '聚合态势只读订阅');
 
+INSERT INTO auth_session (
+    session_id, user_id, status, revoked_at, revoke_reason, client_ip, user_agent, created_at, updated_at
+) VALUES
+('SESSION-ACTIVE-001', 'U-DISPATCH-001', 'ACTIVE', NULL, NULL, '127.0.0.1', 'seed-active-session', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('SESSION-ROTATE-001', 'U-OIDC-001', 'ACTIVE', NULL, NULL, '127.0.0.1', 'seed-rotating-session', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('SESSION-REVOKED-001', 'U-LEADER-001', 'REVOKED', CURRENT_TIMESTAMP, 'LOGOUT', '127.0.0.1', 'seed-logged-out-session', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('SESSION-REPLAY-001', 'U-INSPECT-001', 'REVOKED', CURRENT_TIMESTAMP, 'REPLAY_DETECTED', '127.0.0.1', 'seed-replay-blocked-session', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('SESSION-B04-DISABLED-001', 'U-B04-DISABLED-001', 'REVOKED', CURRENT_TIMESTAMP, 'ACCOUNT_DISABLED', '127.0.0.1', 'seed-disabled-session', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('SESSION-B04-CONVERGED-001', 'U-B04-CONVERGED-001', 'REVOKED', CURRENT_TIMESTAMP, 'PERMISSION_CHANGED', '127.0.0.1', 'seed-converged-session', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
 INSERT INTO auth_refresh_token (
     token_id, user_id, token_hash, session_id, issued_at, expires_at,
     rotated_from_token_id, replaced_by_token_id, status, client_ip, user_agent, created_at, updated_at
@@ -117,11 +135,15 @@ INSERT INTO auth_refresh_token (
 ('RT-ROTATED-OLD-001', 'U-OIDC-001', 'b0e5c06acaf04b63daa2b96f41cf9ce3bdbccc2cbe148ba955f02e76fbd1640a', 'SESSION-ROTATE-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', NULL, 'RT-ROTATED-NEW-001', 'ROTATED', '127.0.0.1', 'seed-rotated-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('RT-ROTATED-NEW-001', 'U-OIDC-001', '58ebeec618e7aed94b4871b31a1990aa59494e9bfdd90934ab18aa5b0eecc612', 'SESSION-ROTATE-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', 'RT-ROTATED-OLD-001', NULL, 'ACTIVE', '127.0.0.1', 'seed-rotated-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('RT-REVOKED-001', 'U-LEADER-001', 'beda9b236175a1a46629c49d11dd29408011bd2a3a239c3e1916e6e8c598eeb6', 'SESSION-REVOKED-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', NULL, NULL, 'REVOKED', '127.0.0.1', 'seed-revoked-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('RT-REPLAY-001', 'U-INSPECT-001', '8b96f05c3f907e9ce5dd8315bd97279231be36f9796f6d8655e1e56ee3a3090f', 'SESSION-REPLAY-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', NULL, NULL, 'REPLAY_BLOCKED', '127.0.0.1', 'seed-replay-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+('RT-REPLAY-001', 'U-INSPECT-001', '8b96f05c3f907e9ce5dd8315bd97279231be36f9796f6d8655e1e56ee3a3090f', 'SESSION-REPLAY-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', NULL, NULL, 'REPLAY_BLOCKED', '127.0.0.1', 'seed-replay-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('RT-B04-DISABLED-001', 'U-B04-DISABLED-001', 'df1938af8037f1de7f832ddfac93e8e6ec6ae42dc95f38ec5d7b0f4b5334c2ce', 'SESSION-B04-DISABLED-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', NULL, NULL, 'REVOKED', '127.0.0.1', 'seed-disabled-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('RT-B04-CONVERGED-001', 'U-B04-CONVERGED-001', '4b0437f6ec0bf4d5e3c196f01a80fbcea38c5f7235ea34e9985ef1fd266a6cc4', 'SESSION-B04-CONVERGED-001', CURRENT_TIMESTAMP, TIMESTAMP '2099-12-31 23:59:59', NULL, NULL, 'REVOKED', '127.0.0.1', 'seed-converged-refresh-token', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO security_audit (
     event_type, user_id, token_id, session_id, outcome, detail, client_ip, user_agent, trace_id, created_at
 ) VALUES
 ('TOKEN_REFRESH_SUCCESS', 'U-OIDC-001', 'RT-ROTATED-OLD-001', 'SESSION-ROTATE-001', 'SUCCESS', 'Seed audit for rotated refresh token flow', '127.0.0.1', 'seed-audit-success', 'TRACE-SEED-001', CURRENT_TIMESTAMP),
 ('TOKEN_REFRESH_REVOKED', 'U-LEADER-001', 'RT-REVOKED-001', 'SESSION-REVOKED-001', 'DENY', 'Seed audit for revoked refresh token reuse', '127.0.0.1', 'seed-audit-revoked', 'TRACE-SEED-002', CURRENT_TIMESTAMP),
-('TOKEN_REFRESH_REPLAY', 'U-INSPECT-001', 'RT-REPLAY-001', 'SESSION-REPLAY-001', 'DENY', 'Seed audit for replay-blocked refresh token reuse', '127.0.0.1', 'seed-audit-replay', 'TRACE-SEED-003', CURRENT_TIMESTAMP);
+('TOKEN_REFRESH_REPLAY', 'U-INSPECT-001', 'RT-REPLAY-001', 'SESSION-REPLAY-001', 'DENY', 'Seed audit for replay-blocked refresh token reuse', '127.0.0.1', 'seed-audit-replay', 'TRACE-SEED-003', CURRENT_TIMESTAMP),
+('TOKEN_USER_DISABLED', 'U-B04-DISABLED-001', NULL, 'SESSION-B04-DISABLED-001', 'SUCCESS', 'Seed audit for disabled user convergence', '127.0.0.1', 'seed-audit-disabled', 'TRACE-SEED-004', CURRENT_TIMESTAMP),
+('TOKEN_PERMISSION_REVOKED', 'U-B04-CONVERGED-001', NULL, 'SESSION-B04-CONVERGED-001', 'SUCCESS', 'Seed audit for permission convergence', '127.0.0.1', 'seed-audit-converged', 'TRACE-SEED-005', CURRENT_TIMESTAMP);

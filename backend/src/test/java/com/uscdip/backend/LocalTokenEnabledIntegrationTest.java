@@ -51,19 +51,19 @@ class LocalTokenEnabledIntegrationTest {
 
     @Test
     void meAcceptsLocallyIssuedAccessToken() throws Exception {
-        TokenPairResponse tokenPairResponse = localTokenService.issueForUser("U-DISPATCH-001", "127.0.0.1", "JUnit");
+        TokenPairResponse tokenPairResponse = localTokenService.issueForUser("U-LEADER-001", "127.0.0.1", "JUnit");
 
         mockMvc.perform(get("/api/auth/me")
                         .header("Authorization", "Bearer " + tokenPairResponse.accessToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.userId").value("U-DISPATCH-001"))
-                .andExpect(jsonPath("$.data.snapshot.userId").value("U-DISPATCH-001"));
+                .andExpect(jsonPath("$.data.userId").value("U-LEADER-001"))
+                .andExpect(jsonPath("$.data.snapshot.userId").value("U-LEADER-001"));
     }
 
     @Test
     void refreshRotatesTokenAndRejectsOldTokenReplay() throws Exception {
-        TokenPairResponse tokenPairResponse = localTokenService.issueForUser("U-OIDC-001", "127.0.0.1", "JUnit");
+        TokenPairResponse tokenPairResponse = localTokenService.issueForUser("U-ALGO-001", "127.0.0.1", "JUnit");
 
         mockMvc.perform(post("/api/auth/refresh")
                         .contentType("application/json")
@@ -83,6 +83,101 @@ class LocalTokenEnabledIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("TOKEN_REFRESH_REPLAY_DETECTED"));
+    }
+
+    @Test
+    void logoutRevokesCurrentSessionAndRefreshToken() throws Exception {
+        TokenPairResponse tokenPairResponse = localTokenService.issueForUser("U-DISPATCH-001", "127.0.0.1", "JUnit");
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .header("Authorization", "Bearer " + tokenPairResponse.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.loggedOut").value(true))
+                .andExpect(jsonPath("$.data.revokedSessionCount").value(1))
+                .andExpect(jsonPath("$.data.revokedRefreshTokenCount").value(1));
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + tokenPairResponse.accessToken()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType("application/json")
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(tokenPairResponse.refreshToken())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("TOKEN_REFRESH_REVOKED"));
+    }
+
+    @Test
+    void disableUserRevokesExistingAccessAndRefreshTokens() throws Exception {
+        TokenPairResponse adminToken = localTokenService.issueForUser("U-ADMIN-001", "127.0.0.1", "JUnit");
+        TokenPairResponse targetToken = localTokenService.issueForUser("U-INSPECT-001", "127.0.0.1", "JUnit");
+
+        mockMvc.perform(post("/api/auth/admin/users/U-INSPECT-001/disable")
+                        .header("Authorization", "Bearer " + adminToken.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.userId").value("U-INSPECT-001"))
+                .andExpect(jsonPath("$.data.action").value("DISABLE_USER"))
+                .andExpect(jsonPath("$.data.revokedSessionCount").value(1))
+                .andExpect(jsonPath("$.data.revokedRefreshTokenCount").value(1));
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + targetToken.accessToken()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType("application/json")
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(targetToken.refreshToken())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("TOKEN_REFRESH_REVOKED"));
+    }
+
+    @Test
+    void permissionRevokeInvalidatesOldTokensAndAllowsFreshLogin() throws Exception {
+        TokenPairResponse adminToken = localTokenService.issueForUser("U-ADMIN-001", "127.0.0.1", "JUnit");
+        TokenPairResponse targetToken = localTokenService.issueForUser("U-B04-CONVERGED-001", "127.0.0.1", "JUnit");
+
+        mockMvc.perform(post("/api/auth/admin/users/U-B04-CONVERGED-001/permissions/revoke")
+                        .header("Authorization", "Bearer " + adminToken.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.userId").value("U-B04-CONVERGED-001"))
+                .andExpect(jsonPath("$.data.action").value("REVOKE_PERMISSIONS"))
+                .andExpect(jsonPath("$.data.revokedSessionCount").value(1))
+                .andExpect(jsonPath("$.data.revokedRefreshTokenCount").value(1));
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + targetToken.accessToken()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType("application/json")
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(targetToken.refreshToken())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("TOKEN_REFRESH_REVOKED"));
+
+        TokenPairResponse newToken = localTokenService.issueForUser("U-B04-CONVERGED-001", "127.0.0.1", "JUnit");
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + newToken.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.userId").value("U-B04-CONVERGED-001"));
     }
 
     private static HttpServer startIssuerServer() {

@@ -18,6 +18,11 @@ public class SecurityAuditService {
     public static final String EVENT_REFRESH_REPLAY = "TOKEN_REFRESH_REPLAY";
     public static final String EVENT_REFRESH_REVOKED = "TOKEN_REFRESH_REVOKED";
     public static final String EVENT_REFRESH_EXPIRED = "TOKEN_REFRESH_EXPIRED";
+    public static final String EVENT_LOGOUT_SUCCESS = "TOKEN_LOGOUT_SUCCESS";
+    public static final String EVENT_SESSION_REVOKED = "TOKEN_SESSION_REVOKED";
+    public static final String EVENT_USER_DISABLED = "TOKEN_USER_DISABLED";
+    public static final String EVENT_PERMISSION_REVOKED = "TOKEN_PERMISSION_REVOKED";
+    public static final String EVENT_ACCESS_REJECTED = "TOKEN_ACCESS_REJECTED";
 
     private final SecurityAuditRepository securityAuditRepository;
 

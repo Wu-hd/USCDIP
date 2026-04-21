@@ -97,9 +97,10 @@ public class SecurityConfig {
         @Bean
         LocalAccessTokenAuthenticationFilter localAccessTokenAuthenticationFilter(
                 com.uscdip.backend.service.LocalAccessTokenService localAccessTokenService,
+                com.uscdip.backend.service.TokenRevocationService tokenRevocationService,
                 org.springframework.beans.factory.ObjectProvider<JwtDecoder> jwtDecoderProvider
         ) {
-            return new LocalAccessTokenAuthenticationFilter(localAccessTokenService, jwtDecoderProvider);
+            return new LocalAccessTokenAuthenticationFilter(localAccessTokenService, tokenRevocationService, jwtDecoderProvider);
         }
 
         private ClientRegistration buildClientRegistration(BackendOidcProperties oidcProperties) {

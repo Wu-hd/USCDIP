@@ -6,6 +6,7 @@ import com.uscdip.backend.service.AuthorizationService;
 import com.uscdip.backend.service.LocalTokenService;
 import com.uscdip.backend.service.OidcAuthorizationService;
 import com.uscdip.backend.service.OidcUserSyncService;
+import com.uscdip.backend.service.TokenRevocationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -27,7 +28,9 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class AuthControllerTest {
 
@@ -36,14 +39,20 @@ class AuthControllerTest {
         BackendOidcProperties oidcProperties = createEnabledProperties();
         ClientRegistrationRepository clientRegistrationRepository =
                 new InMemoryClientRegistrationRepository(createClientRegistration("https://issuer.example/logout"));
+        OidcUserSyncService oidcUserSyncService = mock(OidcUserSyncService.class);
+        TokenRevocationService tokenRevocationService = mock(TokenRevocationService.class);
+        when(oidcUserSyncService.syncOidcUser(any())).thenReturn("user-123");
+        when(tokenRevocationService.revokeCurrentSession(any(), any(), any(), any()))
+                .thenReturn(new com.uscdip.backend.dto.TokenRevocationResponse("user-123", "LOGOUT", null, 1, 1));
         AuthController controller = new AuthController(
                 oidcProperties,
                 new StaticListableBeanFactory(Map.of("clientRegistrationRepository", clientRegistrationRepository))
                         .getBeanProvider(ClientRegistrationRepository.class),
-                mock(OidcUserSyncService.class),
+                oidcUserSyncService,
                 mock(AuthorizationService.class),
                 mock(OidcAuthorizationService.class),
-                mock(LocalTokenService.class)
+                mock(LocalTokenService.class),
+                tokenRevocationService
         );
 
         ApiResponse<Map<String, Object>> responseBody = controller.logout(
@@ -63,14 +72,20 @@ class AuthControllerTest {
         BackendOidcProperties oidcProperties = createEnabledProperties();
         ClientRegistrationRepository clientRegistrationRepository =
                 new InMemoryClientRegistrationRepository(createClientRegistration(null));
+        OidcUserSyncService oidcUserSyncService = mock(OidcUserSyncService.class);
+        TokenRevocationService tokenRevocationService = mock(TokenRevocationService.class);
+        when(oidcUserSyncService.syncOidcUser(any())).thenReturn("user-123");
+        when(tokenRevocationService.revokeCurrentSession(any(), any(), any(), any()))
+                .thenReturn(new com.uscdip.backend.dto.TokenRevocationResponse("user-123", "LOGOUT", null, 1, 1));
         AuthController controller = new AuthController(
                 oidcProperties,
                 new StaticListableBeanFactory(Map.of("clientRegistrationRepository", clientRegistrationRepository))
                         .getBeanProvider(ClientRegistrationRepository.class),
-                mock(OidcUserSyncService.class),
+                oidcUserSyncService,
                 mock(AuthorizationService.class),
                 mock(OidcAuthorizationService.class),
-                mock(LocalTokenService.class)
+                mock(LocalTokenService.class),
+                tokenRevocationService
         );
 
         ApiResponse<Map<String, Object>> responseBody = controller.logout(

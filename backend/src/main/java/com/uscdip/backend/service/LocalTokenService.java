@@ -39,6 +39,7 @@ public class LocalTokenService {
     private final AuthorizationService authorizationService;
     private final LocalAccessTokenService localAccessTokenService;
     private final SecurityAuditService securityAuditService;
+    private final TokenRevocationService tokenRevocationService;
 
     public LocalTokenService(
             BackendOidcProperties oidcProperties,
@@ -46,7 +47,8 @@ public class LocalTokenService {
             UserAccountRepository userAccountRepository,
             AuthorizationService authorizationService,
             LocalAccessTokenService localAccessTokenService,
-            SecurityAuditService securityAuditService
+            SecurityAuditService securityAuditService,
+            TokenRevocationService tokenRevocationService
     ) {
         this.oidcProperties = oidcProperties;
         this.authRefreshTokenRepository = authRefreshTokenRepository;
@@ -54,12 +56,16 @@ public class LocalTokenService {
         this.authorizationService = authorizationService;
         this.localAccessTokenService = localAccessTokenService;
         this.securityAuditService = securityAuditService;
+        this.tokenRevocationService = tokenRevocationService;
     }
 
     @Transactional
     public TokenPairResponse issueForUser(String userId, String clientIp, String userAgent) {
         UserAccountEntity userAccount = userAccountRepository.findById(userId)
                 .orElseThrow(() -> new AuthFlowException(ErrorCode.USER_NOT_FOUND, HttpStatus.NOT_FOUND, "User not found: " + userId));
+        if (!"ACTIVE".equalsIgnoreCase(userAccount.getStatus())) {
+            throw new AuthFlowException(ErrorCode.ACCOUNT_DISABLED, HttpStatus.UNAUTHORIZED, ErrorCode.ACCOUNT_DISABLED.defaultMessage());
+        }
         return createTokenPair(userAccount, UUID.randomUUID().toString(), null, clientIp, userAgent);
     }
 
@@ -135,6 +141,7 @@ public class LocalTokenService {
 
         UserAccountEntity userAccount = userAccountRepository.findById(currentToken.getUserId())
                 .orElseThrow(() -> new AuthFlowException(ErrorCode.USER_NOT_FOUND, HttpStatus.NOT_FOUND, "User not found: " + currentToken.getUserId()));
+        tokenRevocationService.validateRefreshToken(currentToken, userAccount, clientIp, userAgent);
 
         currentToken.setStatus(STATUS_ROTATED);
         currentToken.setUpdatedAt(now);
@@ -170,6 +177,7 @@ public class LocalTokenService {
         String refreshTokenId = UUID.randomUUID().toString();
         Instant refreshTokenExpiresAt = Instant.now().plusSeconds(oidcProperties.getRefreshTokenTtlSeconds());
         LocalDateTime now = LocalDateTime.now();
+        tokenRevocationService.ensureSessionRecorded(userAccount.getUserId(), sessionId, clientIp, userAgent);
 
         AuthRefreshTokenEntity refreshTokenEntity = new AuthRefreshTokenEntity(
                 refreshTokenId,

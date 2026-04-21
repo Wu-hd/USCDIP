@@ -11,4 +11,6 @@ public interface AuthRefreshTokenRepository extends JpaRepository<AuthRefreshTok
     Optional<AuthRefreshTokenEntity> findByTokenHash(String tokenHash);
 
     List<AuthRefreshTokenEntity> findBySessionId(String sessionId);
+
+    List<AuthRefreshTokenEntity> findByUserId(String userId);
 }

@@ -35,6 +35,12 @@ public class UserAccountEntity {
     @Column(name = "status", nullable = false, length = 32)
     private String status;
 
+    @Column(name = "token_valid_after")
+    private LocalDateTime tokenValidAfter;
+
+    @Column(name = "disabled_at")
+    private LocalDateTime disabledAt;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

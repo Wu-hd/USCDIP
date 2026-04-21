@@ -9,6 +9,7 @@ import com.uscdip.backend.service.AuthorizationService;
 import com.uscdip.backend.service.LocalTokenService;
 import com.uscdip.backend.service.OidcAuthorizationService;
 import com.uscdip.backend.service.OidcUserSyncService;
+import com.uscdip.backend.service.TokenRevocationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
@@ -44,7 +45,8 @@ class AuthCallbackControllerTest {
                 mock(OidcUserSyncService.class),
                 mock(AuthorizationService.class),
                 oidcAuthorizationService,
-                mock(LocalTokenService.class)
+                mock(LocalTokenService.class),
+                mock(TokenRevocationService.class)
         );
 
         mockMvc = MockMvcBuilders.standaloneSetup(authController)

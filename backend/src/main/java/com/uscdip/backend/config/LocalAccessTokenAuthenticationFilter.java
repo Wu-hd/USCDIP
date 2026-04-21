@@ -1,6 +1,7 @@
 package com.uscdip.backend.config;
 
 import com.uscdip.backend.service.LocalAccessTokenService;
+import com.uscdip.backend.service.TokenRevocationService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,13 +19,16 @@ import java.util.Collections;
 public class LocalAccessTokenAuthenticationFilter extends OncePerRequestFilter {
 
     private final LocalAccessTokenService localAccessTokenService;
+    private final TokenRevocationService tokenRevocationService;
     private final ObjectProvider<JwtDecoder> oidcJwtDecoderProvider;
 
     public LocalAccessTokenAuthenticationFilter(
             LocalAccessTokenService localAccessTokenService,
+            TokenRevocationService tokenRevocationService,
             ObjectProvider<JwtDecoder> oidcJwtDecoderProvider
     ) {
         this.localAccessTokenService = localAccessTokenService;
+        this.tokenRevocationService = tokenRevocationService;
         this.oidcJwtDecoderProvider = oidcJwtDecoderProvider;
     }
 
@@ -35,7 +39,7 @@ public class LocalAccessTokenAuthenticationFilter extends OncePerRequestFilter {
         if (authorization != null && authorization.startsWith("Bearer ")) {
             String token = authorization.substring(7).trim();
             if (!token.isEmpty() && SecurityContextHolder.getContext().getAuthentication() == null) {
-                if (!tryAuthenticateWithLocalToken(token)) {
+                if (!tryAuthenticateWithLocalToken(token, request)) {
                     tryAuthenticateWithOidcToken(token);
                 }
             }
@@ -43,9 +47,14 @@ public class LocalAccessTokenAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean tryAuthenticateWithLocalToken(String token) {
+    private boolean tryAuthenticateWithLocalToken(String token, HttpServletRequest request) {
         try {
             LocalAccessTokenService.AccessTokenPrincipal principal = localAccessTokenService.verify(token);
+            tokenRevocationService.validateAccessToken(
+                    principal,
+                    nullSafeClientIp(request),
+                    request.getHeader("User-Agent")
+            );
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                     principal,
                     token,
@@ -74,5 +83,16 @@ public class LocalAccessTokenAuthenticationFilter extends OncePerRequestFilter {
         } catch (Exception ignored) {
             // Let the request continue unauthenticated; the security entry point will handle protected endpoints.
         }
+    }
+
+    private String nullSafeClientIp(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

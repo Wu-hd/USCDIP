@@ -19,6 +19,7 @@ import com.uscdip.backend.repository.WorkOrderRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,6 +37,7 @@ public class ObjectChainService {
     private final WorkOrderRepository workOrderRepository;
     private final ModelResultRepository modelResultRepository;
     private final ObjectScopeService objectScopeService;
+    private final ObjectChainTraversalService objectChainTraversalService;
 
     public ObjectChainService(
             NodeRepository nodeRepository,
@@ -45,7 +47,8 @@ public class ObjectChainService {
             IncidentRepository incidentRepository,
             WorkOrderRepository workOrderRepository,
             ModelResultRepository modelResultRepository,
-            ObjectScopeService objectScopeService
+            ObjectScopeService objectScopeService,
+            ObjectChainTraversalService objectChainTraversalService
     ) {
         this.nodeRepository = nodeRepository;
         this.segmentRepository = segmentRepository;
@@ -55,6 +58,7 @@ public class ObjectChainService {
         this.workOrderRepository = workOrderRepository;
         this.modelResultRepository = modelResultRepository;
         this.objectScopeService = objectScopeService;
+        this.objectChainTraversalService = objectChainTraversalService;
     }
 
     public List<ObjectDictionaryItem> getObjectDictionary(AuthorizationContext authorizationContext) {
@@ -94,12 +98,22 @@ public class ObjectChainService {
         }
         objectScopeService.requireAccess(authorizationContext, ObjectScopeService.OBJECT_SEGMENT, segmentId, "MENU:ASSET:READ");
 
-        List<NodeEntity> nodes = nodeRepository.findAllById(List.of(segment.get().getStartNodeId(), segment.get().getEndNodeId()));
-        List<FacilityEntity> facilities = facilityRepository.findBySegmentId(segmentId);
+        List<String> nodeIds = objectChainTraversalService.findNodeIdsForSegment(segmentId);
+        if (nodeIds.isEmpty()) {
+            nodeIds = List.of(segment.get().getStartNodeId(), segment.get().getEndNodeId());
+        }
+        List<NodeEntity> nodes = nodeRepository.findAllById(nodeIds);
+
+        List<String> facilityIdsFromRelations = objectChainTraversalService.findFacilityIdsForSegment(segmentId);
+        List<FacilityEntity> facilities = facilityIdsFromRelations.isEmpty()
+                ? facilityRepository.findBySegmentId(segmentId)
+                : facilityRepository.findAllById(facilityIdsFromRelations);
         List<String> facilityIds = facilities.stream().map(FacilityEntity::getFacilityId).toList();
+
         List<IncidentEntity> incidents = incidentRepository.findBySegmentId(segmentId);
         List<String> incidentIds = incidents.stream().map(IncidentEntity::getIncidentId).toList();
         List<WorkOrderEntity> workOrders = incidentIds.isEmpty() ? Collections.emptyList() : workOrderRepository.findByIncidentIdIn(incidentIds);
+        List<String> deviceIds = objectChainTraversalService.findDeviceIdsForFacilityIds(facilityIds);
 
         ObjectChainResponse response = ObjectChainResponse.builder()
                 .queryType("segment")
@@ -107,7 +121,14 @@ public class ObjectChainService {
                 .nodes(filterNodes(authorizationContext, nodes))
                 .segments(List.of(segment.get()))
                 .facilities(filterFacilities(authorizationContext, facilities))
-                .devices(filterDevices(authorizationContext, facilityIds.isEmpty() ? Collections.emptyList() : deviceRepository.findByFacilityIdIn(facilityIds)))
+                .devices(filterDevices(
+                        authorizationContext,
+                        facilityIds.isEmpty()
+                                ? Collections.emptyList()
+                                : deviceIds.isEmpty()
+                                ? deviceRepository.findByFacilityIdIn(facilityIds)
+                                : deviceRepository.findAllById(deviceIds)
+                ))
                 .incidents(filterIncidents(authorizationContext, incidents))
                 .workOrders(filterWorkOrders(authorizationContext, workOrders))
                 .modelResults(filterModelResults(authorizationContext, modelResultRepository.findBySegmentId(segmentId)))
@@ -123,15 +144,29 @@ public class ObjectChainService {
         }
         objectScopeService.requireAccess(authorizationContext, ObjectScopeService.OBJECT_NODE, nodeId, "MENU:ASSET:READ");
 
-        List<SegmentEntity> segments = segmentRepository.findByStartNodeIdOrEndNodeId(nodeId, nodeId);
+        List<String> segmentIdsFromRelations = objectChainTraversalService.findSegmentIdsForNode(nodeId);
+        List<SegmentEntity> segments = segmentIdsFromRelations.isEmpty()
+                ? segmentRepository.findByStartNodeIdOrEndNodeId(nodeId, nodeId)
+                : segmentRepository.findAllById(segmentIdsFromRelations);
         List<String> segmentIds = segments.stream().map(SegmentEntity::getSegmentId).collect(Collectors.toList());
-        List<FacilityEntity> facilities = facilityRepository.findByNodeId(nodeId);
+
+        List<String> facilityIdsFromRelations = objectChainTraversalService.findFacilityIdsForNode(nodeId);
+        List<FacilityEntity> facilities = facilityIdsFromRelations.isEmpty()
+                ? facilityRepository.findByNodeId(nodeId)
+                : facilityRepository.findAllById(facilityIdsFromRelations);
         if (facilities.isEmpty() && !segmentIds.isEmpty()) {
-            facilities = segmentIds.stream()
+            Set<String> derivedFacilityIds = new LinkedHashSet<>();
+            for (String segmentId : segmentIds) {
+                derivedFacilityIds.addAll(objectChainTraversalService.findFacilityIdsForSegment(segmentId));
+            }
+            facilities = derivedFacilityIds.isEmpty()
+                    ? segmentIds.stream()
                     .flatMap(id -> facilityRepository.findBySegmentId(id).stream())
-                    .collect(Collectors.toList());
+                    .collect(Collectors.toList())
+                    : facilityRepository.findAllById(derivedFacilityIds);
         }
         List<String> facilityIds = facilities.stream().map(FacilityEntity::getFacilityId).toList();
+        List<String> deviceIds = objectChainTraversalService.findDeviceIdsForFacilityIds(facilityIds);
 
         List<IncidentEntity> incidents = incidentRepository.findByNodeId(nodeId);
         if (incidents.isEmpty() && !segmentIds.isEmpty()) {
@@ -149,7 +184,14 @@ public class ObjectChainService {
                 .nodes(List.of(node.get()))
                 .segments(filterSegments(authorizationContext, segments))
                 .facilities(filterFacilities(authorizationContext, facilities))
-                .devices(filterDevices(authorizationContext, facilityIds.isEmpty() ? Collections.emptyList() : deviceRepository.findByFacilityIdIn(facilityIds)))
+                .devices(filterDevices(
+                        authorizationContext,
+                        facilityIds.isEmpty()
+                                ? Collections.emptyList()
+                                : deviceIds.isEmpty()
+                                ? deviceRepository.findByFacilityIdIn(facilityIds)
+                                : deviceRepository.findAllById(deviceIds)
+                ))
                 .incidents(filterIncidents(authorizationContext, incidents))
                 .workOrders(filterWorkOrders(authorizationContext, workOrders))
                 .modelResults(filterModelResults(authorizationContext, segmentIds.isEmpty() ? modelResultRepository.findByNodeId(nodeId) : segmentIds.stream().flatMap(id -> modelResultRepository.findBySegmentId(id).stream()).toList()))

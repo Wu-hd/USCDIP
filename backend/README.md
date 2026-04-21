@@ -25,6 +25,10 @@
    - GET /api/object-dictionary/page?page=1&pageSize=3
    - GET /api/object-chain/segment/{segmentId}
    - GET /api/object-chain/node/{nodeId}
+   - GET /api/master/nodes
+   - GET /api/master/segments
+   - GET /api/master/facilities
+   - GET /api/master/devices
    - GET /api/gis/field-spec
    - POST /api/gis/convert
    - POST /api/gis/depth/validate
@@ -58,6 +62,7 @@
 - B-05 应急旁路账号与审计：本地受控旁路账号、独立短期 token、激活/撤销和审计查询
 - B-06 Gateway 校验与限流：数据库驱动的应用内 Gateway 过滤、黑白名单、输入校验、单实例限流与高风险审计
 - B-07 RBAC + 数据范围 + 订阅范围：运行时声明式鉴权、对象范围绑定、业务查询过滤与 topic 模拟订阅
+- B-08 主数据表与对象链服务：主数据只读 API、对象链关系真值表、基于 relation 的链路遍历
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -464,6 +469,65 @@
 - `TOPIC_SCOPE_DENIED`
 - `SUBSCRIPTION_NOT_ALLOWED`
 
+## B-08 主数据表与对象链服务说明
+
+### 1) 目标能力
+- 将现有 A-02 的对象链查询骨架收口为主数据中心只读服务。
+- 新增 `/api/master/*` 只读接口，面向 node、segment、facility、device 提供稳定查询入口。
+- 对象链遍历优先依赖 `object_relation`，不再只靠业务 service 内零散拼接。
+
+### 2) 主数据与关系真值
+- 主数据主表继续使用：
+   - `node`
+   - `segment`
+   - `facility`
+   - `device`
+- 新增关系表：`object_relation`
+- 作用：保存对象链遍历真值，统一表达：
+   - `SEGMENT_START_NODE`
+   - `SEGMENT_END_NODE`
+   - `SEGMENT_FACILITY`
+   - `NODE_FACILITY`
+   - `FACILITY_DEVICE`
+- 业务结果表 `incident / work_order / model_result` 继续保留原有 `segment_id / node_id` 外键落点，但必须可追溯回主数据对象链。
+
+### 3) 接口口径
+- 保留兼容：
+   - GET /api/object-dictionary
+   - GET /api/object-dictionary/page
+   - GET /api/object-chain/segment/{segmentId}
+   - GET /api/object-chain/node/{nodeId}
+- 新增主数据只读接口：
+   - GET /api/master/nodes
+   - GET /api/master/nodes/{nodeId}
+   - GET /api/master/segments
+   - GET /api/master/segments/{segmentId}
+   - GET /api/master/facilities
+   - GET /api/master/facilities/{facilityId}
+   - GET /api/master/devices
+   - GET /api/master/devices/{deviceId}
+- 一期最小查询参数：
+   - `page`
+   - `pageSize`
+   - `status`
+   - `regionId`
+   - `segmentId / nodeId / facilityId`
+- 返回约束：
+   - 必须包含当前对象主键
+   - 必须包含对象类型
+   - 必须包含关联对象主键列表
+   - 不能只返回 geometry 或展示字段
+
+### 4) 访问控制
+- `/api/master/*` 作为真实业务接口，默认需要鉴权。
+- 继续复用现有 B-07 数据范围过滤：
+   - 平台管理员：全量
+   - 区域调度员：本区
+   - 巡检人员：本人归属对象
+   - 算法工程师：脱敏范围
+   - 领导只读：聚合只读范围
+- Gateway 种子策略已同步加入 `/api/master/*`，不会被视为匿名开放接口。
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -514,6 +578,8 @@
    - gateway_risk_audit
 - B-07 新增：
    - object_scope_binding
+- B-08 新增：
+   - object_relation
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -533,6 +599,11 @@
    - `rbac_* / user_data_scope / topic_scope_rule` 继续保存角色、数据范围和 topic 模式
    - H2 默认启动会自动建表并执行 `data.sql`
    - PostgreSQL profile 首次联调需手动导入 `src/main/resources/data.sql`
+- B-08 说明：
+   - `object_relation` 保存 node/segment/facility/device 的拓扑关系真值
+   - `/api/master/*` 提供主数据只读查询，`/api/object-chain/*` 提供聚合链路查询
+   - H2 默认启动会自动建表并执行 `data.sql`
+   - PostgreSQL profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
 
 ## 测试数据说明
 - 文件：src/main/resources/data.sql
@@ -571,7 +642,7 @@
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
 - 已新增 B-06 Gateway 联调样例：
-   - gateway_route_policy：21 条（公共规范接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
+   - gateway_route_policy：29 条（公共规范接口、B-08 主数据接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
    - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
    - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
    - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
@@ -582,6 +653,10 @@
    - 巡检归属：`U-INSPECT-001 / zhangsan`
    - 算法脱敏样例：`MR-001 -> MASKED`
    - 领导聚合样例：`MR-002 -> AGGREGATED`
+- 已新增 B-08 主数据对象链联调样例：
+   - object_relation：13 条（覆盖 segment-start/end-node、segment-facility、node-facility、facility-device）
+   - `/api/master/nodes|segments|facilities|devices` 可直接使用现有 H2 或 PostgreSQL 种子联调
+   - `incident / work_order / model_result` 仍通过 `segment_id / node_id` 反查对象链
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令
@@ -597,6 +672,12 @@
    - curl -s http://localhost:8080/api/object-chain/segment/SEG-001 -H "Authorization: Bearer <access_token>"
 - 按 node_id 查询对象链：
    - curl -s http://localhost:8080/api/object-chain/node/NODE-002 -H "Authorization: Bearer <access_token>"
+- 查询主数据节点：
+   - curl -s "http://localhost:8080/api/master/nodes?page=1&pageSize=10" -H "Authorization: Bearer <access_token>"
+- 查询主数据管段详情：
+   - curl -s http://localhost:8080/api/master/segments/SEG-001 -H "Authorization: Bearer <access_token>"
+- 查询主数据设备详情：
+   - curl -s http://localhost:8080/api/master/devices/DEV-001 -H "Authorization: Bearer <access_token>"
 - 查询 GIS 字段规范：
    - curl -s http://localhost:8080/api/gis/field-spec
 - 坐标转换：
@@ -618,6 +699,9 @@
 - 验证“B-07 单区域调度只能访问本区对象”：
    - curl -s http://localhost:8080/api/object-chain/segment/SEG-001 -H "Authorization: Bearer <hz_scope_access_token>"
    - curl -s http://localhost:8080/api/object-chain/segment/SEG-002 -H "Authorization: Bearer <hz_scope_access_token>"
+- 验证“B-08 单区域调度主数据过滤”：
+   - curl -s "http://localhost:8080/api/master/nodes?page=1&pageSize=10" -H "Authorization: Bearer <hz_scope_access_token>"
+   - curl -s http://localhost:8080/api/master/devices/DEV-003 -H "Authorization: Bearer <hz_scope_access_token>"
 - 验证 topic 检查：
    - curl -s -X POST http://localhost:8080/api/authz/topics/check -H "Authorization: Bearer <hz_scope_access_token>" -H "Content-Type: application/json" -d "{\"userId\":\"U-B07-HZ-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"regionId\":\"REGION-HZ\",\"requestedTopics\":[\"region.REGION-HZ.alerts.critical\",\"region.REGION-BINJIANG.alerts.critical\"]}"
 - 验证 topic 模拟订阅：
@@ -664,6 +748,6 @@
    - H2 Console / PostgreSQL 中执行 `SELECT * FROM gateway_risk_audit ORDER BY created_at DESC;`
 
 ## 下一步建议
-- 在 B-07 的 `TopicAuthorizationService` 之上接入 B-24 WebSocket 握手与订阅鉴权。
+- 在 B-09 上补主数据 optimistic lock、版本号与变更审计。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

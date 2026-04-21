@@ -1,5 +1,6 @@
 package com.uscdip.backend.controller;
 
+import com.uscdip.backend.annotation.AuthzGuard;
 import com.uscdip.backend.dto.TokenRevocationResponse;
 import com.uscdip.backend.exception.AuthFlowException;
 import com.uscdip.backend.model.ApiResponse;
@@ -46,6 +47,7 @@ public class AuthAdminController {
     }
 
     @PostMapping("/{userId}/disable")
+    @AuthzGuard(requiredRole = "PLATFORM_ADMIN", entryPermission = "ENTRY:MGMT")
     @Operation(summary = "禁用用户并吊销全部会话")
     public ApiResponse<TokenRevocationResponse> disableUser(
             @Parameter(description = "用户ID", required = true) @PathVariable String userId,
@@ -63,6 +65,7 @@ public class AuthAdminController {
     }
 
     @PostMapping("/{userId}/permissions/revoke")
+    @AuthzGuard(requiredRole = "PLATFORM_ADMIN", entryPermission = "ENTRY:MGMT")
     @Operation(summary = "触发用户权限重大变更后的全量收敛")
     public ApiResponse<TokenRevocationResponse> revokePermissions(
             @Parameter(description = "用户ID", required = true) @PathVariable String userId,

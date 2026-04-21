@@ -33,6 +33,8 @@
    - GET /api/authz/users/{userId}/snapshot
    - GET /api/authz/users/{userId}/topics
    - POST /api/authz/check
+   - POST /api/authz/topics/check
+   - POST /api/authz/topics/subscribe
    - GET /api/auth/me
    - POST /api/auth/logout
    - GET /v3/api-docs
@@ -53,7 +55,9 @@
 - B-02 OIDC 登录集成：默认本地可关闭 + 按需启用 OAuth2 Login + PKCE + 用户信息同步 + 统一登出
 - B-03 Access / Refresh Token 刷新轮换：本地 access token、refresh token rotation、重放检测、最小安全审计
 - B-04 Token 吊销与权限收敛：当前 session 登出吊销、账号禁用失效、权限重大变更全量收敛
+- B-05 应急旁路账号与审计：本地受控旁路账号、独立短期 token、激活/撤销和审计查询
 - B-06 Gateway 校验与限流：数据库驱动的应用内 Gateway 过滤、黑白名单、输入校验、单实例限流与高风险审计
+- B-07 RBAC + 数据范围 + 订阅范围：运行时声明式鉴权、对象范围绑定、业务查询过滤与 topic 模拟订阅
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -157,7 +161,7 @@
 
 ### 5) 默认本地模式
 - 默认 `BACKEND_OIDC_ENABLED=false`，不会触发 OIDC issuer discovery。
-- 此模式下，A-01/A-02/A-03/A-04 的规范与演示接口保持匿名可访问，便于本地开发与联调。
+- 此模式下，规范与矩阵说明接口保持匿名可访问，真实业务查询与管理接口仍需本地 access token。
 - 此模式下：
    - GET /api/auth/login 与 GET /api/auth/login-url 返回 `enabled=false`
    - 未携带本地 access token 时，GET /api/auth/me 与 POST /api/auth/logout 返回 `503 + OIDC_DISABLED`
@@ -346,8 +350,9 @@
    - POST /api/auth/refresh
 - 继续保持匿名可访问的公共接口样例：
    - GET /api/menu-boundaries
-   - GET /api/object-dictionary
-   - GET /api/object-dictionary/page
+   - GET /api/platforms
+   - GET /api/platforms/{platformCode}
+   - GET /api/authz/matrix-spec
    - GET /api/authz/matrix
 - 已预置未来路由策略样例，但当前仓库没有对应控制器：
    - /api/exports/**
@@ -366,6 +371,98 @@
 - `gateway_risk_audit` 记录 allow / deny / rate-limited 等决策。
 - 限流计数器不落库；多实例部署时各实例窗口互相独立。
 - README 与 `data.sql` 里的阈值只用于联调示例，不代表生产建议值。
+
+## B-07 RBAC + 数据范围 + 订阅范围说明
+
+### 1) 目标能力
+- 将 A-04 中的角色权限、数据范围、topic 范围从“矩阵说明”收口为默认生效的运行时约束。
+- 真实业务查询接口改为鉴权访问，违规策略为：
+   - 列表接口返回已过滤结果
+   - 单对象详情、写操作、topic 订阅直接拒绝
+- 本轮提供 HTTP 侧的 topic 检查与模拟订阅入口，供后续 WebSocket 网关直接复用。
+
+### 2) 鉴权骨架
+- 新增声明式注解 `@AuthzGuard`，用于在控制器层声明：
+   - `requiredRole`
+   - `entryPermission`
+   - `menuPermission`
+- 新增 `AuthzGuardAspect`、`CurrentUserResolver` 与 `AuthorizationContext`，统一从当前本地 access token 解析：
+   - `roleCodes`
+   - `permissionCodes`
+   - `dataScopeRule`
+   - `authorizedRegions`
+   - `authorizedAssignees`
+   - `dataViewConstraint`
+   - `topicPatterns`
+- `GET /api/auth/me` 与 `GET /api/authz/users/{userId}/snapshot` 现在对齐同一套权限快照口径。
+
+### 3) 数据范围模型
+- 新增表：`object_scope_binding`
+- 作用：为对象链中的真实对象提供统一归属真值，不直接大改现有主数据表。
+- 字段：
+   - `binding_id`
+   - `object_type`
+   - `object_id`
+   - `region_id`
+   - `owner_user_id`
+   - `owner_username`
+   - `scope_level`
+   - `created_at`
+   - `updated_at`
+- `object_type` 覆盖：
+   - `NODE / SEGMENT / FACILITY / DEVICE / INCIDENT / WORK_ORDER / MODEL_RESULT`
+- `scope_level` 覆盖：
+   - `DETAIL / MASKED / AGGREGATED`
+- `ResolvedDataScope` 规则：
+   - 平台管理员：`ALL`
+   - 区域调度员 / 应急指挥：`REGION_ONLY`
+   - 巡检人员：`ASSIGNEE_ONLY`
+   - 算法工程师：`MASKED_FEATURE_ONLY`
+   - 领导只读：`AGGREGATED_READ_ONLY`
+
+### 4) 受保护接口口径
+- 继续匿名开放：
+   - GET /api/menu-boundaries
+   - GET /api/platforms
+   - GET /api/platforms/{platformCode}
+   - GET /api/gis/field-spec
+   - POST /api/gis/convert
+   - POST /api/gis/depth/validate
+   - GET /api/authz/matrix-spec
+   - GET /api/authz/matrix
+- 改为鉴权访问并接入 B-07 联合校验：
+   - GET /api/object-dictionary
+   - GET /api/object-dictionary/page
+   - GET /api/object-chain/segment/{segmentId}
+   - GET /api/object-chain/node/{nodeId}
+   - GET /api/authz/users/{userId}/snapshot
+   - GET /api/authz/users/{userId}/topics
+   - POST /api/authz/check
+   - POST /api/authz/topics/check
+   - POST /api/authz/topics/subscribe
+- Gateway 路由种子也已同步更新，确保这些业务查询不再被视为匿名公开接口。
+
+### 5) Topic 授权入口
+- 新增 `TopicAuthorizationService`，统一提供：
+   - `expandAuthorizedTopics(userId)`
+   - `checkTopics(userId, requestedTopics)`
+   - `filterAuthorizedTopics(userId, requestedTopics)`
+- 新增接口：
+   - POST /api/authz/topics/check
+   - POST /api/authz/topics/subscribe
+- `topics/check` 返回：
+   - `requestedTopics`
+   - `allowedTopics`
+   - `deniedTopics`
+   - `allAllowed`
+- `topics/subscribe` 是 B-24 WebSocket 前的 HTTP 模拟订阅入口；不保存长连接状态，只返回授权结果或拒绝错误。
+
+### 6) 错误码
+- `ENTRY_PERMISSION_DENIED`
+- `MENU_PERMISSION_DENIED`
+- `DATA_SCOPE_DENIED`
+- `TOPIC_SCOPE_DENIED`
+- `SUBSCRIPTION_NOT_ALLOWED`
 
 ## 数据库配置说明
 
@@ -415,6 +512,8 @@
    - gateway_route_policy
    - gateway_client_rule
    - gateway_risk_audit
+- B-07 新增：
+   - object_scope_binding
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -429,6 +528,11 @@
    - `gateway_route_policy` 保存路由风控、输入校验和限流策略
    - `gateway_client_rule` 保存 IP / 用户黑白名单
    - `gateway_risk_audit` 保存 Gateway allow / deny / rate-limited 审计记录
+- B-07 说明：
+   - `object_scope_binding` 保存对象所属区域、归属用户和视图级别真值
+   - `rbac_* / user_data_scope / topic_scope_rule` 继续保存角色、数据范围和 topic 模式
+   - H2 默认启动会自动建表并执行 `data.sql`
+   - PostgreSQL profile 首次联调需手动导入 `src/main/resources/data.sql`
 
 ## 测试数据说明
 - 文件：src/main/resources/data.sql
@@ -441,12 +545,12 @@
    - work_order：2 条
    - model_result：2 条
 - 已生成 A-04 权限联调数据：
-   - user_account：10 条（含静态权限样例用户、B-04 禁用用户样例、B-04 权限收敛样例、B-05 应急用户样例、B-06 网关阻断用户样例）
+   - user_account：11 条（含静态权限样例用户、B-04 禁用用户样例、B-04 权限收敛样例、B-05 应急用户样例、B-06 网关阻断用户样例、B-07 单区域调度样例）
    - rbac_role：6 条
    - rbac_permission：12 条
-   - rbac_user_role：10 条
+   - rbac_user_role：11 条
    - rbac_role_permission：29 条
-   - user_data_scope：11 条
+   - user_data_scope：12 条
    - topic_scope_rule：8 条
 - 已保留 B-02 静态权限样例：
    - user_account: U-OIDC-001 / oidc_static_sample
@@ -467,10 +571,17 @@
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
 - 已新增 B-06 Gateway 联调样例：
-   - gateway_route_policy：13 条（公共只读、当前高风险、未来导出/批量派单/模型发布预置策略）
+   - gateway_route_policy：21 条（公共规范接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
    - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
    - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
    - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
+- 已新增 B-07 数据范围与 topic 联调样例：
+   - object_scope_binding：17 条（覆盖 NODE / SEGMENT / FACILITY / DEVICE / INCIDENT / WORK_ORDER / MODEL_RESULT）
+   - user_account: `U-B07-HZ-001` 作为单区域调度用户样例
+   - 区域归属：`REGION-HZ` 与 `REGION-BINJIANG`
+   - 巡检归属：`U-INSPECT-001 / zhangsan`
+   - 算法脱敏样例：`MR-001 -> MASKED`
+   - 领导聚合样例：`MR-002 -> AGGREGATED`
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令
@@ -481,11 +592,11 @@
 
 ## 快速验证命令
 - 查询对象字典：
-   - curl -s http://localhost:8080/api/object-dictionary
+   - curl -s http://localhost:8080/api/object-dictionary -H "Authorization: Bearer <access_token>"
 - 按 segment_id 查询对象链：
-   - curl -s http://localhost:8080/api/object-chain/segment/SEG-001
+   - curl -s http://localhost:8080/api/object-chain/segment/SEG-001 -H "Authorization: Bearer <access_token>"
 - 按 node_id 查询对象链：
-   - curl -s http://localhost:8080/api/object-chain/node/NODE-002
+   - curl -s http://localhost:8080/api/object-chain/node/NODE-002 -H "Authorization: Bearer <access_token>"
 - 查询 GIS 字段规范：
    - curl -s http://localhost:8080/api/gis/field-spec
 - 坐标转换：
@@ -497,15 +608,22 @@
 - 查看角色矩阵（数据库展开后）：
    - curl -s http://localhost:8080/api/authz/matrix
 - 查看用户权限快照：
-   - curl -s http://localhost:8080/api/authz/users/U-DISPATCH-001/snapshot
+   - curl -s http://localhost:8080/api/authz/users/U-DISPATCH-001/snapshot -H "Authorization: Bearer <dispatch_access_token>"
 - 验证“区域调度员跨区拒绝”：
-   - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-DISPATCH-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"regionId\":\"REGION-SH\",\"topic\":\"region.REGION-SH.alerts.critical\",\"dataView\":\"AGGREGATED\"}"
+   - curl -s -X POST http://localhost:8080/api/authz/check -H "Authorization: Bearer <dispatch_access_token>" -H "Content-Type: application/json" -d "{\"userId\":\"U-DISPATCH-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"regionId\":\"REGION-SH\",\"topic\":\"region.REGION-SH.alerts.critical\",\"dataView\":\"AGGREGATED\"}"
 - 验证“巡检仅本人任务”：
-   - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-INSPECT-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"assignee\":\"zhangsan\",\"topic\":\"user.U-INSPECT-001.workorder.created\",\"dataView\":\"AGGREGATED\"}"
+   - curl -s -X POST http://localhost:8080/api/authz/check -H "Authorization: Bearer <inspector_access_token>" -H "Content-Type: application/json" -d "{\"userId\":\"U-INSPECT-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"assignee\":\"zhangsan\",\"topic\":\"user.U-INSPECT-001.workorder.created\",\"dataView\":\"AGGREGATED\"}"
 - 验证“算法工程师默认仅脱敏视图”：
-   - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-ALGO-001\",\"entryPermission\":\"ENTRY:DIAG\",\"menuPermission\":\"MENU:MODEL:READ\",\"dataView\":\"MASKED_FEATURE\",\"topic\":\"diag.model.inference\"}"
+   - curl -s -X POST http://localhost:8080/api/authz/check -H "Authorization: Bearer <algo_access_token>" -H "Content-Type: application/json" -d "{\"userId\":\"U-ALGO-001\",\"entryPermission\":\"ENTRY:DIAG\",\"menuPermission\":\"MENU:MODEL:READ\",\"dataView\":\"MASKED_FEATURE\",\"topic\":\"diag.model.inference\"}"
+- 验证“B-07 单区域调度只能访问本区对象”：
+   - curl -s http://localhost:8080/api/object-chain/segment/SEG-001 -H "Authorization: Bearer <hz_scope_access_token>"
+   - curl -s http://localhost:8080/api/object-chain/segment/SEG-002 -H "Authorization: Bearer <hz_scope_access_token>"
+- 验证 topic 检查：
+   - curl -s -X POST http://localhost:8080/api/authz/topics/check -H "Authorization: Bearer <hz_scope_access_token>" -H "Content-Type: application/json" -d "{\"userId\":\"U-B07-HZ-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"regionId\":\"REGION-HZ\",\"requestedTopics\":[\"region.REGION-HZ.alerts.critical\",\"region.REGION-BINJIANG.alerts.critical\"]}"
+- 验证 topic 模拟订阅：
+   - curl -s -X POST http://localhost:8080/api/authz/topics/subscribe -H "Authorization: Bearer <hz_scope_access_token>" -H "Content-Type: application/json" -d "{\"userId\":\"U-B07-HZ-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"regionId\":\"REGION-HZ\",\"requestedTopics\":[\"region.REGION-HZ.alerts.critical\"]}"
 - 分页接口联调：
-   - curl -s "http://localhost:8080/api/object-dictionary/page?page=1&pageSize=3"
+   - curl -s "http://localhost:8080/api/object-dictionary/page?page=1&pageSize=3" -H "Authorization: Bearer <access_token>"
 - OpenAPI 文档检查：
    - curl -s http://localhost:8080/v3/api-docs
 - 获取正式 OIDC 登录描述：
@@ -537,7 +655,7 @@
 - 验证 Gateway IP blocklist 拒绝：
    - curl -s http://localhost:8080/api/menu-boundaries -H "X-Forwarded-For: 203.0.113.77" -H "X-Trace-Id: TRACE-B06-BLOCK"
 - 验证 Gateway 分页参数限制：
-   - curl -s "http://localhost:8080/api/object-dictionary/page?page=1&pageSize=10000" -H "X-Trace-Id: TRACE-B06-PAGE"
+   - curl -s "http://localhost:8080/api/object-dictionary/page?page=1&pageSize=10000" -H "Authorization: Bearer <access_token>" -H "X-Trace-Id: TRACE-B06-PAGE"
 - 验证 Gateway Content-Type 校验：
    - curl -s -X POST http://localhost:8080/api/auth/refresh -H "Content-Type: text/plain" -d "not-json" -H "X-Trace-Id: TRACE-B06-CT"
 - 验证应急登录接口限流：
@@ -546,6 +664,6 @@
    - H2 Console / PostgreSQL 中执行 `SELECT * FROM gateway_risk_audit ORDER BY created_at DESC;`
 
 ## 下一步建议
-- 基于当前 Gateway 骨架继续落地 B-07（细粒度 RBAC 与数据范围联动）。
+- 在 B-07 的 `TopicAuthorizationService` 之上接入 B-24 WebSocket 握手与订阅鉴权。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

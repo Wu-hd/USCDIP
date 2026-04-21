@@ -1,5 +1,6 @@
 package com.uscdip.backend.controller;
 
+import com.uscdip.backend.annotation.AuthzGuard;
 import com.uscdip.backend.dto.EmergencyAccountActivateRequest;
 import com.uscdip.backend.dto.EmergencyAccountResponse;
 import com.uscdip.backend.dto.EmergencyAccountRevokeRequest;
@@ -71,6 +72,7 @@ public class EmergencyAuthController {
     }
 
     @PostMapping("/accounts/{accountId}/activate")
+    @AuthzGuard(requiredRole = "PLATFORM_ADMIN", entryPermission = "ENTRY:MGMT")
     @Operation(summary = "激活应急旁路账号")
     public ApiResponse<EmergencyAccountResponse> activate(
             @Parameter(description = "旁路账号ID", required = true) @PathVariable String accountId,
@@ -89,6 +91,7 @@ public class EmergencyAuthController {
     }
 
     @PostMapping("/accounts/{accountId}/revoke")
+    @AuthzGuard(requiredRole = "PLATFORM_ADMIN", entryPermission = "ENTRY:MGMT")
     @Operation(summary = "撤销应急旁路账号")
     public ApiResponse<EmergencyAccountResponse> revoke(
             @Parameter(description = "旁路账号ID", required = true) @PathVariable String accountId,
@@ -107,6 +110,7 @@ public class EmergencyAuthController {
     }
 
     @GetMapping("/audit")
+    @AuthzGuard(requiredRole = "PLATFORM_ADMIN", entryPermission = "ENTRY:MGMT")
     @Operation(summary = "查询应急旁路审计记录")
     public ApiResponse<EmergencyAuditPageResponse> queryAudit(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,

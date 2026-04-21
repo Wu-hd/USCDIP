@@ -49,6 +49,17 @@ public class SecurityConfig {
             "/api/auth/emergency/login"
     };
 
+    private static final String[] PUBLIC_SPEC_ENDPOINTS = {
+            "/api/menu-boundaries",
+            "/api/platforms",
+            "/api/platforms/*",
+            "/api/gis/field-spec",
+            "/api/gis/convert",
+            "/api/gis/depth/validate",
+            "/api/authz/matrix-spec",
+            "/api/authz/matrix"
+    };
+
     @Bean
     LocalAccessTokenAuthenticationFilter localAccessTokenAuthenticationFilter(
             com.uscdip.backend.service.LocalAccessTokenService localAccessTokenService,
@@ -73,19 +84,6 @@ public class SecurityConfig {
         return new GatewayControlFilter(gatewayPolicyService, gatewayRateLimitService, gatewayProperties, objectMapper);
     }
 
-    private static final String[] DEMO_ENDPOINTS = {
-            "/api/menu-boundaries",
-            "/api/platforms",
-            "/api/platforms/*",
-            "/api/object-dictionary",
-            "/api/object-dictionary/page",
-            "/api/object-chain/**",
-            "/api/gis/field-spec",
-            "/api/gis/convert",
-            "/api/gis/depth/validate",
-            "/api/authz/**"
-    };
-
     @Configuration
     @ConditionalOnProperty(prefix = "backend.oidc", name = "enabled", havingValue = "true")
     static class OidcEnabledSecurityConfiguration {
@@ -103,7 +101,7 @@ public class SecurityConfig {
                     .authorizeHttpRequests(auth -> auth
                             .requestMatchers(DOCUMENTATION_ENDPOINTS).permitAll()
                             .requestMatchers(AUTH_ENDPOINTS).permitAll()
-                            .requestMatchers(DEMO_ENDPOINTS).permitAll()
+                            .requestMatchers(PUBLIC_SPEC_ENDPOINTS).permitAll()
                             .anyRequest().authenticated()
                     )
                     .addFilterBefore(localAccessTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
@@ -164,7 +162,7 @@ public class SecurityConfig {
                             .requestMatchers(DOCUMENTATION_ENDPOINTS).permitAll()
                             .requestMatchers(AUTH_ENDPOINTS).permitAll()
                             .requestMatchers("/api/auth/me", "/api/auth/logout").permitAll()
-                            .requestMatchers(DEMO_ENDPOINTS).permitAll()
+                            .requestMatchers(PUBLIC_SPEC_ENDPOINTS).permitAll()
                             .anyRequest().authenticated()
                     )
                     .addFilterBefore(localAccessTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

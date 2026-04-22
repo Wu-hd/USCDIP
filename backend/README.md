@@ -6,6 +6,7 @@
 - A-03 坐标与深度字段冻结（GIS 字段规范、坐标转换、深度校验）
 - A-04 权限模型与数据范围矩阵（RBAC + 数据范围 + topic 订阅范围）
 - B-11 设备台账与心跳接口（设备注册、心跳上报、在线状态计算）
+- B-12 统一入站 DTO 与协议适配骨架（统一 DTO、协议适配、接入批次落库）
 
 当前项目已添加数据库能力。
 
@@ -34,6 +35,10 @@
    - GET /api/device-ledger/devices/{deviceId}
    - POST /api/device-ledger/devices/register
    - POST /api/device-ledger/devices/{deviceId}/heartbeat
+   - POST /api/ingest/metrics
+   - POST /api/ingest/adapt/{protocolType}
+   - GET /api/ingest/batches
+   - GET /api/ingest/batches/{batchId}
    - POST /api/master/changes
    - GET /api/master/changes
    - GET /api/master/changes/{requestId}
@@ -76,6 +81,7 @@
 - B-09 主数据版本与并发控制：变更申请、单级审批生效、主表 optimistic lock、版本快照与主数据审计
 - B-10 GIS 空间查询与坐标转换服务：bbox 检索、对象点查、统一 WKT 坐标转换与空间索引真值
 - B-11 设备台账与心跳接口：设备注册 Upsert、心跳历史、在线/预警/离线三态计算
+- B-12 统一入站 DTO 与协议适配骨架：统一 eventTime/recvTime/deviceTime、协议适配示例、接入批次与记录真值落库
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -119,6 +125,7 @@
 - 权限不足：FORBIDDEN
 - 资源不存在：RESOURCE_NOT_FOUND / PLATFORM_NOT_FOUND / SEGMENT_NOT_FOUND / NODE_NOT_FOUND / USER_NOT_FOUND
 - 设备台账错误：DEVICE_NOT_FOUND / DEVICE_RELATION_INVALID / DEVICE_HEARTBEAT_INVALID
+- 接入错误：INGEST_PROTOCOL_UNSUPPORTED / INGEST_DEVICE_NOT_FOUND / INGEST_PAYLOAD_INVALID / INGEST_BATCH_NOT_FOUND
 - 幂等冲突：IDEMPOTENT_CONFLICT
 - 内部异常：INTERNAL_ERROR
 
@@ -712,6 +719,44 @@
    - `object_relation(FACILITY -> DEVICE)`
 - 心跳接口不会自动补建设备；未知 `deviceId` 返回 `DEVICE_NOT_FOUND`。
 
+## B-12 统一入站 DTO 与协议适配骨架说明
+
+### 1) 目标能力
+- 提供统一入站 DTO，固定区分 `eventTime / recvTime / deviceTime / metricCode / value`。
+- 提供 `MQTT / MODBUS / NB_IOT` 三类协议适配骨架，演示协议载荷向统一 DTO 的归一化过程。
+- 提供 `ingest_batch / ingest_record` 两张接入真值表，供后续 B-13、B-14、B-16 继续复用。
+
+### 2) B-12 接口
+- `POST /api/ingest/metrics`
+   - 请求体固定包含：`protocolType / sourceType / sourceKey / traceId / isBackfill / metrics[]`
+   - 每条 `metrics[]` 固定包含：`deviceId / metricCode / value / eventTime / recvTime / deviceTime`
+- `POST /api/ingest/adapt/{protocolType}`
+   - 请求体固定包含：`sourceType / sourceKey / traceId / isBackfill / payload`
+   - 当前骨架支持：`MQTT / MODBUS / NB_IOT`
+- `GET /api/ingest/batches`
+- `GET /api/ingest/batches/{batchId}`
+
+### 3) 数据库与联调说明
+- 当前项目已经接入数据库。
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL profile 首次联调仍需手动导入 `src/main/resources/data.sql`。
+- B-12 新增表：
+   - `ingest_batch`：保存批次元信息，如 `protocol_type / source_type / source_key / trace_id / record_count / status / is_backfill / received_at`
+   - `ingest_record`：保存单条归一化采样，如 `device_id / metric_code / metric_value / event_time / recv_time / device_time / trace_id / is_backfill / adapter_type / attributes_json / raw_payload_excerpt`
+
+### 4) 错误码与校验口径
+- `INGEST_PROTOCOL_UNSUPPORTED`：协议类型不受支持
+- `INGEST_DEVICE_NOT_FOUND`：设备不存在，不允许接入层自动补建设备
+- `INGEST_PAYLOAD_INVALID`：请求体缺字段、时间格式错误、三种时间口径冲突、空批次等
+- `INGEST_BATCH_NOT_FOUND`：批次不存在
+- 三种时间不会合并为单一 `collectTime`
+
+### 5) B-12 联调示例
+- 统一 DTO 直传：
+   - `{"protocolType":"MQTT","sourceType":"EDGE_GATEWAY","sourceKey":"EDGE-HZ-GW-02","traceId":"TRACE-INGEST-001","isBackfill":false,"metrics":[{"deviceId":"DEV-001","metricCode":"PRESSURE","value":0.92,"eventTime":"2026-04-23T09:00:00","recvTime":"2026-04-23T09:00:03","deviceTime":"2026-04-23T08:59:58","attributes":{"topic":"region/hz/dev-001/pressure","qos":1}}]}`
+- Modbus 协议适配：
+   - `{"sourceType":"PLC_GATEWAY","sourceKey":"PLC-HZ-02","traceId":"TRACE-INGEST-ADAPT-001","isBackfill":false,"payload":{"deviceId":"DEV-002","registerAddress":"40001","registerValue":41.8,"sampledAt":"2026-04-23T10:00:00","gatewayReceivedAt":"2026-04-23T10:00:02","controllerTime":"2026-04-23T09:59:59","slaveId":"8"}}`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -772,6 +817,9 @@
    - object_geo_index
 - B-11 新增：
    - device_heartbeat
+- B-12 新增：
+   - ingest_batch
+   - ingest_record
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -815,6 +863,12 @@
    - `gateway_route_policy` 已新增 B-11 四条设备台账路由策略
    - H2 默认启动会自动建表并执行 `data.sql`
    - PostgreSQL profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
+- B-12 说明：
+   - `ingest_batch` 保存接入批次元信息与 `trace_id / is_backfill`
+   - `ingest_record` 保存归一化后的 `event_time / recv_time / device_time / metric_code / metric_value`
+   - `gateway_route_policy` 已新增 B-12 四条接入层路由策略
+   - H2 默认启动会自动建表并执行 `data.sql`
+   - PostgreSQL profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
 
 ## 测试数据说明
 - 文件：src/main/resources/data.sql
@@ -830,6 +884,10 @@
    - `device`：3 条，覆盖 `ONLINE / WARNING / OFFLINE`
    - `device_heartbeat`：3 条历史样例
    - `DEV-002` 的 `calibrationDueAt` 已过期，可直接验证 `calibrationExpired=true`
+- 已生成 B-12 接入层联调数据：
+   - `ingest_batch`：3 条，覆盖 `MQTT / MODBUS / NB_IOT`
+   - `ingest_record`：4 条，覆盖 2 条 MQTT、1 条 MODBUS、1 条 NB_IOT 回填样例
+   - `INGB-SEED-NBIOT-001` 可直接验证 `isBackfill=true`
 - 已生成 A-04 权限联调数据：
    - user_account：11 条（含静态权限样例用户、B-04 禁用用户样例、B-04 权限收敛样例、B-05 应急用户样例、B-06 网关阻断用户样例、B-07 单区域调度样例）
    - rbac_role：6 条
@@ -857,7 +915,7 @@
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
 - 已新增 B-06 Gateway 联调样例：
-   - gateway_route_policy：36 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
+   - gateway_route_policy：40 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12 接入层接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
    - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
    - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
    - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
@@ -888,6 +946,10 @@
    - `DEV-002`：高缓冲预警设备，且标定已过期
    - `DEV-003`：心跳超时离线设备
    - `POST /api/device-ledger/devices/register` 可新增 `DEV-004` 用于联调 Upsert
+- 已新增 B-12 接入层联调样例：
+   - `INGB-SEED-MQTT-001`：2 条 MQTT 统一 DTO 样例
+   - `INGB-SEED-MODBUS-001`：1 条 Modbus 寄存器映射样例
+   - `INGB-SEED-NBIOT-001`：1 条 NB-IoT 回填样例，且 `isBackfill=true`
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令
@@ -917,6 +979,14 @@
    - curl -s -X POST http://localhost:8080/api/device-ledger/devices/register -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"deviceId\":\"DEV-004\",\"deviceName\":\"液位计-04\",\"facilityId\":\"FAC-002\",\"segmentId\":\"SEG-001\",\"nodeId\":\"NODE-002\",\"protocolType\":\"MQTT\",\"calibrationDueAt\":\"2099-12-31T23:59:59\"}"
 - 上报设备心跳：
    - curl -s -X POST http://localhost:8080/api/device-ledger/devices/DEV-002/heartbeat -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"heartbeatTime\":\"2026-04-23T01:00:00\",\"recvTime\":\"2026-04-23T01:00:03\",\"bufferLevel\":85,\"abnormalFlags\":[\"BUFFER_BACKLOG\"]}"
+- 写入统一入站批次：
+   - curl -s -X POST http://localhost:8080/api/ingest/metrics -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"protocolType\":\"MQTT\",\"sourceType\":\"EDGE_GATEWAY\",\"sourceKey\":\"EDGE-HZ-GW-02\",\"traceId\":\"TRACE-INGEST-001\",\"isBackfill\":false,\"metrics\":[{\"deviceId\":\"DEV-001\",\"metricCode\":\"PRESSURE\",\"value\":0.92,\"eventTime\":\"2026-04-23T09:00:00\",\"recvTime\":\"2026-04-23T09:00:03\",\"deviceTime\":\"2026-04-23T08:59:58\",\"attributes\":{\"topic\":\"region/hz/dev-001/pressure\",\"qos\":1}}]}"
+- 触发协议适配骨架：
+   - curl -s -X POST http://localhost:8080/api/ingest/adapt/MODBUS -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"sourceType\":\"PLC_GATEWAY\",\"sourceKey\":\"PLC-HZ-02\",\"traceId\":\"TRACE-INGEST-ADAPT-001\",\"isBackfill\":false,\"payload\":{\"deviceId\":\"DEV-002\",\"registerAddress\":\"40001\",\"registerValue\":41.8,\"sampledAt\":\"2026-04-23T10:00:00\",\"gatewayReceivedAt\":\"2026-04-23T10:00:02\",\"controllerTime\":\"2026-04-23T09:59:59\",\"slaveId\":\"8\"}}"
+- 查询接入批次列表：
+   - curl -s "http://localhost:8080/api/ingest/batches?page=1&pageSize=10" -H "Authorization: Bearer <access_token>"
+- 查询接入批次详情：
+   - curl -s http://localhost:8080/api/ingest/batches/INGB-SEED-MQTT-001 -H "Authorization: Bearer <access_token>"
 - 提交主数据变更申请：
    - curl -s -X POST http://localhost:8080/api/master/changes -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"objectType\":\"DEVICE\",\"objectId\":\"DEV-002\",\"baseVersionNo\":1,\"reason\":\"upgrade device metadata\",\"payload\":{\"deviceName\":\"流量计-02-升级版\",\"protocolType\":\"NB-IOT\"}}"
 - 查询主数据变更列表：

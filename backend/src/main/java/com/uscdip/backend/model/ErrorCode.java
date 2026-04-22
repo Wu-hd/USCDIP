@@ -41,6 +41,10 @@ public enum ErrorCode {
     DEVICE_NOT_FOUND("DEVICE_NOT_FOUND", "Device was not found"),
     DEVICE_RELATION_INVALID("DEVICE_RELATION_INVALID", "Device relation is invalid"),
     DEVICE_HEARTBEAT_INVALID("DEVICE_HEARTBEAT_INVALID", "Device heartbeat payload is invalid"),
+    INGEST_PROTOCOL_UNSUPPORTED("INGEST_PROTOCOL_UNSUPPORTED", "Ingest protocol is not supported"),
+    INGEST_DEVICE_NOT_FOUND("INGEST_DEVICE_NOT_FOUND", "Ingest device was not found"),
+    INGEST_PAYLOAD_INVALID("INGEST_PAYLOAD_INVALID", "Ingest payload is invalid"),
+    INGEST_BATCH_NOT_FOUND("INGEST_BATCH_NOT_FOUND", "Ingest batch was not found"),
     INTERNAL_ERROR("INTERNAL_ERROR", "Internal server error");
 
     private final String code;

@@ -3,6 +3,7 @@ package com.uscdip.backend.exception;
 import com.uscdip.backend.model.ApiResponse;
 import com.uscdip.backend.model.ErrorCode;
 import jakarta.validation.ConstraintViolationException;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -18,32 +19,32 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Void>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex, HttpServletRequest request) {
         String message = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
                 .map(this::toFieldMessage)
                 .collect(Collectors.joining("; "));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.failure(ErrorCode.INVALID_PARAMETER, message));
+                .body(ApiResponse.failure(resolveValidationErrorCode(request), message));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.failure(ErrorCode.INVALID_PARAMETER, ex.getMessage()));
+                .body(ApiResponse.failure(resolveValidationErrorCode(request), ex.getMessage()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiResponse<Void>> handleMessageNotReadable(HttpMessageNotReadableException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleMessageNotReadable(HttpMessageNotReadableException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.failure(ErrorCode.INVALID_PARAMETER, "Request body format is invalid"));
+                .body(ApiResponse.failure(resolveValidationErrorCode(request), "Request body format is invalid"));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.failure(ErrorCode.INVALID_PARAMETER, ex.getMessage()));
+                .body(ApiResponse.failure(resolveValidationErrorCode(request), ex.getMessage()));
     }
 
     @ExceptionHandler(AuthFlowException.class)
@@ -69,5 +70,12 @@ public class GlobalExceptionHandler {
             return fieldError.getField() + " is invalid";
         }
         return fieldError.getField() + ": " + fieldError.getDefaultMessage();
+    }
+
+    private ErrorCode resolveValidationErrorCode(HttpServletRequest request) {
+        if (request != null && request.getRequestURI() != null && request.getRequestURI().startsWith("/api/ingest")) {
+            return ErrorCode.INGEST_PAYLOAD_INVALID;
+        }
+        return ErrorCode.INVALID_PARAMETER;
     }
 }

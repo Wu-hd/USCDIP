@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.uscdip.backend.dto.ProtocolAdaptRequest;
 import com.uscdip.backend.dto.ProtocolAdaptResponse;
+import com.uscdip.backend.dto.BackfillIngestRequest;
+import com.uscdip.backend.dto.DataQualityBatchSummary;
+import com.uscdip.backend.dto.TsdbWriteSummary;
 import com.uscdip.backend.dto.UnifiedIngestBatchRequest;
 import com.uscdip.backend.dto.UnifiedIngestBatchResponse;
 import com.uscdip.backend.dto.UnifiedIngestMetricDto;
@@ -45,6 +48,7 @@ public class UnifiedIngestService {
     private static final String MENU_ASSET_READ = "MENU:ASSET:READ";
     private static final String STATUS_RECEIVED = "RECEIVED";
     private static final String STATUS_ADAPTED = "ADAPTED";
+    private static final String STATUS_PENDING = "PENDING";
     private static final int RAW_EXCERPT_MAX = 2000;
 
     private final IngestBatchRepository ingestBatchRepository;
@@ -52,6 +56,8 @@ public class UnifiedIngestService {
     private final DeviceRepository deviceRepository;
     private final ObjectScopeService objectScopeService;
     private final ProtocolAdapterRegistry protocolAdapterRegistry;
+    private final TsdbWriteService tsdbWriteService;
+    private final DataQualityScoringService dataQualityScoringService;
     private final ObjectMapper objectMapper;
 
     public UnifiedIngestService(
@@ -60,6 +66,8 @@ public class UnifiedIngestService {
             DeviceRepository deviceRepository,
             ObjectScopeService objectScopeService,
             ProtocolAdapterRegistry protocolAdapterRegistry,
+            TsdbWriteService tsdbWriteService,
+            DataQualityScoringService dataQualityScoringService,
             ObjectMapper objectMapper
     ) {
         this.ingestBatchRepository = ingestBatchRepository;
@@ -67,6 +75,8 @@ public class UnifiedIngestService {
         this.deviceRepository = deviceRepository;
         this.objectScopeService = objectScopeService;
         this.protocolAdapterRegistry = protocolAdapterRegistry;
+        this.tsdbWriteService = tsdbWriteService;
+        this.dataQualityScoringService = dataQualityScoringService;
         this.objectMapper = objectMapper;
     }
 
@@ -80,7 +90,7 @@ public class UnifiedIngestService {
                 request.metrics()
         );
         validateDevices(normalizedMetrics, protocolType);
-        return persistBatch(
+        PersistedBatch persistedBatch = persistBatch(
                 protocolType,
                 request.sourceType(),
                 request.sourceKey(),
@@ -88,7 +98,18 @@ public class UnifiedIngestService {
                 request.isBackfill(),
                 STATUS_RECEIVED,
                 normalizedMetrics,
-                buildDirectRawExcerpt(request)
+                buildDirectRawExcerpt(request),
+                null,
+                null,
+                null
+        );
+        TsdbWriteSummary summary = tsdbWriteService.writeBatch(persistedBatch.batch().getBatchId());
+        return toResponse(
+                persistedBatch.batch(),
+                persistedBatch.records(),
+                true,
+                summary,
+                dataQualityScoringService.summarizeBatch(persistedBatch.batch().getBatchId())
         );
     }
 
@@ -110,7 +131,7 @@ public class UnifiedIngestService {
                 adaptedMetrics
         );
         validateDevices(normalizedMetrics, protocolType);
-        UnifiedIngestBatchResponse batch = persistBatch(
+        PersistedBatch persistedBatch = persistBatch(
                 protocolType,
                 request.sourceType(),
                 request.sourceKey(),
@@ -118,9 +139,54 @@ public class UnifiedIngestService {
                 request.isBackfill(),
                 STATUS_ADAPTED,
                 normalizedMetrics,
-                safeExcerpt(request.payload())
+                safeExcerpt(request.payload()),
+                null,
+                null,
+                null
+        );
+        TsdbWriteSummary summary = tsdbWriteService.writeBatch(persistedBatch.batch().getBatchId());
+        UnifiedIngestBatchResponse batch = toResponse(
+                persistedBatch.batch(),
+                persistedBatch.records(),
+                true,
+                summary,
+                dataQualityScoringService.summarizeBatch(persistedBatch.batch().getBatchId())
         );
         return new ProtocolAdaptResponse(protocolType.name(), normalizedMetrics.size(), normalizedMetrics, batch);
+    }
+
+    @Transactional
+    public UnifiedIngestBatchResponse ingestBackfill(BackfillIngestRequest request) {
+        IngestProtocolType protocolType = parseProtocol(request.protocolType());
+        List<UnifiedIngestMetricDto> normalizedMetrics = normalizeMetrics(
+                protocolType,
+                request.traceId(),
+                true,
+                request.metrics()
+        );
+        validateDevices(normalizedMetrics, protocolType);
+        validateBackfillKeys(request.batchNo(), request.seqNo(), normalizedMetrics);
+        PersistedBatch persistedBatch = persistBatch(
+                protocolType,
+                request.sourceType(),
+                request.sourceKey(),
+                request.traceId(),
+                true,
+                STATUS_RECEIVED,
+                normalizedMetrics,
+                buildBackfillRawExcerpt(request),
+                request.batchNo().trim(),
+                request.seqNo(),
+                request.originalSampleTime()
+        );
+        TsdbWriteSummary summary = tsdbWriteService.writeBatch(persistedBatch.batch().getBatchId());
+        return toResponse(
+                persistedBatch.batch(),
+                persistedBatch.records(),
+                true,
+                summary,
+                dataQualityScoringService.summarizeBatch(persistedBatch.batch().getBatchId())
+        );
     }
 
     @Transactional(readOnly = true)
@@ -132,7 +198,13 @@ public class UnifiedIngestService {
 
         List<UnifiedIngestBatchResponse> items = batches.stream()
                 .filter(batch -> !visibleRecords.getOrDefault(batch.getBatchId(), List.of()).isEmpty())
-                .map(batch -> toResponse(batch, visibleRecords.getOrDefault(batch.getBatchId(), List.of()), false))
+                .map(batch -> toResponse(
+                        batch,
+                        visibleRecords.getOrDefault(batch.getBatchId(), List.of()),
+                        false,
+                        tsdbWriteService.getSummaryForBatch(batch),
+                        dataQualityScoringService.summarizeBatch(batch.getBatchId())
+                ))
                 .toList();
 
         return paginate(items, page, pageSize);
@@ -151,10 +223,16 @@ public class UnifiedIngestService {
         if (visibleRecords.isEmpty()) {
             throw new AuthFlowException(ErrorCode.DATA_SCOPE_DENIED, HttpStatus.FORBIDDEN, ErrorCode.DATA_SCOPE_DENIED.defaultMessage());
         }
-        return toResponse(batch, visibleRecords, true);
+        return toResponse(
+                batch,
+                visibleRecords,
+                true,
+                tsdbWriteService.getSummaryForBatch(batch),
+                dataQualityScoringService.summarizeBatch(batch.getBatchId())
+        );
     }
 
-    private UnifiedIngestBatchResponse persistBatch(
+    private PersistedBatch persistBatch(
             IngestProtocolType protocolType,
             String sourceType,
             String sourceKey,
@@ -162,7 +240,10 @@ public class UnifiedIngestService {
             boolean isBackfill,
             String status,
             List<UnifiedIngestMetricDto> metrics,
-            String rawPayloadExcerpt
+            String rawPayloadExcerpt,
+            String batchNo,
+            Long seqNo,
+            LocalDateTime originalSampleTime
     ) {
         LocalDateTime now = LocalDateTime.now();
         IngestBatchEntity batch = ingestBatchRepository.save(new IngestBatchEntity(
@@ -174,7 +255,13 @@ public class UnifiedIngestService {
                 metrics.size(),
                 status,
                 isBackfill,
-                now
+                now,
+                STATUS_PENDING,
+                null,
+                null,
+                batchNo,
+                seqNo,
+                originalSampleTime
         ));
 
         List<IngestRecordEntity> records = new ArrayList<>();
@@ -197,7 +284,7 @@ public class UnifiedIngestService {
             ));
         }
         ingestRecordRepository.saveAll(records);
-        return toResponse(batch, records, true);
+        return new PersistedBatch(batch, records);
     }
 
     private List<UnifiedIngestMetricDto> normalizeMetrics(
@@ -291,7 +378,13 @@ public class UnifiedIngestService {
                 .collect(Collectors.groupingBy(IngestRecordEntity::getBatchId, LinkedHashMap::new, Collectors.toList()));
     }
 
-    private UnifiedIngestBatchResponse toResponse(IngestBatchEntity batch, List<IngestRecordEntity> records, boolean includeRecords) {
+    private UnifiedIngestBatchResponse toResponse(
+            IngestBatchEntity batch,
+            List<IngestRecordEntity> records,
+            boolean includeRecords,
+            TsdbWriteSummary tsdbWrite,
+            DataQualityBatchSummary dqScore
+    ) {
         List<UnifiedIngestMetricDto> metrics = includeRecords
                 ? records.stream().map(this::toMetric).toList()
                 : List.of();
@@ -306,7 +399,9 @@ public class UnifiedIngestService {
                 batch.getRecordCount() == null ? records.size() : batch.getRecordCount(),
                 records.size(),
                 batch.getReceivedAt(),
-                metrics
+                metrics,
+                tsdbWrite,
+                dqScore
         );
     }
 
@@ -393,5 +488,38 @@ public class UnifiedIngestService {
         } catch (IllegalArgumentException ex) {
             return safeExcerpt(objectMapper.createObjectNode().put("traceId", request.traceId()));
         }
+    }
+
+    private String buildBackfillRawExcerpt(BackfillIngestRequest request) {
+        try {
+            return safeExcerpt(objectMapper.valueToTree(Map.of(
+                    "sourceType", request.sourceType(),
+                    "sourceKey", request.sourceKey(),
+                    "traceId", request.traceId(),
+                    "batchNo", request.batchNo(),
+                    "seqNo", request.seqNo(),
+                    "originalSampleTime", request.originalSampleTime(),
+                    "metricCount", request.metrics().size()
+            )));
+        } catch (IllegalArgumentException ex) {
+            return safeExcerpt(objectMapper.createObjectNode().put("traceId", request.traceId()));
+        }
+    }
+
+    private void validateBackfillKeys(String batchNo, Long seqNo, List<UnifiedIngestMetricDto> metrics) {
+        Set<String> dedupeKeys = new LinkedHashSet<>();
+        for (UnifiedIngestMetricDto metric : metrics) {
+            String dedupeKey = metric.deviceId() + "|" + metric.metricCode() + "|" + batchNo.trim() + "|" + seqNo;
+            if (!dedupeKeys.add(dedupeKey)) {
+                throw new AuthFlowException(
+                        ErrorCode.BACKFILL_DUPLICATE,
+                        HttpStatus.CONFLICT,
+                        "Duplicate backfill metric within request for " + metric.deviceId() + ":" + metric.metricCode()
+                );
+            }
+        }
+    }
+
+    private record PersistedBatch(IngestBatchEntity batch, List<IngestRecordEntity> records) {
     }
 }

@@ -14,6 +14,8 @@ public record UnifiedIngestBatchResponse(
         int totalRecordCount,
         int visibleRecordCount,
         LocalDateTime receivedAt,
-        List<UnifiedIngestMetricDto> records
+        List<UnifiedIngestMetricDto> records,
+        TsdbWriteSummary tsdbWrite,
+        DataQualityBatchSummary dqScore
 ) {
 }

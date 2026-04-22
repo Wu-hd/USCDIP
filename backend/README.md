@@ -7,6 +7,8 @@
 - A-04 权限模型与数据范围矩阵（RBAC + 数据范围 + topic 订阅范围）
 - B-11 设备台账与心跳接口（设备注册、心跳上报、在线状态计算）
 - B-12 统一入站 DTO 与协议适配骨架（统一 DTO、协议适配、接入批次落库）
+- B-13 TSDB 写入与补偿写入服务（在线写入、补偿写入、写入日志与重试）
+- B-14 数据质量评分服务（dq_score / dq_flags / 查询接口）
 
 当前项目已添加数据库能力。
 
@@ -37,8 +39,14 @@
    - POST /api/device-ledger/devices/{deviceId}/heartbeat
    - POST /api/ingest/metrics
    - POST /api/ingest/adapt/{protocolType}
+   - POST /api/ingest/backfill
    - GET /api/ingest/batches
    - GET /api/ingest/batches/{batchId}
+   - GET /api/ingest/write-logs
+   - GET /api/ingest/write-logs/{writeLogId}
+   - POST /api/ingest/write-logs/{writeLogId}/retry
+   - GET /api/dq/scores
+   - GET /api/dq/scores/{sourceRecordId}
    - POST /api/master/changes
    - GET /api/master/changes
    - GET /api/master/changes/{requestId}
@@ -757,6 +765,63 @@
 - Modbus 协议适配：
    - `{"sourceType":"PLC_GATEWAY","sourceKey":"PLC-HZ-02","traceId":"TRACE-INGEST-ADAPT-001","isBackfill":false,"payload":{"deviceId":"DEV-002","registerAddress":"40001","registerValue":41.8,"sampledAt":"2026-04-23T10:00:00","gatewayReceivedAt":"2026-04-23T10:00:02","controllerTime":"2026-04-23T09:59:59","slaveId":"8"}}`
 
+## B-13 TSDB 写入与补偿写入服务说明
+
+### 1) 目标能力
+- `POST /api/ingest/metrics`、`POST /api/ingest/adapt/{protocolType}` 与 `POST /api/ingest/backfill` 在接入层落库后会自动串联 TSDB 写入。
+- 在线与补偿写入统一写入 `ts_metric`，并记录 `ts_write_log` 作为写入尝试真值。
+- 支持数据库驱动的失败重试与手动重试入口，不引入 Redis / MQ。
+
+### 2) B-13 接口
+- `POST /api/ingest/backfill`
+- `GET /api/ingest/write-logs`
+- `GET /api/ingest/write-logs/{writeLogId}`
+- `POST /api/ingest/write-logs/{writeLogId}/retry`
+
+### 3) 数据库与联调说明
+- 当前项目已经接入数据库。
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL profile 首次联调仍需手动导入 `src/main/resources/data.sql`。
+- Timescale 目标口径额外提供 `src/main/resources/application-timescale.yml` 与 `src/main/resources/timescale-init.sql`。
+- Timescale 初始化命令：
+   - `CREATE EXTENSION IF NOT EXISTS timescaledb;`
+   - `psql -f src/main/resources/timescale-init.sql`
+- B-13 新增表：
+   - `ts_metric`：保存最终时序样本，以及 `batch_no / seq_no / original_sample_time / late_arrival / latency_ms`
+   - `ts_write_log`：保存每次写入尝试、重试状态和错误
+- `ingest_batch` 已扩展：
+   - `tsdb_write_status / last_write_log_id / last_write_at`
+   - `batch_no / seq_no / original_sample_time`
+
+## B-14 数据质量评分服务说明
+
+### 1) 目标能力
+- TSDB 写入成功后自动计算 `dq_score / dq_level / dq_flags`，并回写到 `ts_metric`。
+- 评分固定采用完整性、有效性、时效性、一致性、稳定性五项加权公式。
+- 写入结果同时落 `dq_alarm_conf_factor`，供后续 B-17 告警置信度降权直接复用。
+
+### 2) B-14 接口
+- `GET /api/dq/scores`
+   - 支持 `deviceId / metricCode / dqLevel / minScore / maxScore / sourceBatchId / isBackfill`
+- `GET /api/dq/scores/{sourceRecordId}`
+
+### 3) 数据库与联调说明
+- B-14 不新增独立评分表，直接扩展 `ts_metric`：
+   - `dq_score / dq_level / dq_flags`
+   - `dq_completeness / dq_validity / dq_timeliness / dq_consistency / dq_stability`
+   - `dq_alarm_conf_factor / dq_scored_at`
+- 查询接口继续复用 B-07 数据范围，只允许看到有权限设备对应的评分样本。
+- 一期范围画像内置在代码中，覆盖 `PRESSURE / TEMPERATURE / VIBRATION / 40001`；未知指标按降权处理并标记 `VALIDITY_PROFILE_MISSING`。
+
+### 4) 错误码
+- `TSDB_WRITE_FAILED`
+- `TSDB_WRITE_LOG_NOT_FOUND`
+- `BACKFILL_PAYLOAD_INVALID`
+- `BACKFILL_DUPLICATE`
+- `DQ_SCORE_NOT_FOUND`
+- `DQ_QUERY_INVALID`
+- `DQ_PROFILE_INVALID`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -783,6 +848,16 @@
    - GATEWAY_BODY_SIZE_LIMIT_BYTES / GATEWAY_PAGE_SIZE_MAX
    - GATEWAY_DEFAULT_WINDOW_SECONDS / GATEWAY_DEFAULT_CAPACITY
    - OIDC_STATE_TTL_SECONDS / REFRESH_TOKEN_HASH_ALGORITHM / LOCAL_TOKEN_ISSUER
+
+### TimescaleDB（PostgreSQL 目标口径）
+- 配置文件：src/main/resources/application-timescale.yml
+- 启动命令：mvn clean spring-boot:run -Dspring-boot.run.profiles=timescale
+- 初始化步骤：
+   - 执行 `CREATE EXTENSION IF NOT EXISTS timescaledb;`
+   - 再执行 `psql -f src/main/resources/timescale-init.sql`
+- 说明：
+   - 默认开发和测试仍使用 H2
+   - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json
@@ -820,6 +895,9 @@
 - B-12 新增：
    - ingest_batch
    - ingest_record
+- B-13 新增：
+   - ts_metric
+   - ts_write_log
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -866,9 +944,21 @@
 - B-12 说明：
    - `ingest_batch` 保存接入批次元信息与 `trace_id / is_backfill`
    - `ingest_record` 保存归一化后的 `event_time / recv_time / device_time / metric_code / metric_value`
-   - `gateway_route_policy` 已新增 B-12 四条接入层路由策略
+   - `gateway_route_policy` 已新增 B-12/B-13/B-14 路由策略
    - H2 默认启动会自动建表并执行 `data.sql`
    - PostgreSQL profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
+- B-13 说明：
+   - `ts_metric` 保存写入后的在线/补偿样本、写入延迟与补偿顺序字段
+   - `ts_write_log` 保存写入状态、错误、重试次数与下次重试时间
+   - `application-timescale.yml` 与 `timescale-init.sql` 提供 Timescale 目标部署说明
+   - H2 默认启动会自动建表并执行 `data.sql`
+   - PostgreSQL / Timescale profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
+- B-14 说明：
+   - `ts_metric` 直接追加 `dq_*` 字段，不额外拆分评分表
+   - `dq_flags` 以逗号分隔大写标签存储
+   - `gateway_route_policy` 已新增 B-14 两条评分查询路由策略
+   - H2 默认启动会自动建表并执行 `data.sql`
+   - PostgreSQL / Timescale profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
 
 ## 测试数据说明
 - 文件：src/main/resources/data.sql
@@ -885,9 +975,17 @@
    - `device_heartbeat`：3 条历史样例
    - `DEV-002` 的 `calibrationDueAt` 已过期，可直接验证 `calibrationExpired=true`
 - 已生成 B-12 接入层联调数据：
-   - `ingest_batch`：3 条，覆盖 `MQTT / MODBUS / NB_IOT`
-   - `ingest_record`：4 条，覆盖 2 条 MQTT、1 条 MODBUS、1 条 NB_IOT 回填样例
+   - `ingest_batch`：5 条，覆盖 `MQTT / MODBUS / NB_IOT / FLATLINE / INVALID`
+   - `ingest_record`：10 条，覆盖 MQTT、Modbus、NB-IoT 回填、平线样本和量程异常样本
    - `INGB-SEED-NBIOT-001` 可直接验证 `isBackfill=true`
+   - `INGB-SEED-FLAT-001` 可直接验证平线窗口
+   - `INGB-SEED-INVALID-001` 可直接验证量程异常与低质量评分
+- 已生成 B-13 / B-14 时序与质量联调数据：
+   - `ts_write_log`：5 条成功写入样例
+   - `ts_metric`：10 条时序样例，均带 `dq_score / dq_level / dq_flags`
+   - `INGR-SEED-004`：回填 + 延迟样例，对应 `C` 级质量
+   - `INGR-SEED-009`：平线样例，带 `STABILITY_FLATLINE`
+   - `INGR-SEED-010`：量程异常 + 延迟样例，对应 `D` 级质量
 - 已生成 A-04 权限联调数据：
    - user_account：11 条（含静态权限样例用户、B-04 禁用用户样例、B-04 权限收敛样例、B-05 应急用户样例、B-06 网关阻断用户样例、B-07 单区域调度样例）
    - rbac_role：6 条
@@ -915,7 +1013,7 @@
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
 - 已新增 B-06 Gateway 联调样例：
-   - gateway_route_policy：40 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12 接入层接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
+   - gateway_route_policy：46 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12/B-13 接入层接口、B-14 评分查询接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
    - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
    - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
    - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
@@ -950,6 +1048,14 @@
    - `INGB-SEED-MQTT-001`：2 条 MQTT 统一 DTO 样例
    - `INGB-SEED-MODBUS-001`：1 条 Modbus 寄存器映射样例
    - `INGB-SEED-NBIOT-001`：1 条 NB-IoT 回填样例，且 `isBackfill=true`
+- 已新增 B-13 TSDB 联调样例：
+   - `GET /api/ingest/write-logs` 可直接查看 5 条写入日志
+   - `POST /api/ingest/backfill` 会自动写入 `ts_metric` 并生成 `ts_write_log`
+   - `application-timescale.yml` 与 `timescale-init.sql` 可直接作为 PostgreSQL/Timescale 联调模板
+- 已新增 B-14 数据质量联调样例：
+   - `GET /api/dq/scores?dqLevel=D` 可直接命中 `INGR-SEED-010`
+   - `GET /api/dq/scores/INGR-SEED-009` 可直接查看 `STABILITY_FLATLINE`
+   - `GET /api/dq/scores/INGR-SEED-004` 可直接查看 `BACKFILL_DATA`
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令
@@ -983,10 +1089,20 @@
    - curl -s -X POST http://localhost:8080/api/ingest/metrics -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"protocolType\":\"MQTT\",\"sourceType\":\"EDGE_GATEWAY\",\"sourceKey\":\"EDGE-HZ-GW-02\",\"traceId\":\"TRACE-INGEST-001\",\"isBackfill\":false,\"metrics\":[{\"deviceId\":\"DEV-001\",\"metricCode\":\"PRESSURE\",\"value\":0.92,\"eventTime\":\"2026-04-23T09:00:00\",\"recvTime\":\"2026-04-23T09:00:03\",\"deviceTime\":\"2026-04-23T08:59:58\",\"attributes\":{\"topic\":\"region/hz/dev-001/pressure\",\"qos\":1}}]}"
 - 触发协议适配骨架：
    - curl -s -X POST http://localhost:8080/api/ingest/adapt/MODBUS -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"sourceType\":\"PLC_GATEWAY\",\"sourceKey\":\"PLC-HZ-02\",\"traceId\":\"TRACE-INGEST-ADAPT-001\",\"isBackfill\":false,\"payload\":{\"deviceId\":\"DEV-002\",\"registerAddress\":\"40001\",\"registerValue\":41.8,\"sampledAt\":\"2026-04-23T10:00:00\",\"gatewayReceivedAt\":\"2026-04-23T10:00:02\",\"controllerTime\":\"2026-04-23T09:59:59\",\"slaveId\":\"8\"}}"
+- 提交补偿写入：
+   - curl -s -X POST http://localhost:8080/api/ingest/backfill -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"protocolType\":\"MQTT\",\"sourceType\":\"EDGE_GATEWAY\",\"sourceKey\":\"EDGE-HZ-GW-05\",\"traceId\":\"TRACE-BACKFILL-001\",\"batchNo\":\"BATCH-001\",\"seqNo\":1,\"originalSampleTime\":\"2026-04-20T09:00:00\",\"isBackfill\":true,\"metrics\":[{\"deviceId\":\"DEV-001\",\"metricCode\":\"PRESSURE\",\"value\":0.91,\"eventTime\":\"2026-04-20T09:00:00\",\"recvTime\":\"2026-04-24T09:00:00\",\"deviceTime\":\"2026-04-20T08:59:59\"}]}"
 - 查询接入批次列表：
    - curl -s "http://localhost:8080/api/ingest/batches?page=1&pageSize=10" -H "Authorization: Bearer <access_token>"
 - 查询接入批次详情：
    - curl -s http://localhost:8080/api/ingest/batches/INGB-SEED-MQTT-001 -H "Authorization: Bearer <access_token>"
+- 查询 TSDB 写入日志：
+   - curl -s "http://localhost:8080/api/ingest/write-logs?page=1&pageSize=10" -H "Authorization: Bearer <access_token>"
+- 手动重试 TSDB 写入：
+   - curl -s -X POST http://localhost:8080/api/ingest/write-logs/<writeLogId>/retry -H "Authorization: Bearer <admin_access_token>"
+- 查询数据质量评分列表：
+   - curl -s "http://localhost:8080/api/dq/scores?page=1&pageSize=10&dqLevel=D" -H "Authorization: Bearer <access_token>"
+- 查询单条数据质量评分：
+   - curl -s http://localhost:8080/api/dq/scores/INGR-SEED-009 -H "Authorization: Bearer <admin_access_token>"
 - 提交主数据变更申请：
    - curl -s -X POST http://localhost:8080/api/master/changes -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"objectType\":\"DEVICE\",\"objectId\":\"DEV-002\",\"baseVersionNo\":1,\"reason\":\"upgrade device metadata\",\"payload\":{\"deviceName\":\"流量计-02-升级版\",\"protocolType\":\"NB-IOT\"}}"
 - 查询主数据变更列表：

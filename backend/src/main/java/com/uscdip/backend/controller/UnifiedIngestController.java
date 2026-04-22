@@ -1,13 +1,16 @@
 package com.uscdip.backend.controller;
 
 import com.uscdip.backend.annotation.AuthzGuard;
+import com.uscdip.backend.dto.BackfillIngestRequest;
 import com.uscdip.backend.dto.ProtocolAdaptRequest;
 import com.uscdip.backend.dto.ProtocolAdaptResponse;
+import com.uscdip.backend.dto.TsdbWriteLogResponse;
 import com.uscdip.backend.dto.UnifiedIngestBatchRequest;
 import com.uscdip.backend.dto.UnifiedIngestBatchResponse;
 import com.uscdip.backend.model.ApiResponse;
 import com.uscdip.backend.model.PageResponse;
 import com.uscdip.backend.service.CurrentUserResolver;
+import com.uscdip.backend.service.TsdbWriteService;
 import com.uscdip.backend.service.UnifiedIngestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,10 +34,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class UnifiedIngestController {
 
     private final UnifiedIngestService unifiedIngestService;
+    private final TsdbWriteService tsdbWriteService;
     private final CurrentUserResolver currentUserResolver;
 
-    public UnifiedIngestController(UnifiedIngestService unifiedIngestService, CurrentUserResolver currentUserResolver) {
+    public UnifiedIngestController(
+            UnifiedIngestService unifiedIngestService,
+            TsdbWriteService tsdbWriteService,
+            CurrentUserResolver currentUserResolver
+    ) {
         this.unifiedIngestService = unifiedIngestService;
+        this.tsdbWriteService = tsdbWriteService;
         this.currentUserResolver = currentUserResolver;
     }
 
@@ -63,6 +72,18 @@ public class UnifiedIngestController {
                 .body(ApiResponse.success(unifiedIngestService.adaptPayload(protocolType, request)));
     }
 
+    @PostMapping("/backfill")
+    @AuthzGuard(entryPermission = "ENTRY:MGMT", menuPermission = "MENU:ASSET:WRITE")
+    @Operation(summary = "接收补偿批次并写入 TSDB")
+    public ResponseEntity<ApiResponse<UnifiedIngestBatchResponse>> ingestBackfill(
+            Authentication authentication,
+            @Valid @RequestBody BackfillIngestRequest request
+    ) {
+        currentUserResolver.requireContext(authentication);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(unifiedIngestService.ingestBackfill(request)));
+    }
+
     @GetMapping("/batches")
     @AuthzGuard(entryPermission = "ENTRY:MGMT", menuPermission = "MENU:ASSET:READ")
     @Operation(summary = "分页查询接入批次")
@@ -88,6 +109,48 @@ public class UnifiedIngestController {
         return ApiResponse.success(unifiedIngestService.getBatchDetail(
                 currentUserResolver.requireContext(authentication),
                 batchId
+        ));
+    }
+
+    @GetMapping("/write-logs")
+    @AuthzGuard(entryPermission = "ENTRY:MGMT", menuPermission = "MENU:ASSET:READ")
+    @Operation(summary = "分页查询 TSDB 写入日志")
+    public ApiResponse<PageResponse<TsdbWriteLogResponse>> getWriteLogs(
+            Authentication authentication,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize
+    ) {
+        return ApiResponse.success(tsdbWriteService.listWriteLogs(
+                currentUserResolver.requireContext(authentication),
+                page,
+                pageSize
+        ));
+    }
+
+    @GetMapping("/write-logs/{writeLogId}")
+    @AuthzGuard(entryPermission = "ENTRY:MGMT", menuPermission = "MENU:ASSET:READ")
+    @Operation(summary = "查询单条 TSDB 写入日志")
+    public ApiResponse<TsdbWriteLogResponse> getWriteLogDetail(
+            Authentication authentication,
+            @PathVariable String writeLogId
+    ) {
+        return ApiResponse.success(tsdbWriteService.getWriteLogDetail(
+                currentUserResolver.requireContext(authentication),
+                writeLogId
+        ));
+    }
+
+    @PostMapping("/write-logs/{writeLogId}/retry")
+    @AuthzGuard(entryPermission = "ENTRY:MGMT", menuPermission = "MENU:ASSET:WRITE")
+    @Operation(summary = "手动重试 TSDB 写入")
+    public ApiResponse<TsdbWriteLogResponse> retryWriteLog(
+            Authentication authentication,
+            @PathVariable String writeLogId
+    ) {
+        return ApiResponse.success(tsdbWriteService.retryWriteLog(
+                currentUserResolver.requireContext(authentication),
+                writeLogId,
+                true
         ));
     }
 }

@@ -46,3 +46,7 @@ backend:
     page-size-max: ${GATEWAY_PAGE_SIZE_MAX:200}
     default-window-seconds: ${GATEWAY_DEFAULT_WINDOW_SECONDS:60}
     default-capacity: ${GATEWAY_DEFAULT_CAPACITY:10}
+  tsdb:
+    retry-fixed-delay-ms: ${TSDB_RETRY_FIXED_DELAY_MS:30000}
+    retry-base-delay-seconds: ${TSDB_RETRY_BASE_DELAY_SECONDS:30}
+    max-attempts: ${TSDB_MAX_ATTEMPTS:3}

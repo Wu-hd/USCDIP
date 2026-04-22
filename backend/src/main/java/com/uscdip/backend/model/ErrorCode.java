@@ -45,6 +45,13 @@ public enum ErrorCode {
     INGEST_DEVICE_NOT_FOUND("INGEST_DEVICE_NOT_FOUND", "Ingest device was not found"),
     INGEST_PAYLOAD_INVALID("INGEST_PAYLOAD_INVALID", "Ingest payload is invalid"),
     INGEST_BATCH_NOT_FOUND("INGEST_BATCH_NOT_FOUND", "Ingest batch was not found"),
+    TSDB_WRITE_FAILED("TSDB_WRITE_FAILED", "TSDB write failed"),
+    TSDB_WRITE_LOG_NOT_FOUND("TSDB_WRITE_LOG_NOT_FOUND", "TSDB write log was not found"),
+    BACKFILL_PAYLOAD_INVALID("BACKFILL_PAYLOAD_INVALID", "Backfill payload is invalid"),
+    BACKFILL_DUPLICATE("BACKFILL_DUPLICATE", "Backfill payload duplicates an existing sample"),
+    DQ_SCORE_NOT_FOUND("DQ_SCORE_NOT_FOUND", "Data quality score was not found"),
+    DQ_QUERY_INVALID("DQ_QUERY_INVALID", "Data quality query is invalid"),
+    DQ_PROFILE_INVALID("DQ_PROFILE_INVALID", "Data quality profile is invalid"),
     INTERNAL_ERROR("INTERNAL_ERROR", "Internal server error");
 
     private final String code;

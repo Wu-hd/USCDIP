@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -47,6 +48,12 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.failure(resolveValidationErrorCode(request), ex.getMessage()));
     }
 
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.failure(resolveValidationErrorCode(request), ex.getMessage()));
+    }
+
     @ExceptionHandler(AuthFlowException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuthFlowException(AuthFlowException ex) {
         return ResponseEntity.status(ex.getHttpStatus())
@@ -73,6 +80,12 @@ public class GlobalExceptionHandler {
     }
 
     private ErrorCode resolveValidationErrorCode(HttpServletRequest request) {
+        if (request != null && request.getRequestURI() != null && request.getRequestURI().startsWith("/api/dq")) {
+            return ErrorCode.DQ_QUERY_INVALID;
+        }
+        if (request != null && request.getRequestURI() != null && request.getRequestURI().startsWith("/api/ingest/backfill")) {
+            return ErrorCode.BACKFILL_PAYLOAD_INVALID;
+        }
         if (request != null && request.getRequestURI() != null && request.getRequestURI().startsWith("/api/ingest")) {
             return ErrorCode.INGEST_PAYLOAD_INVALID;
         }

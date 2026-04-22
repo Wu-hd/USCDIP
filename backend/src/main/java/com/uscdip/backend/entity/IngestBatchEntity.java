@@ -46,4 +46,22 @@ public class IngestBatchEntity {
 
     @Column(name = "received_at", nullable = false)
     private LocalDateTime receivedAt;
+
+    @Column(name = "tsdb_write_status", nullable = false, length = 32)
+    private String tsdbWriteStatus;
+
+    @Column(name = "last_write_log_id", length = 64)
+    private String lastWriteLogId;
+
+    @Column(name = "last_write_at")
+    private LocalDateTime lastWriteAt;
+
+    @Column(name = "batch_no", length = 64)
+    private String batchNo;
+
+    @Column(name = "seq_no")
+    private Long seqNo;
+
+    @Column(name = "original_sample_time")
+    private LocalDateTime originalSampleTime;
 }

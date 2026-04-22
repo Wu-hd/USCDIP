@@ -114,6 +114,7 @@ class UnifiedIngestIntegrationTest {
                 .andExpect(jsonPath("$.data.records[0].eventTime").value("2026-04-23T09:00:00"))
                 .andExpect(jsonPath("$.data.records[0].recvTime").value("2026-04-23T09:00:03"))
                 .andExpect(jsonPath("$.data.records[0].deviceTime").value("2026-04-23T08:59:58"))
+                .andExpect(jsonPath("$.data.dqScore.avgDqScore").exists())
                 .andReturn();
 
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
@@ -154,7 +155,8 @@ class UnifiedIngestIntegrationTest {
                 .andExpect(jsonPath("$.data.adaptedCount").value(1))
                 .andExpect(jsonPath("$.data.adaptedMetrics[0].metricCode").value("40001"))
                 .andExpect(jsonPath("$.data.adaptedMetrics[0].recvTime").value("2026-04-23T10:00:02"))
-                .andExpect(jsonPath("$.data.batch.status").value("ADAPTED"));
+                .andExpect(jsonPath("$.data.batch.status").value("ADAPTED"))
+                .andExpect(jsonPath("$.data.batch.dqScore.avgDqScore").exists());
     }
 
     @Test
@@ -162,13 +164,13 @@ class UnifiedIngestIntegrationTest {
         TokenPairResponse adminToken = localTokenService.issueForUser("U-ADMIN-001", "127.0.0.1", "JUnit");
         TokenPairResponse regionalToken = localTokenService.issueForUser("U-B07-HZ-001", "127.0.0.1", "JUnit");
 
-        mockMvc.perform(get("/api/ingest/batches")
+                mockMvc.perform(get("/api/ingest/batches")
                         .param("page", "1")
                         .param("pageSize", "10")
                         .header("Authorization", "Bearer " + regionalToken.accessToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(2))
-                .andExpect(jsonPath("$.data.items[*].batchId", hasItems("INGB-SEED-MQTT-001", "INGB-SEED-MODBUS-001")))
+                .andExpect(jsonPath("$.data.total").value(4))
+                .andExpect(jsonPath("$.data.items[*].batchId", hasItems("INGB-SEED-MQTT-001", "INGB-SEED-MODBUS-001", "INGB-SEED-FLAT-001", "INGB-SEED-INVALID-001")))
                 .andExpect(jsonPath("$.data.items[*].batchId", not(hasItems("INGB-SEED-NBIOT-001"))));
 
         mockMvc.perform(get("/api/ingest/batches/INGB-SEED-NBIOT-001")

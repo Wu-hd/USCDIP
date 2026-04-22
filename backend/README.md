@@ -5,6 +5,7 @@
 - A-02 统一对象主键与对象链字典（数据库版）
 - A-03 坐标与深度字段冻结（GIS 字段规范、坐标转换、深度校验）
 - A-04 权限模型与数据范围矩阵（RBAC + 数据范围 + topic 订阅范围）
+- B-11 设备台账与心跳接口（设备注册、心跳上报、在线状态计算）
 
 当前项目已添加数据库能力。
 
@@ -29,6 +30,10 @@
    - GET /api/master/segments
    - GET /api/master/facilities
    - GET /api/master/devices
+   - GET /api/device-ledger/devices
+   - GET /api/device-ledger/devices/{deviceId}
+   - POST /api/device-ledger/devices/register
+   - POST /api/device-ledger/devices/{deviceId}/heartbeat
    - POST /api/master/changes
    - GET /api/master/changes
    - GET /api/master/changes/{requestId}
@@ -70,6 +75,7 @@
 - B-08 主数据表与对象链服务：主数据只读 API、对象链关系真值表、基于 relation 的链路遍历
 - B-09 主数据版本与并发控制：变更申请、单级审批生效、主表 optimistic lock、版本快照与主数据审计
 - B-10 GIS 空间查询与坐标转换服务：bbox 检索、对象点查、统一 WKT 坐标转换与空间索引真值
+- B-11 设备台账与心跳接口：设备注册 Upsert、心跳历史、在线/预警/离线三态计算
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -112,6 +118,7 @@
 - 未登录/认证失败：UNAUTHORIZED
 - 权限不足：FORBIDDEN
 - 资源不存在：RESOURCE_NOT_FOUND / PLATFORM_NOT_FOUND / SEGMENT_NOT_FOUND / NODE_NOT_FOUND / USER_NOT_FOUND
+- 设备台账错误：DEVICE_NOT_FOUND / DEVICE_RELATION_INVALID / DEVICE_HEARTBEAT_INVALID
 - 幂等冲突：IDEMPOTENT_CONFLICT
 - 内部异常：INTERNAL_ERROR
 
@@ -663,6 +670,48 @@
    - bbox 查询按分页规则校验
    - 点查走 JSON body 校验
 
+## B-11 设备台账与心跳接口说明
+
+### 1) 目标能力
+- 提供设备台账分页查询、详情查询、设备注册 Upsert、心跳上报。
+- 在线状态固定为三态：`ONLINE / WARNING / OFFLINE`。
+- 在线状态由最后心跳、缓冲水位和异常标记联合计算，不是简单布尔值。
+- 标定有效期仅用于台账展示；过期时返回 `calibrationExpired=true`，不直接改变在线状态。
+
+### 2) 状态计算口径
+- `OFFLINE`：无心跳，或最后心跳距当前超过 90 秒。
+- `WARNING`：90 秒内有心跳，且 `bufferLevel >= 80` 或存在 `abnormalFlags`。
+- `ONLINE`：90 秒内有心跳，且缓冲水位正常、无异常标记。
+- `onlineStatusReason` 当前返回：
+   - `NO_HEARTBEAT`
+   - `HEARTBEAT_TIMEOUT`
+   - `BUFFER_LEVEL_HIGH`
+   - `ABNORMAL_FLAGS_PRESENT`
+   - `BUFFER_LEVEL_HIGH_AND_ABNORMAL`
+   - `HEARTBEAT_OK`
+
+### 3) B-11 接口
+- `GET /api/device-ledger/devices`
+   - 支持过滤：`status / regionId / segmentId / nodeId / facilityId / protocolType / calibrationExpired / page / pageSize`
+- `GET /api/device-ledger/devices/{deviceId}`
+- `POST /api/device-ledger/devices/register`
+   - 请求体：
+   - `{"deviceId":"DEV-004","deviceName":"液位计-04","facilityId":"FAC-002","segmentId":"SEG-001","nodeId":"NODE-002","protocolType":"MQTT","calibrationDueAt":"2099-12-31T23:59:59"}`
+- `POST /api/device-ledger/devices/{deviceId}/heartbeat`
+   - 请求体：
+   - `{"heartbeatTime":"2026-04-23T01:00:00","recvTime":"2026-04-23T01:00:03","bufferLevel":85,"abnormalFlags":["BUFFER_BACKLOG"]}`
+
+### 4) 对象链与权限边界
+- 查询接口复用 B-07 数据范围过滤，只返回调用者可访问的 `DEVICE` 对象。
+- 详情接口越权访问直接返回 `DATA_SCOPE_DENIED`。
+- 注册接口是幂等 Upsert：
+   - `deviceId` 已存在时更新可变字段
+   - `deviceId` 不存在时创建新设备
+- 注册时会同步校验 `facilityId / segmentId / nodeId` 的对象链关系，并补齐：
+   - `object_scope_binding`
+   - `object_relation(FACILITY -> DEVICE)`
+- 心跳接口不会自动补建设备；未知 `deviceId` 返回 `DEVICE_NOT_FOUND`。
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -721,6 +770,8 @@
    - master_data_audit
 - B-10 新增：
    - object_geo_index
+- B-11 新增：
+   - device_heartbeat
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -758,6 +809,12 @@
    - GIS 查询采用应用层空间计算 + 数据库存储索引的组合方式
    - H2 默认启动会自动建表并执行 `data.sql`
    - PostgreSQL profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
+- B-11 说明：
+   - `device` 新增 `last_recv_time / last_buffer_level / last_abnormal_flags / online_status_reason / calibration_due_at`
+   - `device_heartbeat` 保存每次心跳上报历史
+   - `gateway_route_policy` 已新增 B-11 四条设备台账路由策略
+   - H2 默认启动会自动建表并执行 `data.sql`
+   - PostgreSQL profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
 
 ## 测试数据说明
 - 文件：src/main/resources/data.sql
@@ -769,6 +826,10 @@
    - incident：2 条
    - work_order：2 条
    - model_result：2 条
+- 已生成 B-11 设备台账联调数据：
+   - `device`：3 条，覆盖 `ONLINE / WARNING / OFFLINE`
+   - `device_heartbeat`：3 条历史样例
+   - `DEV-002` 的 `calibrationDueAt` 已过期，可直接验证 `calibrationExpired=true`
 - 已生成 A-04 权限联调数据：
    - user_account：11 条（含静态权限样例用户、B-04 禁用用户样例、B-04 权限收敛样例、B-05 应急用户样例、B-06 网关阻断用户样例、B-07 单区域调度样例）
    - rbac_role：6 条
@@ -796,7 +857,7 @@
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
 - 已新增 B-06 Gateway 联调样例：
-   - gateway_route_policy：32 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
+   - gateway_route_policy：36 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
    - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
    - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
    - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
@@ -822,6 +883,11 @@
    - bbox 范围样例可直接命中 `REGION-HZ` 与 `REGION-BINJIANG` 两组对象
    - 点查样例可直接命中 `NODE-001`
    - `SEGMENT` 已提供 `LINESTRING` 空间真值
+- 已新增 B-11 设备台账联调样例：
+   - `DEV-001`：在线正常设备
+   - `DEV-002`：高缓冲预警设备，且标定已过期
+   - `DEV-003`：心跳超时离线设备
+   - `POST /api/device-ledger/devices/register` 可新增 `DEV-004` 用于联调 Upsert
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令
@@ -843,6 +909,14 @@
    - curl -s http://localhost:8080/api/master/segments/SEG-001 -H "Authorization: Bearer <access_token>"
 - 查询主数据设备详情：
    - curl -s http://localhost:8080/api/master/devices/DEV-001 -H "Authorization: Bearer <access_token>"
+- 查询设备台账列表：
+   - curl -s "http://localhost:8080/api/device-ledger/devices?page=1&pageSize=10&status=WARNING" -H "Authorization: Bearer <access_token>"
+- 查询设备台账详情：
+   - curl -s http://localhost:8080/api/device-ledger/devices/DEV-002 -H "Authorization: Bearer <access_token>"
+- 注册设备台账：
+   - curl -s -X POST http://localhost:8080/api/device-ledger/devices/register -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"deviceId\":\"DEV-004\",\"deviceName\":\"液位计-04\",\"facilityId\":\"FAC-002\",\"segmentId\":\"SEG-001\",\"nodeId\":\"NODE-002\",\"protocolType\":\"MQTT\",\"calibrationDueAt\":\"2099-12-31T23:59:59\"}"
+- 上报设备心跳：
+   - curl -s -X POST http://localhost:8080/api/device-ledger/devices/DEV-002/heartbeat -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"heartbeatTime\":\"2026-04-23T01:00:00\",\"recvTime\":\"2026-04-23T01:00:03\",\"bufferLevel\":85,\"abnormalFlags\":[\"BUFFER_BACKLOG\"]}"
 - 提交主数据变更申请：
    - curl -s -X POST http://localhost:8080/api/master/changes -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"objectType\":\"DEVICE\",\"objectId\":\"DEV-002\",\"baseVersionNo\":1,\"reason\":\"upgrade device metadata\",\"payload\":{\"deviceName\":\"流量计-02-升级版\",\"protocolType\":\"NB-IOT\"}}"
 - 查询主数据变更列表：
@@ -933,6 +1007,5 @@
    - H2 Console / PostgreSQL 中执行 `SELECT * FROM gateway_risk_audit ORDER BY created_at DESC;`
 
 ## 下一步建议
-- 在 B-11 上补设备台账、心跳上报和在线状态计算。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

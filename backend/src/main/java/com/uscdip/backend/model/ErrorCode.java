@@ -38,6 +38,9 @@ public enum ErrorCode {
     MASTER_CHANGE_NOT_FOUND("MASTER_CHANGE_NOT_FOUND", "Master data change was not found"),
     MASTER_CHANGE_INVALID_STATE("MASTER_CHANGE_INVALID_STATE", "Master data change state is invalid"),
     MASTER_CHANGE_APPROVAL_REQUIRED("MASTER_CHANGE_APPROVAL_REQUIRED", "Master data change approval is required"),
+    DEVICE_NOT_FOUND("DEVICE_NOT_FOUND", "Device was not found"),
+    DEVICE_RELATION_INVALID("DEVICE_RELATION_INVALID", "Device relation is invalid"),
+    DEVICE_HEARTBEAT_INVALID("DEVICE_HEARTBEAT_INVALID", "Device heartbeat payload is invalid"),
     INTERNAL_ERROR("INTERNAL_ERROR", "Internal server error");
 
     private final String code;

@@ -10,4 +10,6 @@ public interface IncidentRepository extends JpaRepository<IncidentEntity, String
     List<IncidentEntity> findBySegmentId(String segmentId);
 
     List<IncidentEntity> findByNodeId(String nodeId);
+
+    List<IncidentEntity> findBySegmentIdAndNodeId(String segmentId, String nodeId);
 }

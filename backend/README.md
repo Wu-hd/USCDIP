@@ -9,6 +9,7 @@
 - B-12 统一入站 DTO 与协议适配骨架（统一 DTO、协议适配、接入批次落库）
 - B-13 TSDB 写入与补偿写入服务（在线写入、补偿写入、写入日志与重试）
 - B-14 数据质量评分服务（dq_score / dq_flags / 查询接口）
+- B-15 标定与漂移管理接口（标定版本、漂移复核、到期提醒与校正预览）
 
 当前项目已添加数据库能力。
 
@@ -47,6 +48,12 @@
    - POST /api/ingest/write-logs/{writeLogId}/retry
    - GET /api/dq/scores
    - GET /api/dq/scores/{sourceRecordId}
+   - POST /api/calibration/devices/{deviceId}/profiles
+   - GET /api/calibration/devices/{deviceId}/profiles
+   - GET /api/calibration/devices/{deviceId}/profiles/active?metricCode=PRESSURE
+   - POST /api/calibration/devices/{deviceId}/drift-checks
+   - GET /api/calibration/devices/{deviceId}/drift-checks
+   - GET /api/calibration/metrics/{sourceRecordId}/corrected
    - POST /api/master/changes
    - GET /api/master/changes
    - GET /api/master/changes/{requestId}
@@ -90,6 +97,9 @@
 - B-10 GIS 空间查询与坐标转换服务：bbox 检索、对象点查、统一 WKT 坐标转换与空间索引真值
 - B-11 设备台账与心跳接口：设备注册 Upsert、心跳历史、在线/预警/离线三态计算
 - B-12 统一入站 DTO 与协议适配骨架：统一 eventTime/recvTime/deviceTime、协议适配示例、接入批次与记录真值落库
+- B-13 TSDB 写入与补偿写入服务：在线/补偿写入、写入日志、失败重试与 Timescale 目标口径
+- B-14 数据质量评分服务：自动评分、dq_flags、查询过滤与告警置信度降权因子
+- B-15 标定与漂移管理接口：版本化标定档案、漂移复核、到期提醒工单、校正预览
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -134,6 +144,7 @@
 - 资源不存在：RESOURCE_NOT_FOUND / PLATFORM_NOT_FOUND / SEGMENT_NOT_FOUND / NODE_NOT_FOUND / USER_NOT_FOUND
 - 设备台账错误：DEVICE_NOT_FOUND / DEVICE_RELATION_INVALID / DEVICE_HEARTBEAT_INVALID
 - 接入错误：INGEST_PROTOCOL_UNSUPPORTED / INGEST_DEVICE_NOT_FOUND / INGEST_PAYLOAD_INVALID / INGEST_BATCH_NOT_FOUND
+- 标定与漂移错误：CALIBRATION_PROFILE_NOT_FOUND / CALIBRATION_PROFILE_CONFLICT / CALIBRATION_DRIFT_EVALUATION_INVALID / CALIBRATION_CORRECTION_PREVIEW_INVALID
 - 幂等冲突：IDEMPOTENT_CONFLICT
 - 内部异常：INTERNAL_ERROR
 
@@ -822,6 +833,44 @@
 - `DQ_QUERY_INVALID`
 - `DQ_PROFILE_INVALID`
 
+## B-15 标定与漂移管理接口说明
+
+### 1) 目标能力
+- 提供 `calibration_profile` 版本化标定档案，支持 `DRAFT / ACTIVE / EXPIRED / SUPERSEDED`。
+- 提供 `calibration_drift_record` 漂移复核真值，基于 `observedValue + referenceValue` 做阈值判定。
+- 标定激活与日级扫描会为临期或过期设备生成数据治理类 `incident + work_order`。
+- 历史 `ts_metric.metric_value` 保持原始值不变，校正结果仅通过预览接口动态返回。
+
+### 2) B-15 接口
+- `POST /api/calibration/devices/{deviceId}/profiles`
+   - 请求体固定包含：`profileVersion / metricCode / calibratedAt / effectiveFrom / effectiveUntil / operatorName / referenceStandard / correctionSlope / correctionOffset / driftThresholdAbs / driftThresholdPct / activate`
+- `GET /api/calibration/devices/{deviceId}/profiles`
+- `GET /api/calibration/devices/{deviceId}/profiles/active`
+   - 查询参数：`metricCode`
+- `POST /api/calibration/devices/{deviceId}/drift-checks`
+   - 请求体固定包含：`profileVersion / metricCode / observedValue / referenceValue / checkedAt / checkedBy`
+- `GET /api/calibration/devices/{deviceId}/drift-checks`
+- `GET /api/calibration/metrics/{sourceRecordId}/corrected`
+   - 支持可选查询参数：`profileVersion`
+
+### 3) 数据库与联调说明
+- 当前项目已经接入数据库。
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL / Timescale profile 首次联调仍需手动导入 `src/main/resources/data.sql`。
+- B-15 新增表：
+   - `calibration_profile`：保存 `profile_version / metric_code / calibrated_at / effective_from / effective_until / correction_* / drift_threshold_* / status`
+   - `calibration_drift_record`：保存 `observed_value / reference_value / deviation_abs / deviation_pct / drift_status / incident_id / work_order_id`
+- B-15 继续复用并补充：
+   - `device.calibration_due_at`：仅保存设备台账快照，不保存完整标定历史
+   - `incident / work_order`：保存到期提醒与漂移确认生成的数据治理工单
+   - `object_scope_binding`：为新生成的 incident / work_order 继承设备所属区域和责任人
+
+### 4) 错误码
+- `CALIBRATION_PROFILE_NOT_FOUND`
+- `CALIBRATION_PROFILE_CONFLICT`
+- `CALIBRATION_DRIFT_EVALUATION_INVALID`
+- `CALIBRATION_CORRECTION_PREVIEW_INVALID`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -898,6 +947,9 @@
 - B-13 新增：
    - ts_metric
    - ts_write_log
+- B-15 新增：
+   - calibration_profile
+   - calibration_drift_record
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -959,6 +1011,13 @@
    - `gateway_route_policy` 已新增 B-14 两条评分查询路由策略
    - H2 默认启动会自动建表并执行 `data.sql`
    - PostgreSQL / Timescale profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
+- B-15 说明：
+   - `calibration_profile` 保存标定版本、有效期、校正参数和漂移阈值
+   - `calibration_drift_record` 保存复核输入、偏差计算、判定状态与关联工单
+   - `device.calibration_due_at` 继续作为设备台账快照字段，由 ACTIVE/EXPIRED profile 同步刷新
+   - `gateway_route_policy` 已新增 B-15 六条标定/漂移路由策略
+   - H2 默认启动会自动建表并执行 `data.sql`
+   - PostgreSQL / Timescale profile 首次联调同样需要手动导入 `src/main/resources/data.sql`
 
 ## 测试数据说明
 - 文件：src/main/resources/data.sql
@@ -967,8 +1026,8 @@
    - segment：2 条
    - facility：3 条
    - device：3 条
-   - incident：2 条
-   - work_order：2 条
+   - incident：4 条
+   - work_order：4 条
    - model_result：2 条
 - 已生成 B-11 设备台账联调数据：
    - `device`：3 条，覆盖 `ONLINE / WARNING / OFFLINE`
@@ -986,6 +1045,11 @@
    - `INGR-SEED-004`：回填 + 延迟样例，对应 `C` 级质量
    - `INGR-SEED-009`：平线样例，带 `STABILITY_FLATLINE`
    - `INGR-SEED-010`：量程异常 + 延迟样例，对应 `D` 级质量
+- 已生成 B-15 标定与漂移联调数据：
+   - `calibration_profile`：3 条，覆盖 `SUPERSEDED / ACTIVE / EXPIRED`
+   - `calibration_drift_record`：1 条 `CONFIRMED` 漂移样例，已关联 `INC-CAL-SEED-001 / WO-CAL-SEED-001`
+   - `INC-CAL-SEED-002 / WO-CAL-SEED-002`：过期标定提醒样例
+   - `GET /api/calibration/metrics/INGR-SEED-001/corrected` 可直接验证校正预览
 - 已生成 A-04 权限联调数据：
    - user_account：11 条（含静态权限样例用户、B-04 禁用用户样例、B-04 权限收敛样例、B-05 应急用户样例、B-06 网关阻断用户样例、B-07 单区域调度样例）
    - rbac_role：6 条
@@ -1013,12 +1077,12 @@
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
 - 已新增 B-06 Gateway 联调样例：
-   - gateway_route_policy：46 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12/B-13 接入层接口、B-14 评分查询接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
+   - gateway_route_policy：52 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12/B-13 接入层接口、B-14 评分查询接口、B-15 标定与漂移接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
    - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
    - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
    - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
 - 已新增 B-07 数据范围与 topic 联调样例：
-   - object_scope_binding：17 条（覆盖 NODE / SEGMENT / FACILITY / DEVICE / INCIDENT / WORK_ORDER / MODEL_RESULT）
+   - object_scope_binding：21 条（覆盖 NODE / SEGMENT / FACILITY / DEVICE / INCIDENT / WORK_ORDER / MODEL_RESULT）
    - user_account: `U-B07-HZ-001` 作为单区域调度用户样例
    - 区域归属：`REGION-HZ` 与 `REGION-BINJIANG`
    - 巡检归属：`U-INSPECT-001 / zhangsan`
@@ -1056,6 +1120,11 @@
    - `GET /api/dq/scores?dqLevel=D` 可直接命中 `INGR-SEED-010`
    - `GET /api/dq/scores/INGR-SEED-009` 可直接查看 `STABILITY_FLATLINE`
    - `GET /api/dq/scores/INGR-SEED-004` 可直接查看 `BACKFILL_DATA`
+- 已新增 B-15 标定与漂移联调样例：
+   - `GET /api/calibration/devices/DEV-001/profiles` 可直接查看 `CAL-2025-11 / CAL-2026-02`
+   - `GET /api/calibration/devices/DEV-001/profiles/active?metricCode=PRESSURE` 可直接命中 `CAL-2026-02`
+   - `GET /api/calibration/devices/DEV-001/drift-checks` 可直接查看 `CALD-SEED-001`
+   - `GET /api/calibration/metrics/INGR-SEED-001/corrected` 可直接验证校正预览
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令
@@ -1103,6 +1172,21 @@
    - curl -s "http://localhost:8080/api/dq/scores?page=1&pageSize=10&dqLevel=D" -H "Authorization: Bearer <access_token>"
 - 查询单条数据质量评分：
    - curl -s http://localhost:8080/api/dq/scores/INGR-SEED-009 -H "Authorization: Bearer <admin_access_token>"
+- 创建标定版本：
+   - curl -s -X POST http://localhost:8080/api/calibration/devices/DEV-001/profiles -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"profileVersion\":\"CAL-2026-07\",\"metricCode\":\"PRESSURE\",\"calibratedAt\":\"2026-04-23T09:00:00\",\"effectiveFrom\":\"2026-04-23T09:00:00\",\"effectiveUntil\":\"2026-10-31T23:59:59\",\"operatorName\":\"赵工\",\"referenceStandard\":\"STD-PRESSURE-C\",\"correctionSlope\":1.020000,\"correctionOffset\":-0.010000,\"driftThresholdAbs\":0.150000,\"driftThresholdPct\":8.000000,\"activate\":true}"
+- 查询设备标定档案：
+   - curl -s http://localhost:8080/api/calibration/devices/DEV-001/profiles -H "Authorization: Bearer <access_token>"
+- 查询当前激活标定版本：
+   - curl -s "http://localhost:8080/api/calibration/devices/DEV-001/profiles/active?metricCode=PRESSURE" -H "Authorization: Bearer <access_token>"
+- 提交漂移复核：
+   - curl -s -X POST http://localhost:8080/api/calibration/devices/DEV-001/drift-checks -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"profileVersion\":\"CAL-2026-02\",\"metricCode\":\"PRESSURE\",\"observedValue\":1.350000,\"referenceValue\":0.850000,\"checkedAt\":\"2026-04-23T10:30:00\",\"checkedBy\":\"zhangsan\"}"
+- 查询漂移复核记录：
+   - curl -s http://localhost:8080/api/calibration/devices/DEV-001/drift-checks -H "Authorization: Bearer <access_token>"
+- 查询校正预览：
+   - curl -s "http://localhost:8080/api/calibration/metrics/INGR-SEED-001/corrected?profileVersion=CAL-2026-02" -H "Authorization: Bearer <access_token>"
+- 查看提醒/检修工单样例：
+   - H2 Console / PostgreSQL 中执行 `SELECT * FROM incident WHERE incident_id LIKE 'INC-CAL-%' ORDER BY created_at DESC;`
+   - H2 Console / PostgreSQL 中执行 `SELECT * FROM work_order WHERE work_order_id LIKE 'WO-CAL-%' ORDER BY created_at DESC;`
 - 提交主数据变更申请：
    - curl -s -X POST http://localhost:8080/api/master/changes -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"objectType\":\"DEVICE\",\"objectId\":\"DEV-002\",\"baseVersionNo\":1,\"reason\":\"upgrade device metadata\",\"payload\":{\"deviceName\":\"流量计-02-升级版\",\"protocolType\":\"NB-IOT\"}}"
 - 查询主数据变更列表：

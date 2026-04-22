@@ -52,6 +52,10 @@ public enum ErrorCode {
     DQ_SCORE_NOT_FOUND("DQ_SCORE_NOT_FOUND", "Data quality score was not found"),
     DQ_QUERY_INVALID("DQ_QUERY_INVALID", "Data quality query is invalid"),
     DQ_PROFILE_INVALID("DQ_PROFILE_INVALID", "Data quality profile is invalid"),
+    CALIBRATION_PROFILE_NOT_FOUND("CALIBRATION_PROFILE_NOT_FOUND", "Calibration profile was not found"),
+    CALIBRATION_PROFILE_CONFLICT("CALIBRATION_PROFILE_CONFLICT", "Calibration profile is invalid or conflicts with existing data"),
+    CALIBRATION_DRIFT_EVALUATION_INVALID("CALIBRATION_DRIFT_EVALUATION_INVALID", "Calibration drift evaluation payload is invalid"),
+    CALIBRATION_CORRECTION_PREVIEW_INVALID("CALIBRATION_CORRECTION_PREVIEW_INVALID", "Calibration correction preview request is invalid"),
     INTERNAL_ERROR("INTERNAL_ERROR", "Internal server error");
 
     private final String code;

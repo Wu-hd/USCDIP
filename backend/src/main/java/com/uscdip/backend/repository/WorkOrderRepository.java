@@ -12,4 +12,6 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Stri
     List<WorkOrderEntity> findByNodeId(String nodeId);
 
     List<WorkOrderEntity> findByIncidentIdIn(List<String> incidentIds);
+
+    List<WorkOrderEntity> findByIncidentId(String incidentId);
 }

@@ -83,6 +83,13 @@ public class GlobalExceptionHandler {
         if (request != null && request.getRequestURI() != null && request.getRequestURI().startsWith("/api/dq")) {
             return ErrorCode.DQ_QUERY_INVALID;
         }
+        if (request != null && request.getRequestURI() != null && request.getRequestURI().contains("/api/calibration/devices/")
+                && request.getRequestURI().contains("/drift-checks")) {
+            return ErrorCode.CALIBRATION_DRIFT_EVALUATION_INVALID;
+        }
+        if (request != null && request.getRequestURI() != null && request.getRequestURI().startsWith("/api/calibration/metrics/")) {
+            return ErrorCode.CALIBRATION_CORRECTION_PREVIEW_INVALID;
+        }
         if (request != null && request.getRequestURI() != null && request.getRequestURI().startsWith("/api/ingest/backfill")) {
             return ErrorCode.BACKFILL_PAYLOAD_INVALID;
         }

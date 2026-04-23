@@ -759,3 +759,64 @@ INSERT INTO websocket_ack (
 ) VALUES
 ('U-INSPECT-001:user.U-INSPECT-001.workorder.notifications', 'U-INSPECT-001', 'user.U-INSPECT-001.workorder.notifications', 99, CURRENT_TIMESTAMP),
 ('U-DISPATCH-001:region.REGION-HZ.workorder.notifications', 'U-DISPATCH-001', 'region.REGION-HZ.workorder.notifications', 100, CURRENT_TIMESTAMP);
+
+INSERT INTO model_registry (
+    model_code, model_name, model_type, status, default_timeout_ms, rule_fallback_enabled,
+    description, created_by, created_at, updated_at
+) VALUES
+('LEAK_DETECTOR', '泄漏风险识别模型', 'DIAGNOSIS', 'REGISTERED', 1500, TRUE, 'B-25 模型网关成功推理样例', 'U-ADMIN-001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('CALIBRATION_DRIFT_GUARD', '标定漂移守护模型', 'CALIBRATION', 'REGISTERED', 500, TRUE, 'B-25 超时后规则兜底样例', 'U-ADMIN-001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO model_version (
+    version_id, model_code, version_no, status, gray_percent, artifact_uri, feature_schema_version,
+    timeout_ms, rule_fallback_enabled, published_at, rolled_back_at, created_by, created_at, updated_at
+) VALUES
+('LEAK_DETECTOR:V1', 'LEAK_DETECTOR', 'V1', 'ACTIVE', 100, 'local://models/leak-detector/v1', 'FEATURE-SCHEMA-001', 1500, TRUE,
+ CURRENT_TIMESTAMP, NULL, 'U-ADMIN-001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('LEAK_DETECTOR:V2', 'LEAK_DETECTOR', 'V2', 'GRAY', 25, 'local://models/leak-detector/v2', 'FEATURE-SCHEMA-002', 1200, TRUE,
+ CURRENT_TIMESTAMP, NULL, 'U-ADMIN-001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('LEAK_DETECTOR:V0', 'LEAK_DETECTOR', 'V0', 'ROLLED_BACK', 0, 'local://models/leak-detector/v0', 'FEATURE-SCHEMA-000', 2000, TRUE,
+ TIMESTAMP '2026-04-01 09:00:00', CURRENT_TIMESTAMP, 'U-ADMIN-001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('CALIBRATION_DRIFT_GUARD:V1', 'CALIBRATION_DRIFT_GUARD', 'V1', 'ACTIVE', 100, 'local://models/calibration-drift/v1', 'FEATURE-SCHEMA-CAL-001', 500, TRUE,
+ CURRENT_TIMESTAMP, NULL, 'U-ADMIN-001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('CALIBRATION_DRIFT_GUARD:V2', 'CALIBRATION_DRIFT_GUARD', 'V2', 'DRAFT', 0, 'local://models/calibration-drift/v2', 'FEATURE-SCHEMA-CAL-002', 400, TRUE,
+ NULL, NULL, 'U-ADMIN-001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO model_result (model_result_id, segment_id, node_id, model_code, model_version, status, created_at, updated_at) VALUES
+('MR-B25-MODEL-001', 'SEG-001', 'NODE-001', 'LEAK_DETECTOR', 'V1', 'VALID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('MR-B25-FALLBACK-001', 'SEG-001', 'NODE-002', 'CALIBRATION_DRIFT_GUARD', 'V1', 'RULE_FALLBACK', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO object_scope_binding (
+    binding_id, object_type, object_id, region_id, owner_user_id, owner_username, scope_level, created_at, updated_at
+) VALUES
+('OSB-MR-B25-MODEL-001', 'MODEL_RESULT', 'MR-B25-MODEL-001', 'REGION-HZ', 'U-ALGO-001', 'algo_user', 'MASKED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('OSB-MR-B25-FALLBACK-001', 'MODEL_RESULT', 'MR-B25-FALLBACK-001', 'REGION-HZ', 'U-ALGO-001', 'algo_user', 'MASKED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO model_invocation_audit (
+    invocation_audit_id, request_id, model_code, version_no, segment_id, node_id, result_source, status,
+    model_result_id, latency_ms, failure_reason, input_summary, output_summary, created_at
+) VALUES
+('MIA-B25-MODEL-001', 'MREQ-B25-SEED-SUCCESS', 'LEAK_DETECTOR', 'V1', 'SEG-001', 'NODE-001', 'MODEL', 'SUCCESS',
+ 'MR-B25-MODEL-001', 35, NULL, '{"pressureDrop":0.72}', 'modelCode=LEAK_DETECTOR, versionNo=V1, featureKeys=1, latencyMs=35', CURRENT_TIMESTAMP),
+('MIA-B25-FALLBACK-001', 'MREQ-B25-SEED-TIMEOUT', 'CALIBRATION_DRIFT_GUARD', 'V1', 'SEG-001', 'NODE-002', 'RULE_FALLBACK', 'SUCCESS',
+ 'MR-B25-FALLBACK-001', 900, 'MODEL_TIMEOUT', '{"driftPct":28.5}', 'ruleChain=ALERT_RULE_FALLBACK, modelCode=CALIBRATION_DRIFT_GUARD, reason=MODEL_TIMEOUT, enabledRules=seed', CURRENT_TIMESTAMP);
+
+INSERT INTO model_operation_audit (
+    operation_audit_id, model_code, version_no, operation_type, operator_user_id, before_state, after_state, created_at
+) VALUES
+('MOA-B25-REGISTER-001', 'LEAK_DETECTOR', NULL, 'REGISTER', 'U-ADMIN-001', NULL, '{"status":"REGISTERED"}', CURRENT_TIMESTAMP),
+('MOA-B25-GRAY-001', 'LEAK_DETECTOR', 'V2', 'GRAY_PUBLISH', 'U-ADMIN-001', '{"status":"DRAFT"}', '{"status":"GRAY","grayPercent":25}', CURRENT_TIMESTAMP),
+('MOA-B25-FALLBACK-001', 'CALIBRATION_DRIFT_GUARD', 'V1', 'INFER', 'U-ADMIN-001', NULL, 'ruleChain=ALERT_RULE_FALLBACK, reason=MODEL_TIMEOUT', CURRENT_TIMESTAMP);
+
+INSERT INTO gateway_route_policy (
+    policy_id, route_code, path_pattern, http_method, auth_required, risk_level, validation_profile,
+    rate_limit_scope, rate_limit_capacity, rate_limit_window_seconds, audit_enabled, enabled, created_at, updated_at
+) VALUES
+('GWP-PROTECTED-MODEL-LIST-001', 'MODEL_LIST', '/api/models', 'GET', TRUE, 'MEDIUM', 'PAGE_QUERY', 'USER_OR_IP', 120, 60, FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MODEL-DETAIL-001', 'MODEL_DETAIL', '/api/models/*', 'GET', TRUE, 'MEDIUM', 'NONE', 'USER_OR_IP', 120, 60, FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MODEL-REGISTER-001', 'MODEL_REGISTER', '/api/models/register', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MODEL-VERSION-CREATE-001', 'MODEL_VERSION_CREATE', '/api/models/*/versions', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MODEL-GRAY-001', 'MODEL_GRAY_RELEASE', '/api/models/*/versions/*/gray', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MODEL-ACTIVATE-001', 'MODEL_ACTIVATE', '/api/models/*/versions/*/activate', 'POST', TRUE, 'CRITICAL', 'NONE', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MODEL-ROLLBACK-001', 'MODEL_ROLLBACK', '/api/models/*/rollback', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-MODEL-INFER-001', 'MODEL_INFER', '/api/models/*/infer', 'POST', TRUE, 'HIGH', 'JSON_BODY', 'USER_OR_IP', 30, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

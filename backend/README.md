@@ -18,6 +18,8 @@
 - B-21 幂等键与死信处理（idempotent_record、dead_letter、工单创建幂等消费）
 - B-22 工单服务（创建、派单、接单、转派、完成、关闭、回写与数据范围过滤）
 - B-23 通知服务（稳定工单事件消费、多通道模拟发送、失败重试与死信）
+- B-24 WebSocket 推送网关（STOMP 推送、握手鉴权、订阅授权、ack 与断线补发）
+- B-25 模型网关一期框架（模型注册、版本、灰度、回退、规则兜底与审计）
 
 当前项目已添加数据库能力。
 
@@ -73,6 +75,14 @@
    - GET /api/notifications/{notificationId}
    - POST /api/notifications/consume-outbox
    - POST /api/notifications/{notificationId}/retry
+   - GET /api/models
+   - GET /api/models/{modelCode}
+   - POST /api/models/register
+   - POST /api/models/{modelCode}/versions
+   - POST /api/models/{modelCode}/versions/{versionNo}/gray
+   - POST /api/models/{modelCode}/versions/{versionNo}/activate
+   - POST /api/models/{modelCode}/rollback
+   - POST /api/models/{modelCode}/infer
    - POST /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles/active?metricCode=PRESSURE
@@ -132,6 +142,7 @@
 - B-22 工单服务：支持一事件多工单、工单状态流转、回写记录、对象范围继承与工单 Outbox 事件
 - B-23 通知服务：只消费稳定工单事件，生成 `notification_message / notification_delivery`，支持多通道模拟发送、重试与死信
 - B-24 WebSocket 推送网关：`/ws/push` STOMP 推送、握手鉴权、订阅授权、心跳、ack 与断线补发
+- B-25 模型网关一期框架：注册模型、管理版本、灰度发布、激活/回退、模拟推理、失败超时规则兜底与模型域审计
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -1381,6 +1392,46 @@
 - 串联通知与推送：
    - `SELECT n.notification_id, n.aggregate_id, p.seq_no, p.topic, a.last_ack_seq FROM notification_message n JOIN websocket_push_message p ON p.source_notification_id = n.notification_id LEFT JOIN websocket_ack a ON a.topic = p.topic ORDER BY p.seq_no;`
 
+## B-25 模型网关一期框架说明
+
+### 1) 目标能力
+- 当前项目已经接入数据库，B-25 继续复用 H2 / PostgreSQL / TimescaleDB 与 JPA 自动建表。
+- 新增模型治理框架：模型注册、版本管理、灰度发布、激活、回退、推理审计和规则兜底。
+- 一期不接真实 MLflow、Python 服务或外部模型运行时；`POST /api/models/{modelCode}/infer` 使用 Java 本地模拟适配器，支持通过 `simulateFailure / simulateLatencyMs` 复现失败和超时。
+
+### 2) API 与权限
+- 查询：`GET /api/models`、`GET /api/models/{modelCode}`，需要 `ENTRY:DIAG + MENU:MODEL:READ`。
+- 写操作：`POST /api/models/register`、`POST /api/models/{modelCode}/versions`、`/gray`、`/activate`、`/rollback`、`/infer`，需要 `ENTRY:DIAG + MENU:MODEL:WRITE`。
+- 推理请求必须携带 `segmentId` 或 `nodeId`；生成的 `model_result` 会继续写入对象范围绑定，默认使用 `MASKED` 级别，便于算法工程师按脱敏视图查看。
+
+### 3) 版本、灰度与回退
+- 模型状态：`REGISTERED`。
+- 版本状态：`DRAFT / GRAY / ACTIVE / ROLLED_BACK / DISABLED`。
+- 灰度选择按 `requestId` 做确定性哈希；`grayPercent=100` 时稳定命中灰度版本。
+- 激活或回退会把当前 `ACTIVE / GRAY` 版本标记为 `ROLLED_BACK`，目标版本置为 `ACTIVE`。
+
+### 4) 规则兜底与审计
+- 无可用版本、模拟失败或模拟耗时超过版本 `timeoutMs` 时，立即走 `RuleFallbackService`，返回 `resultSource=RULE_FALLBACK`。
+- 成功推理和规则兜底都会写入 `model_result` 与 `model_invocation_audit`。
+- 注册、创建版本、灰度、激活、回退、推理写入 `model_operation_audit`；B-26 统一审计服务后可再汇聚。
+
+### 5) 数据库与测试数据说明
+- B-25 继续复用已有三套数据库配置：
+   - H2：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL / Timescale 首次联调仍需手动导入测试数据：`psql -U postgres -d uscdip -f src/main/resources/data.sql`。
+- `src/main/resources/data.sql` 已新增 B-25 种子：`LEAK_DETECTOR / CALIBRATION_DRIFT_GUARD` 模型、`ACTIVE / GRAY / ROLLED_BACK / DRAFT` 版本、成功推理 `model_result`、超时规则兜底审计，以及 `/api/models/**` Gateway 路由策略。
+
+### 6) SQL 联调示例
+- 查看模型与版本：
+   - `SELECT m.model_code, m.model_name, v.version_no, v.status, v.gray_percent, v.timeout_ms FROM model_registry m JOIN model_version v ON v.model_code = m.model_code ORDER BY m.model_code, v.version_no;`
+- 查看推理结果与审计：
+   - `SELECT a.request_id, a.model_code, a.version_no, a.result_source, a.failure_reason, r.model_result_id, r.status FROM model_invocation_audit a JOIN model_result r ON r.model_result_id = a.model_result_id ORDER BY a.created_at DESC;`
+- 查看模型操作审计：
+   - `SELECT model_code, version_no, operation_type, operator_user_id, created_at FROM model_operation_audit ORDER BY created_at DESC;`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -1417,7 +1468,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 / B-23 / B-24 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter、work_order 闭环、notification 与 websocket 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 / B-23 / B-24 / B-25 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter、work_order 闭环、notification、websocket 与 model gateway 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json
@@ -1461,6 +1512,11 @@
 - B-15 新增：
    - calibration_profile
    - calibration_drift_record
+- B-25 新增：
+   - model_registry
+   - model_version
+   - model_invocation_audit
+   - model_operation_audit
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -1541,7 +1597,11 @@
    - work_order：9 条
    - notification_message：3 条
    - notification_delivery：9 条
-   - model_result：2 条
+   - model_result：4 条
+   - model_registry：2 条
+   - model_version：5 条
+   - model_invocation_audit：2 条
+   - model_operation_audit：3 条
 - 已生成 B-11 设备台账联调数据：
    - `device`：3 条，覆盖 `ONLINE / WARNING / OFFLINE`
    - `device_heartbeat`：3 条历史样例
@@ -1593,12 +1653,12 @@
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
 - 已新增 B-06 Gateway 联调样例：
-   - gateway_route_policy：52 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12/B-13 接入层接口、B-14 评分查询接口、B-15 标定与漂移接口、受保护业务查询、当前高风险、未来导出/批量派单/模型发布预置策略）
+   - gateway_route_policy：60 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12/B-13 接入层接口、B-14 评分查询接口、B-15 标定与漂移接口、受保护业务查询、通知、WebSocket、模型网关与当前高风险策略）
    - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
    - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
    - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
 - 已新增 B-07 数据范围与 topic 联调样例：
-   - object_scope_binding：21 条（覆盖 NODE / SEGMENT / FACILITY / DEVICE / INCIDENT / WORK_ORDER / MODEL_RESULT）
+   - object_scope_binding：23 条（覆盖 NODE / SEGMENT / FACILITY / DEVICE / INCIDENT / WORK_ORDER / MODEL_RESULT）
    - user_account: `U-B07-HZ-001` 作为单区域调度用户样例
    - 区域归属：`REGION-HZ` 与 `REGION-BINJIANG`
    - 巡检归属：`U-INSPECT-001 / zhangsan`
@@ -1641,6 +1701,12 @@
    - `GET /api/calibration/devices/DEV-001/profiles/active?metricCode=PRESSURE` 可直接命中 `CAL-2026-02`
    - `GET /api/calibration/devices/DEV-001/drift-checks` 可直接查看 `CALD-SEED-001`
    - `GET /api/calibration/metrics/INGR-SEED-001/corrected` 可直接验证校正预览
+- 已新增 B-25 模型网关联调样例：
+   - `LEAK_DETECTOR`：`V1 ACTIVE / V2 GRAY / V0 ROLLED_BACK`
+   - `CALIBRATION_DRIFT_GUARD`：`V1 ACTIVE / V2 DRAFT`
+   - `MR-B25-MODEL-001`：成功推理结果样例
+   - `MR-B25-FALLBACK-001`：超时后规则兜底结果样例
+   - `model_invocation_audit` 可直接查看 `MODEL / RULE_FALLBACK` 两类结果来源
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令

@@ -11,7 +11,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.MDC;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,12 +19,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Set;
-import java.util.UUID;
-import java.util.regex.Pattern;
 
 public class GatewayControlFilter extends OncePerRequestFilter {
 
-    private static final Pattern TRACE_ID_PATTERN = Pattern.compile("^[A-Za-z0-9._:-]{1,64}$");
     private static final Set<String> FILTERED_PATH_PREFIXES = Set.of(
             "/api/",
             "/v3/api-docs"
@@ -58,7 +54,7 @@ public class GatewayControlFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String requestPath = request.getRequestURI();
-        sanitizeTraceId(request, response);
+        ensureTraceId(request, response);
 
         GatewayRoutePolicyEntity policy = gatewayPolicyService.resolvePolicy(requestPath, request.getMethod()).orElse(null);
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -123,17 +119,17 @@ public class GatewayControlFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private void sanitizeTraceId(HttpServletRequest request, HttpServletResponse response) {
-        String traceId = request.getHeader(TraceIdContext.TRACE_ID_HEADER);
-        if (traceId == null || !TRACE_ID_PATTERN.matcher(traceId.trim()).matches()) {
-            String generated = UUID.randomUUID().toString();
-            MDC.put(TraceIdContext.TRACE_ID_KEY, generated);
-            response.setHeader(TraceIdContext.TRACE_ID_HEADER, generated);
-            return;
+    private void ensureTraceId(HttpServletRequest request, HttpServletResponse response) {
+        String traceId = TraceIdContext.getTraceId();
+        if (!TraceIdContext.isValidTraceId(traceId)) {
+            traceId = TraceIdContext.resolveIncomingTraceId(
+                    request.getHeader(TraceIdContext.TRACE_ID_HEADER),
+                    request.getHeader(TraceIdContext.TRACEPARENT_HEADER)
+            );
+            TraceIdContext.setTraceId(traceId);
         }
-        String sanitized = traceId.trim();
-        MDC.put(TraceIdContext.TRACE_ID_KEY, sanitized);
-        response.setHeader(TraceIdContext.TRACE_ID_HEADER, sanitized);
+        request.setAttribute(TraceIdContext.TRACE_ID_REQUEST_ATTRIBUTE, traceId);
+        response.setHeader(TraceIdContext.TRACE_ID_HEADER, traceId);
     }
 
     private boolean isJsonContentType(String contentType) {

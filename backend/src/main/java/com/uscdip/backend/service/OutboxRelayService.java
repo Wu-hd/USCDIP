@@ -20,6 +20,7 @@ public class OutboxRelayService {
 
     private final OutboxEventRepository outboxEventRepository;
     private final OutboxDispatcher outboxDispatcher;
+    private final TraceLinkService traceLinkService;
     private final int batchSize;
     private final int maxAttempts;
     private final int retryBaseDelaySeconds;
@@ -29,6 +30,7 @@ public class OutboxRelayService {
     public OutboxRelayService(
             OutboxEventRepository outboxEventRepository,
             OutboxDispatcher outboxDispatcher,
+            TraceLinkService traceLinkService,
             @Value("${backend.outbox.batch-size:20}") int batchSize,
             @Value("${backend.outbox.max-attempts:3}") int maxAttempts,
             @Value("${backend.outbox.retry-base-delay-seconds:30}") int retryBaseDelaySeconds,
@@ -37,6 +39,7 @@ public class OutboxRelayService {
     ) {
         this.outboxEventRepository = outboxEventRepository;
         this.outboxDispatcher = outboxDispatcher;
+        this.traceLinkService = traceLinkService;
         this.batchSize = Math.max(1, batchSize);
         this.maxAttempts = Math.max(1, maxAttempts);
         this.retryBaseDelaySeconds = Math.max(1, retryBaseDelaySeconds);
@@ -97,15 +100,19 @@ public class OutboxRelayService {
     }
 
     private void dispatchClaimedEvent(OutboxEventEntity event, LocalDateTime now) {
+        long startNanos = System.nanoTime();
         try {
             OutboxDispatchResult result = TraceIdContext.withTraceId(event.getTraceId(), () -> outboxDispatcher.dispatch(event));
             if (result != null && result.success()) {
                 markSent(event, now);
+                recordDispatchTrace(event, "OUTBOX_DISPATCH_SUCCESS", event.getStatus(), null, elapsedMillis(startNanos));
                 return;
             }
             markFailed(event, result == null ? "Outbox dispatcher returned null result" : result.errorMessage(), now);
+            recordDispatchTrace(event, failureEventType(event), event.getStatus(), event.getLastError(), elapsedMillis(startNanos));
         } catch (Exception ex) {
             markFailed(event, ex.getMessage(), now);
+            recordDispatchTrace(event, failureEventType(event), event.getStatus(), event.getLastError(), elapsedMillis(startNanos));
         }
     }
 
@@ -152,5 +159,40 @@ public class OutboxRelayService {
             return value;
         }
         return value.substring(0, MAX_ERROR_LENGTH);
+    }
+
+    private void recordDispatchTrace(OutboxEventEntity event, String eventType, String status, String detail, long latencyMs) {
+        traceLinkService.record(new TraceLinkService.TraceLinkCommand(
+                null,
+                event.getTraceId(),
+                "OUTBOX-" + event.getEventId(),
+                null,
+                TraceLinkService.STAGE_OUTBOX,
+                eventType,
+                TraceLinkService.SOURCE_OUTBOX,
+                event.getAggregateType(),
+                event.getAggregateId(),
+                status,
+                latencyMs,
+                LocalDateTime.now(),
+                event.getCreatedAt(),
+                null,
+                null,
+                null,
+                event.getEventId(),
+                null,
+                null,
+                detail
+        ));
+    }
+
+    private String failureEventType(OutboxEventEntity event) {
+        return OutboxEventStatus.DEAD.name().equals(event.getStatus())
+                ? "OUTBOX_DISPATCH_DEAD"
+                : "OUTBOX_DISPATCH_FAILED";
+    }
+
+    private long elapsedMillis(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000L;
     }
 }

@@ -35,13 +35,20 @@ public class WebSocketAuthHandshakeInterceptor implements HandshakeInterceptor {
         if (!gatewayService.isOriginAllowed(origin)) {
             return false;
         }
+        String traceId = com.uscdip.backend.support.TraceIdContext.resolveIncomingTraceId(
+                request.getHeaders().getFirst(com.uscdip.backend.support.TraceIdContext.TRACE_ID_HEADER),
+                request.getHeaders().getFirst(com.uscdip.backend.support.TraceIdContext.TRACEPARENT_HEADER)
+        );
         try {
-            WebSocketUserPrincipal principal = gatewayService.authenticateHandshake(
-                    resolveToken(request),
-                    resolveClientIp(request),
-                    request.getHeaders().getFirst(HttpHeaders.USER_AGENT)
-            );
+            WebSocketUserPrincipal principal = com.uscdip.backend.support.TraceIdContext.withTraceId(traceId, () ->
+                    gatewayService.authenticateHandshake(
+                            resolveToken(request),
+                            resolveClientIp(request),
+                            request.getHeaders().getFirst(HttpHeaders.USER_AGENT),
+                            traceId
+                    ));
             attributes.put(ATTR_PRINCIPAL, principal);
+            attributes.put(com.uscdip.backend.support.TraceIdContext.TRACE_ID_REQUEST_ATTRIBUTE, traceId);
             return true;
         } catch (RuntimeException ex) {
             return false;

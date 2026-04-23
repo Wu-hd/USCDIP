@@ -96,6 +96,8 @@
    - GET /api/audit-logs
    - GET /api/audit-logs/{auditId}
    - GET /api/audit-logs/break-glass-report
+   - GET /api/traces
+   - GET /api/traces/{traceId}
    - POST /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles/active?metricCode=PRESSURE
@@ -1540,6 +1542,41 @@
 - 按 trace 串联：
    - `SELECT event_time, source_module, event_type, object_type, object_id, outcome FROM audit_log WHERE trace_id = 'TRACE-B27-BG-001' ORDER BY event_time;`
 
+## B-28 Trace 与链路埋点中间件说明
+
+### 1) 目标能力
+- 当前项目已经接入数据库，B-28 继续复用 H2 / PostgreSQL / TimescaleDB 与 JPA 自动建表。
+- 新增统一 `trace_link_event` 主表，用于把 HTTP、Outbox、通知消费和 WebSocket 推送/ack 串成可查询链路。
+- `TraceIdFilter`、Outbox relay、通知消费和 WebSocket 推送网关会统一透传 `traceId`，并把它注入 MDC 与响应头。
+
+### 2) API 与权限
+- `GET /api/traces`：分页查询链路埋点，支持 `traceId / stage / sourceModule / objectType / objectId / status / from / to`。
+- `GET /api/traces/{traceId}`：按时间顺序返回单条 trace 的全链路事件。
+- 两个接口均要求 `PLATFORM_ADMIN + ENTRY:MGMT`；Gateway 路由策略均启用审计。
+
+### 3) Trace 透传规则
+- HTTP 优先读取 `X-Trace-Id`，兼容读取 `traceparent` 并提取其中的 trace 部分；非法或缺失时自动生成 UUID。
+- HTTP 响应头固定回传 `X-Trace-Id`，响应体 `traceId` 与响应头保持一致。
+- `outbox_event.trace_id` 与 payload 内的 `traceId` 同步写入，通知消费和 WebSocket push payload 继续沿用同一条 trace。
+- WebSocket 推送 payload 现包含 `seqNo / messageId / topic / type / sourceNotificationId / traceId / title / content / createdAt`。
+
+### 4) 数据库与测试数据说明
+- B-28 继续复用已有三套数据库配置：
+   - H2：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL / Timescale 首次联调仍需手动导入测试数据：`psql -U postgres -d uscdip -f src/main/resources/data.sql`。
+- `src/main/resources/data.sql` 已新增 B-28 种子：`TRACE-B28-E2E-001` 串联 HTTP 入站、工单 Outbox、通知消费、WebSocket 握手/推送/ack，以及 WebSocket 断开样例和 `/api/traces/**` Gateway 路由策略。
+
+### 5) SQL 联调示例
+- 查看全量链路埋点：
+   - `SELECT trace_id, stage, event_type, source_module, object_type, object_id, status, route_path, message_id FROM trace_link_event ORDER BY event_time DESC;`
+- 查询单条 trace：
+   - `SELECT trace_id, stage, event_type, status, route_path, topic, message_id, detail FROM trace_link_event WHERE trace_id = 'TRACE-B28-E2E-001' ORDER BY event_time;`
+- 按链路阶段统计：
+   - `SELECT stage, COUNT(*) FROM trace_link_event GROUP BY stage ORDER BY stage;`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -1576,7 +1613,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 / B-23 / B-24 / B-25 / B-26 / B-27 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter、work_order 闭环、notification、websocket、model gateway、feature view 与 unified audit 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 / B-23 / B-24 / B-25 / B-26 / B-27 / B-28 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter、work_order 闭环、notification、websocket、model gateway、feature view、unified audit 与 trace link 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json
@@ -1630,6 +1667,8 @@
    - feature_view_access_audit
 - B-27 新增：
    - audit_log
+- B-28 新增：
+   - trace_link_event
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -1718,6 +1757,7 @@
    - feature_view_grant：3 条
    - feature_view_access_audit：3 条
    - audit_log：7 条
+   - trace_link_event：8 条
 - 已生成 B-11 设备台账联调数据：
    - `device`：3 条，覆盖 `ONLINE / WARNING / OFFLINE`
    - `device_heartbeat`：3 条历史样例
@@ -1769,7 +1809,7 @@
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
 - 已新增 B-06 Gateway 联调样例：
-   - gateway_route_policy：68 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12/B-13 接入层接口、B-14 评分查询接口、B-15 标定与漂移接口、受保护业务查询、通知、WebSocket、模型网关、特征视图、统一审计与当前高风险策略）
+   - gateway_route_policy：70 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12/B-13 接入层接口、B-14 评分查询接口、B-15 标定与漂移接口、受保护业务查询、通知、WebSocket、模型网关、特征视图、统一审计、trace 查询与当前高风险策略）
    - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
    - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
    - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
@@ -1834,6 +1874,11 @@
    - `GET /api/audit-logs?eventCategory=MODEL` 可验证模型回退统一审计
    - `GET /api/audit-logs/break-glass-report` 可验证应急旁路专项报表
    - `/api/audit-logs/**` Gateway 路由策略已写入测试数据
+- 已新增 B-28 Trace 联调样例：
+   - `trace_link_event`：8 条，覆盖 HTTP 入站、Outbox dispatch、通知消费、WebSocket 握手/推送/ack/断开
+   - `GET /api/traces?traceId=TRACE-B28-E2E-001` 可验证整条链路
+   - `GET /api/traces/TRACE-B28-E2E-001` 可验证按时间顺序回放
+   - `/api/traces/**` Gateway 路由策略已写入测试数据
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令

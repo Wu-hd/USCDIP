@@ -67,6 +67,7 @@ public class NotificationService {
     private final DeadLetterRepository deadLetterRepository;
     private final IdempotentConsumerService idempotentConsumerService;
     private final ObjectScopeService objectScopeService;
+    private final TraceLinkService traceLinkService;
     private final ObjectMapper objectMapper;
     private final List<String> channels;
     private final Set<String> failChannels;
@@ -81,6 +82,7 @@ public class NotificationService {
             DeadLetterRepository deadLetterRepository,
             IdempotentConsumerService idempotentConsumerService,
             ObjectScopeService objectScopeService,
+            TraceLinkService traceLinkService,
             ObjectMapper objectMapper,
             @Value("${backend.notification.channels:IN_APP,SMS,WECHAT}") String configuredChannels,
             @Value("${backend.notification.fail-channels:}") String configuredFailChannels,
@@ -94,6 +96,7 @@ public class NotificationService {
         this.deadLetterRepository = deadLetterRepository;
         this.idempotentConsumerService = idempotentConsumerService;
         this.objectScopeService = objectScopeService;
+        this.traceLinkService = traceLinkService;
         this.objectMapper = objectMapper;
         this.channels = parseList(configuredChannels, List.of("IN_APP", "SMS", "WECHAT"));
         this.failChannels = new LinkedHashSet<>(parseList(configuredFailChannels, List.of()));
@@ -199,23 +202,34 @@ public class NotificationService {
     }
 
     private boolean consumeStableWorkOrderEvent(OutboxEventEntity event) {
-        if (notificationMessageRepository.findBySourceEventId(event.getEventId()).isPresent()) {
-            return false;
-        }
-        JsonNode payload = parsePayload(event);
-        String workOrderId = text(payload, "workOrderId", event.getAggregateId());
-        Long versionNo = longValue(payload, "versionNo", 0L);
-        IdempotentConsumerResult result = idempotentConsumerService.consume(
-                IdempotentConsumerService.ACTION_SEND_NOTIFICATION,
-                AGGREGATE_WORK_ORDER,
-                workOrderId,
-                event.getEventId(),
-                versionNo,
-                event.getPayload(),
-                event.getTraceId(),
-                () -> createNotificationIfAbsent(event, payload, workOrderId, versionNo)
-        );
-        return IdempotentRecordStatus.SUCCESS.name().equals(result.status()) && !result.duplicate();
+        String traceId = defaultString(event == null ? null : event.getTraceId(), TraceIdContext.currentOrGenerate());
+        return TraceIdContext.withTraceId(traceId, () -> {
+            if (notificationMessageRepository.findBySourceEventId(event.getEventId()).isPresent()) {
+                recordNotificationTrace(traceId, event, "NOTIFICATION_CONSUME_DUPLICATE", "DUPLICATE", null);
+                return false;
+            }
+            JsonNode payload = parsePayload(event);
+            String workOrderId = text(payload, "workOrderId", event.getAggregateId());
+            Long versionNo = longValue(payload, "versionNo", 0L);
+            IdempotentConsumerResult result = idempotentConsumerService.consume(
+                    IdempotentConsumerService.ACTION_SEND_NOTIFICATION,
+                    AGGREGATE_WORK_ORDER,
+                    workOrderId,
+                    event.getEventId(),
+                    versionNo,
+                    event.getPayload(),
+                    traceId,
+                    () -> createNotificationIfAbsent(event, payload, workOrderId, versionNo)
+            );
+            String eventType = switch (normalize(result.status())) {
+                case "SUCCESS" -> result.duplicate() ? "NOTIFICATION_CONSUME_DUPLICATE" : "NOTIFICATION_CONSUME_SUCCESS";
+                case "DEAD" -> "NOTIFICATION_CONSUME_DEAD";
+                default -> "NOTIFICATION_CONSUME_FAILED";
+            };
+            String status = result.duplicate() ? "DUPLICATE" : normalize(result.status());
+            recordNotificationTrace(traceId, event, eventType, status, "resultRefId=" + result.resultRefId());
+            return IdempotentRecordStatus.SUCCESS.name().equals(result.status()) && !result.duplicate();
+        });
     }
 
     private String createNotificationIfAbsent(OutboxEventEntity event, JsonNode payload, String workOrderId, Long versionNo) {
@@ -556,5 +570,30 @@ public class NotificationService {
 
     private boolean equalsIgnoreCase(String left, String right) {
         return left != null && right != null && left.equalsIgnoreCase(right);
+    }
+
+    private void recordNotificationTrace(String traceId, OutboxEventEntity event, String eventType, String status, String detail) {
+        traceLinkService.record(new TraceLinkService.TraceLinkCommand(
+                null,
+                traceId,
+                event == null ? null : "NOTIFY-" + event.getEventId(),
+                event == null ? null : event.getEventId(),
+                TraceLinkService.STAGE_NOTIFICATION,
+                eventType,
+                TraceLinkService.SOURCE_NOTIFICATION,
+                AGGREGATE_WORK_ORDER,
+                event == null ? null : event.getAggregateId(),
+                status,
+                null,
+                LocalDateTime.now(),
+                event == null ? null : event.getCreatedAt(),
+                null,
+                null,
+                null,
+                event == null ? null : event.getEventId(),
+                null,
+                null,
+                detail
+        ));
     }
 }

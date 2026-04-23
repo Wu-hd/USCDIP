@@ -60,6 +60,7 @@ public class WebSocketPushGatewayService {
     private final TokenRevocationService tokenRevocationService;
     private final AuthorizationService authorizationService;
     private final TopicAuthorizationService topicAuthorizationService;
+    private final TraceLinkService traceLinkService;
     private final ObjectProvider<SimpMessagingTemplate> messagingTemplateProvider;
     private final ObjectMapper objectMapper;
 
@@ -75,6 +76,7 @@ public class WebSocketPushGatewayService {
             TokenRevocationService tokenRevocationService,
             AuthorizationService authorizationService,
             TopicAuthorizationService topicAuthorizationService,
+            TraceLinkService traceLinkService,
             ObjectProvider<SimpMessagingTemplate> messagingTemplateProvider,
             ObjectMapper objectMapper
     ) {
@@ -89,6 +91,7 @@ public class WebSocketPushGatewayService {
         this.tokenRevocationService = tokenRevocationService;
         this.authorizationService = authorizationService;
         this.topicAuthorizationService = topicAuthorizationService;
+        this.traceLinkService = traceLinkService;
         this.messagingTemplateProvider = messagingTemplateProvider;
         this.objectMapper = objectMapper;
     }
@@ -105,25 +108,72 @@ public class WebSocketPushGatewayService {
 
     @Transactional
     public WebSocketUserPrincipal authenticateHandshake(String token, String clientIp, String userAgent) {
+        return authenticateHandshake(token, clientIp, userAgent, TraceIdContext.currentOrGenerate());
+    }
+
+    @Transactional
+    public WebSocketUserPrincipal authenticateHandshake(String token, String clientIp, String userAgent, String traceId) {
         if (token == null || token.isBlank()) {
+            recordWebSocketTrace(
+                    traceId,
+                    null,
+                    null,
+                    null,
+                    "WS_HANDSHAKE_FAILED",
+                    "FAILED",
+                    clientIp,
+                    "/ws/push",
+                    null,
+                    "WebSocket access token is required"
+            );
             throw new AuthFlowException(ErrorCode.UNAUTHORIZED, HttpStatus.UNAUTHORIZED, "WebSocket access token is required");
         }
-        LocalAccessTokenService.AccessTokenPrincipal tokenPrincipal = localAccessTokenService.verify(token);
-        tokenRevocationService.validateAccessToken(tokenPrincipal, clientIp, userAgent);
-        rejectIfConnectionLimitExceeded(tokenPrincipal.userId());
-        LocalDateTime now = LocalDateTime.now();
-        String connectionId = "WSC-" + UUID.randomUUID();
-        WebSocketConnectionEntity connection = new WebSocketConnectionEntity();
-        connection.setConnectionId(connectionId);
-        connection.setUserId(tokenPrincipal.userId());
-        connection.setUsername(tokenPrincipal.username());
-        connection.setClientIp(truncate(clientIp, 64));
-        connection.setUserAgent(truncate(userAgent, 512));
-        connection.setStatus(WebSocketConnectionStatus.CONNECTED.name());
-        connection.setConnectedAt(now);
-        connection.setLastSeenAt(now);
-        connectionRepository.save(connection);
-        return new WebSocketUserPrincipal(tokenPrincipal.userId(), tokenPrincipal.userId(), tokenPrincipal.username(), connectionId);
+        try {
+            return TraceIdContext.withTraceId(traceId, () -> {
+                LocalAccessTokenService.AccessTokenPrincipal tokenPrincipal = localAccessTokenService.verify(token);
+                tokenRevocationService.validateAccessToken(tokenPrincipal, clientIp, userAgent);
+                rejectIfConnectionLimitExceeded(tokenPrincipal.userId());
+                LocalDateTime now = LocalDateTime.now();
+                String connectionId = "WSC-" + UUID.randomUUID();
+                WebSocketConnectionEntity connection = new WebSocketConnectionEntity();
+                connection.setConnectionId(connectionId);
+                connection.setUserId(tokenPrincipal.userId());
+                connection.setUsername(tokenPrincipal.username());
+                connection.setClientIp(truncate(clientIp, 64));
+                connection.setUserAgent(truncate(userAgent, 512));
+                connection.setStatus(WebSocketConnectionStatus.CONNECTED.name());
+                connection.setConnectedAt(now);
+                connection.setLastSeenAt(now);
+                connectionRepository.save(connection);
+                recordWebSocketTrace(
+                        traceId,
+                        connectionId,
+                        null,
+                        tokenPrincipal.userId(),
+                        "WS_HANDSHAKE_SUCCESS",
+                        "SUCCESS",
+                        clientIp,
+                        "/ws/push",
+                        null,
+                        "connectionId=" + connectionId
+                );
+                return new WebSocketUserPrincipal(tokenPrincipal.userId(), tokenPrincipal.userId(), tokenPrincipal.username(), connectionId);
+            });
+        } catch (RuntimeException ex) {
+            recordWebSocketTrace(
+                    traceId,
+                    null,
+                    null,
+                    null,
+                    "WS_HANDSHAKE_FAILED",
+                    "FAILED",
+                    clientIp,
+                    "/ws/push",
+                    null,
+                    ex.getClass().getSimpleName() + ": " + ex.getMessage()
+            );
+            throw ex;
+        }
     }
 
     @Transactional
@@ -135,6 +185,18 @@ public class WebSocketPushGatewayService {
             connection.setStompSessionId(stompSessionId);
             connection.setLastSeenAt(LocalDateTime.now());
             connectionRepository.save(connection);
+            recordWebSocketTrace(
+                    TraceIdContext.currentOrGenerate(),
+                    connection.getConnectionId(),
+                    stompSessionId,
+                    connection.getUserId(),
+                    "WS_CONNECT",
+                    "CONNECTED",
+                    connection.getClientIp(),
+                    "/ws/push",
+                    null,
+                    null
+            );
         });
     }
 
@@ -143,6 +205,18 @@ public class WebSocketPushGatewayService {
         findConnection(principal, stompSessionId).ifPresent(connection -> {
             connection.setLastSeenAt(LocalDateTime.now());
             connectionRepository.save(connection);
+            recordWebSocketTrace(
+                    TraceIdContext.currentOrGenerate(),
+                    connection.getConnectionId(),
+                    connection.getStompSessionId(),
+                    connection.getUserId(),
+                    "WS_HEARTBEAT",
+                    "SUCCESS",
+                    connection.getClientIp(),
+                    "/app/push/heartbeat",
+                    null,
+                    null
+            );
         });
     }
 
@@ -166,6 +240,18 @@ public class WebSocketPushGatewayService {
         subscriptionRepository.save(subscription);
         connection.setLastSeenAt(now);
         connectionRepository.save(connection);
+        recordWebSocketTrace(
+                TraceIdContext.currentOrGenerate(),
+                connection.getConnectionId(),
+                stompSessionId,
+                context.userId(),
+                "WS_SUBSCRIBE",
+                "SUCCESS",
+                connection.getClientIp(),
+                destination,
+                topic,
+                "subscriptionId=" + subscriptionId
+        );
         replayUnackedMessages(context.userId(), topic);
     }
 
@@ -188,7 +274,20 @@ public class WebSocketPushGatewayService {
         ack.setLastAckSeq(Math.max(ack.getLastAckSeq() == null ? 0L : ack.getLastAckSeq(), lastAckSeq));
         ack.setUpdatedAt(now);
         heartbeat(principal, null);
-        return ackRepository.save(ack);
+        WebSocketAckEntity saved = ackRepository.save(ack);
+        findConnection(principal, null).ifPresent(connection -> recordWebSocketTrace(
+                TraceIdContext.currentOrGenerate(),
+                connection.getConnectionId(),
+                connection.getStompSessionId(),
+                context.userId(),
+                "WS_ACK",
+                "SUCCESS",
+                connection.getClientIp(),
+                "/app/push/ack",
+                topic,
+                "lastAckSeq=" + saved.getLastAckSeq()
+        ));
+        return saved;
     }
 
     @Transactional
@@ -198,7 +297,7 @@ public class WebSocketPushGatewayService {
         }
         LocalDateTime now = LocalDateTime.now();
         connectionRepository.findByStompSessionIdAndStatus(stompSessionId, WebSocketConnectionStatus.CONNECTED.name())
-                .ifPresent(connection -> closeConnection(connection, reason, now));
+                .ifPresent(connection -> closeConnection(connection, reason, now, TraceIdContext.currentOrGenerate()));
         closeSubscriptions(subscriptionRepository.findByStompSessionIdAndStatus(stompSessionId, WebSocketSubscriptionStatus.ACTIVE.name()), now);
     }
 
@@ -211,7 +310,7 @@ public class WebSocketPushGatewayService {
         );
         LocalDateTime now = LocalDateTime.now();
         for (WebSocketConnectionEntity connection : idleConnections) {
-            closeConnection(connection, "IDLE_TIMEOUT", now);
+            closeConnection(connection, "IDLE_TIMEOUT", now, TraceIdContext.currentOrGenerate());
             closeSubscriptions(subscriptionRepository.findByConnectionIdAndStatus(
                     connection.getConnectionId(),
                     WebSocketSubscriptionStatus.ACTIVE.name()
@@ -357,6 +456,18 @@ public class WebSocketPushGatewayService {
 
     private void sendPayload(String topic, String userId, WebSocketPushPayload payload) {
         TraceIdContext.runWithTraceId(payload.traceId(), () -> {
+            recordWebSocketTrace(
+                    payload.traceId(),
+                    null,
+                    null,
+                    userId,
+                    "WS_PUSH",
+                    "SENT",
+                    null,
+                    topic,
+                    topic,
+                    "messageId=" + payload.messageId() + ", sourceNotificationId=" + payload.sourceNotificationId()
+            );
             if (topic.startsWith("user.")) {
                 String targetUserId = topic.substring("user.".length(), topic.length() - USER_QUEUE_TOPIC_SUFFIX.length());
                 messagingTemplateProvider.getIfAvailable().convertAndSendToUser(targetUserId, "/queue/workorder.notifications", payload);
@@ -366,12 +477,24 @@ public class WebSocketPushGatewayService {
         });
     }
 
-    private void closeConnection(WebSocketConnectionEntity connection, String reason, LocalDateTime now) {
+    private void closeConnection(WebSocketConnectionEntity connection, String reason, LocalDateTime now, String traceId) {
         connection.setStatus(WebSocketConnectionStatus.DISCONNECTED.name());
         connection.setDisconnectedAt(now);
         connection.setLastSeenAt(now);
         connection.setCloseReason(truncate(reason, 255));
         connectionRepository.save(connection);
+        recordWebSocketTrace(
+                traceId,
+                connection.getConnectionId(),
+                connection.getStompSessionId(),
+                connection.getUserId(),
+                "WS_DISCONNECT",
+                connection.getStatus(),
+                connection.getClientIp(),
+                "/ws/push",
+                null,
+                reason
+        );
     }
 
     private void closeSubscriptions(List<WebSocketSubscriptionEntity> subscriptions, LocalDateTime now) {
@@ -436,5 +559,41 @@ public class WebSocketPushGatewayService {
             return value;
         }
         return value.substring(0, maxLength);
+    }
+
+    private void recordWebSocketTrace(
+            String traceId,
+            String connectionId,
+            String sessionId,
+            String actorUserId,
+            String eventType,
+            String status,
+            String clientIp,
+            String routePath,
+            String topic,
+            String detail
+    ) {
+        traceLinkService.record(new TraceLinkService.TraceLinkCommand(
+                null,
+                traceId,
+                connectionId == null ? null : "WS-" + connectionId,
+                null,
+                TraceLinkService.STAGE_WEBSOCKET,
+                eventType,
+                TraceLinkService.SOURCE_WEBSOCKET,
+                "WEBSOCKET_CONNECTION",
+                connectionId,
+                status,
+                null,
+                LocalDateTime.now(),
+                null,
+                actorUserId,
+                clientIp,
+                routePath,
+                null,
+                sessionId,
+                topic,
+                detail
+        ));
     }
 }

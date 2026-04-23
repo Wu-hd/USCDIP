@@ -10,12 +10,14 @@ import com.uscdip.backend.entity.CalibrationProfileEntity;
 import com.uscdip.backend.entity.DeviceEntity;
 import com.uscdip.backend.entity.TsMetricEntity;
 import com.uscdip.backend.repository.CalibrationProfileRepository;
+import com.uscdip.backend.repository.IdempotentRecordRepository;
 import com.uscdip.backend.repository.DeviceRepository;
 import com.uscdip.backend.repository.IncidentRepository;
 import com.uscdip.backend.repository.ObjectScopeBindingRepository;
 import com.uscdip.backend.repository.TsMetricRepository;
 import com.uscdip.backend.repository.WorkOrderRepository;
 import com.uscdip.backend.service.CalibrationManagementService;
+import com.uscdip.backend.service.IdempotentConsumerService;
 import com.uscdip.backend.service.LocalTokenService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
@@ -80,7 +82,13 @@ class CalibrationManagementIntegrationTest {
     private ObjectScopeBindingRepository objectScopeBindingRepository;
 
     @Autowired
+    private IdempotentRecordRepository idempotentRecordRepository;
+
+    @Autowired
     private CalibrationManagementService calibrationManagementService;
+
+    @Autowired
+    private IdempotentConsumerService idempotentConsumerService;
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
@@ -200,6 +208,72 @@ class CalibrationManagementIntegrationTest {
         Assertions.assertTrue(workOrderRepository.findById(workOrderId).isPresent());
         Assertions.assertTrue(objectScopeBindingRepository.findByObjectTypeAndObjectId("INCIDENT", incidentId).isPresent());
         Assertions.assertTrue(objectScopeBindingRepository.findByObjectTypeAndObjectId("WORK_ORDER", workOrderId).isPresent());
+    }
+
+    @Test
+    void repeatedConfirmedDriftReusesIdempotentWorkOrderForSameIncidentVersion() throws Exception {
+        TokenPairResponse adminToken = localTokenService.issueForUser("U-ADMIN-001", "127.0.0.1", "JUnit");
+        String profileVersion = "CAL-IDEMP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+
+        mockMvc.perform(post("/api/calibration/devices/DEV-002/profiles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.ofEntries(
+                                Map.entry("profileVersion", profileVersion),
+                                Map.entry("metricCode", "40001"),
+                                Map.entry("calibratedAt", "2026-04-23T11:00:00"),
+                                Map.entry("effectiveFrom", "2026-04-23T11:00:00"),
+                                Map.entry("effectiveUntil", "2026-08-31T23:59:59"),
+                                Map.entry("operatorName", "王工"),
+                                Map.entry("referenceStandard", "STD-FLOW-IDEMP"),
+                                Map.entry("correctionSlope", 1.0),
+                                Map.entry("correctionOffset", 0.0),
+                                Map.entry("driftThresholdAbs", 1.0),
+                                Map.entry("driftThresholdPct", 3.0),
+                                Map.entry("activate", true)
+                        )))
+                        .header("Authorization", "Bearer " + adminToken.accessToken()))
+                .andExpect(status().isCreated());
+
+        Map<String, Object> driftPayload = Map.of(
+                "profileVersion", profileVersion,
+                "metricCode", "40001",
+                "observedValue", 50.0,
+                "referenceValue", 40.0,
+                "checkedAt", "2026-04-23T12:00:00",
+                "checkedBy", "zhangsan"
+        );
+
+        MvcResult first = mockMvc.perform(post("/api/calibration/devices/DEV-002/drift-checks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(driftPayload))
+                        .header("Authorization", "Bearer " + adminToken.accessToken()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.driftStatus").value("CONFIRMED"))
+                .andReturn();
+
+        MvcResult second = mockMvc.perform(post("/api/calibration/devices/DEV-002/drift-checks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(driftPayload))
+                        .header("Authorization", "Bearer " + adminToken.accessToken()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.driftStatus").value("CONFIRMED"))
+                .andReturn();
+
+        JsonNode firstResponse = objectMapper.readTree(first.getResponse().getContentAsString());
+        JsonNode secondResponse = objectMapper.readTree(second.getResponse().getContentAsString());
+        String incidentId = firstResponse.path("data").path("incidentId").asText();
+        String workOrderId = firstResponse.path("data").path("workOrderId").asText();
+        Assertions.assertEquals(incidentId, secondResponse.path("data").path("incidentId").asText());
+        Assertions.assertEquals(workOrderId, secondResponse.path("data").path("workOrderId").asText());
+        Assertions.assertEquals(1, workOrderRepository.findByIncidentId(incidentId).size());
+
+        String idempotentKey = idempotentConsumerService.buildKey(
+                incidentId,
+                IdempotentConsumerService.ACTION_CREATE_WORK_ORDER,
+                1L
+        );
+        Assertions.assertTrue(idempotentRecordRepository.findById(idempotentKey).isPresent());
+        Assertions.assertEquals(workOrderId, idempotentRecordRepository.findById(idempotentKey).orElseThrow().getResultRefId());
     }
 
     @Test

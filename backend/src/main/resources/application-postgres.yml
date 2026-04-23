@@ -50,3 +50,5 @@ backend:
     retry-base-delay-seconds: ${OUTBOX_RETRY_BASE_DELAY_SECONDS:30}
     claim-timeout-seconds: ${OUTBOX_CLAIM_TIMEOUT_SECONDS:120}
     instance-id: ${OUTBOX_INSTANCE_ID:local-relay-1}
+  idempotency:
+    max-attempts: ${IDEMPOTENCY_MAX_ATTEMPTS:3}

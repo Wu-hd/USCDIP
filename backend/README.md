@@ -15,6 +15,7 @@
 - B-18 告警去重 / 抑制 / 升级服务（alert_policy / alert_case、去重窗口、抑制窗口、升级与恢复扫描）
 - B-19 事件化服务（incident 事件化、最小 incident API、人工确认与自动恢复）
 - B-20 Outbox 与 Relay（outbox_event、事务事件写入、Relay 认领发送、失败重试与死信）
+- B-21 幂等键与死信处理（idempotent_record、dead_letter、工单创建幂等消费）
 
 当前项目已添加数据库能力。
 
@@ -112,6 +113,7 @@
 - B-16 边缘断网补偿接口：`batchNo / seqNo / originalSampleTime` 必填、乱序可接受、重复幂等与冲突重复直接拒绝
 - B-17 告警规则引擎一期骨架：阈值/组合规则、DQ 降权置信度、自动触发与手动回放评估
 - B-20 Outbox 与 Relay：事务内写 `outbox_event`，定时 Relay 认领发送，支持失败重试和 DEAD 死信状态
+- B-21 幂等键与死信处理：消费侧以 `incident_id + action_type + version` 生成幂等键，记录 `idempotent_record`，失败超过阈值写入 `dead_letter`
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -1165,6 +1167,49 @@
    - `mvn spring-boot:run`
    - 日志中出现 `outbox dispatch eventId=... eventType=... aggregateType=INCIDENT ...` 表示默认日志发送器已接管发送。
 
+## B-21 幂等键与死信处理说明
+
+### 1) 目标能力
+- 当前项目已经接入数据库，B-21 继续复用现有 H2 / PostgreSQL / TimescaleDB 配置，不重新引入数据库或中间件。
+- 消费侧统一以 `incident_id + action_type + version` 生成幂等键，避免工单创建、通知消费、回写消费重复执行。
+- 本轮已将校准治理工单创建接入幂等消费；后续 B-22 工单服务、B-23 通知服务可复用同一 `IdempotentConsumerService`。
+- B-20 的 `outbox_event.DEAD` 表示发送侧失败；B-21 的 `dead_letter` 表示消费侧失败，两者分表记录。
+
+### 2) idempotent_record 与 dead_letter
+- `idempotent_record` 核心字段：`idempotent_key / action_type / aggregate_type / aggregate_id / event_id / version_no / status / result_ref_id / attempt_count / first_seen_at / last_seen_at / completed_at / last_error`。
+- 幂等状态：
+   - `PROCESSING`：首次消费已认领，业务动作执行中
+   - `SUCCESS`：消费成功，`result_ref_id` 保存业务结果引用
+   - `FAILED`：消费失败但未达到最大尝试次数，可再次重试
+   - `DEAD`：达到最大尝试次数，已写入消费侧死信
+- `dead_letter` 核心字段：`dead_letter_id / source_event_id / idempotent_key / action_type / aggregate_type / aggregate_id / payload / trace_id / failure_reason / retry_count / status / created_at / resolved_at`。
+- 预留 action type：`CREATE_WORK_ORDER / SEND_NOTIFICATION / WRITEBACK_RESULT`。
+
+### 3) 配置项
+- `IDEMPOTENCY_MAX_ATTEMPTS`：消费最大尝试次数，默认 `3`。
+
+### 4) 数据库与测试数据说明
+- B-21 继续复用已有三套数据库配置：
+   - H2：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL / Timescale 首次联调仍需手动导入测试数据：
+   - `psql -U postgres -d uscdip -f src/main/resources/data.sql`
+- `src/main/resources/data.sql` 已新增 B-21 种子：
+   - `INC-CAL-SEED-001:CREATE_WORK_ORDER:1`：工单创建成功样例，结果引用 `WO-CAL-SEED-001`
+   - `INC-ALERT-SEED-001:SEND_NOTIFICATION:1`：通知消费成功样例
+   - `INC-ALERT-SEED-004:WRITEBACK_RESULT:2`：回写消费死信样例
+   - `DLQ-SEED-WRITEBACK-001`：消费侧死信样例
+
+### 5) SQL 联调示例
+- 查看幂等记录：
+   - `SELECT idempotent_key, action_type, aggregate_id, version_no, status, result_ref_id, attempt_count, last_error FROM idempotent_record ORDER BY first_seen_at;`
+- 查看消费侧死信：
+   - `SELECT dead_letter_id, source_event_id, idempotent_key, action_type, status, retry_count, failure_reason FROM dead_letter ORDER BY created_at;`
+- 串联 incident、工单与幂等记录：
+   - `SELECT i.incident_id, w.work_order_id, r.idempotent_key, r.status FROM incident i JOIN work_order w ON w.incident_id = i.incident_id JOIN idempotent_record r ON r.result_ref_id = w.work_order_id WHERE r.action_type = 'CREATE_WORK_ORDER';`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -1201,7 +1246,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 / B-17 / B-18 / B-19 / B-20 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化与 outbox_event 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record 与 dead_letter 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json

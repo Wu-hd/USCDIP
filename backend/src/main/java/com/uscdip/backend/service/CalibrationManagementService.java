@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -69,6 +70,7 @@ public class CalibrationManagementService {
     private final WorkOrderRepository workOrderRepository;
     private final ObjectScopeBindingRepository objectScopeBindingRepository;
     private final ObjectScopeService objectScopeService;
+    private final IdempotentConsumerService idempotentConsumerService;
 
     public CalibrationManagementService(
             CalibrationProfileRepository calibrationProfileRepository,
@@ -78,7 +80,8 @@ public class CalibrationManagementService {
             IncidentRepository incidentRepository,
             WorkOrderRepository workOrderRepository,
             ObjectScopeBindingRepository objectScopeBindingRepository,
-            ObjectScopeService objectScopeService
+            ObjectScopeService objectScopeService,
+            IdempotentConsumerService idempotentConsumerService
     ) {
         this.calibrationProfileRepository = calibrationProfileRepository;
         this.calibrationDriftRecordRepository = calibrationDriftRecordRepository;
@@ -88,6 +91,7 @@ public class CalibrationManagementService {
         this.workOrderRepository = workOrderRepository;
         this.objectScopeBindingRepository = objectScopeBindingRepository;
         this.objectScopeService = objectScopeService;
+        this.idempotentConsumerService = idempotentConsumerService;
     }
 
     @Transactional
@@ -423,8 +427,9 @@ public class CalibrationManagementService {
         String severity = "DRIFT_CONFIRMED".equals(normalizedReason) || "EXPIRED".equals(normalizedReason) ? "HIGH" : "MEDIUM";
         ObjectScopeBindingEntity deviceBinding = requireDeviceBinding(device.getDeviceId());
 
-        IncidentEntity incident = new IncidentEntity(
-                "INC-CAL-" + UUID.randomUUID(),
+        String incidentId = buildCalibrationIncidentId(device, profile, normalizedReason);
+        IncidentEntity incident = incidentRepository.findById(incidentId).orElseGet(() -> new IncidentEntity(
+                incidentId,
                 device.getSegmentId(),
                 device.getNodeId(),
                 device.getDeviceId(),
@@ -447,24 +452,63 @@ public class CalibrationManagementService {
                 now,
                 now,
                 1L
-        );
+        ));
+        incident.setUpdatedAt(now);
         incidentRepository.save(incident);
         syncScopedObject(ObjectScopeService.OBJECT_INCIDENT, incident.getIncidentId(), deviceBinding, now);
 
-        WorkOrderEntity workOrder = new WorkOrderEntity(
-                "WO-CAL-" + UUID.randomUUID(),
-                incident.getIncidentId(),
-                device.getSegmentId(),
-                device.getNodeId(),
-                blankToNull(deviceBinding.getOwnerUsername()),
-                WORK_ORDER_STATUS_CREATED,
-                now,
-                now
-        );
-        workOrderRepository.save(workOrder);
-        syncScopedObject(ObjectScopeService.OBJECT_WORK_ORDER, workOrder.getWorkOrderId(), deviceBinding, now);
+        String workOrderId = createWorkOrderOnce(incident, device, deviceBinding, normalizedReason, now);
 
-        return new IncidentWorkOrderPair(incident.getIncidentId(), workOrder.getWorkOrderId());
+        return new IncidentWorkOrderPair(incident.getIncidentId(), workOrderId);
+    }
+
+    private String createWorkOrderOnce(
+            IncidentEntity incident,
+            DeviceEntity device,
+            ObjectScopeBindingEntity deviceBinding,
+            String reasonCode,
+            LocalDateTime now
+    ) {
+        IdempotentConsumerResult result = idempotentConsumerService.consume(
+                IdempotentConsumerService.ACTION_CREATE_WORK_ORDER,
+                ObjectScopeService.OBJECT_INCIDENT,
+                incident.getIncidentId(),
+                null,
+                incident.getVersionNo(),
+                buildWorkOrderPayload(incident, device, reasonCode),
+                incident.getTraceId(),
+                () -> {
+                    WorkOrderEntity workOrder = new WorkOrderEntity(
+                            "WO-CAL-" + UUID.randomUUID(),
+                            incident.getIncidentId(),
+                            device.getSegmentId(),
+                            device.getNodeId(),
+                            blankToNull(deviceBinding.getOwnerUsername()),
+                            WORK_ORDER_STATUS_CREATED,
+                            now,
+                            now
+                    );
+                    workOrderRepository.save(workOrder);
+                    syncScopedObject(ObjectScopeService.OBJECT_WORK_ORDER, workOrder.getWorkOrderId(), deviceBinding, now);
+                    return workOrder.getWorkOrderId();
+                }
+        );
+        return result.resultRefId();
+    }
+
+    private String buildCalibrationIncidentId(DeviceEntity device, CalibrationProfileEntity profile, String reasonCode) {
+        String source = normalize(device.getDeviceId()) + "|" + normalize(profile.getProfileId()) + "|" + normalize(reasonCode);
+        return "INC-CAL-" + UUID.nameUUIDFromBytes(source.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String buildWorkOrderPayload(IncidentEntity incident, DeviceEntity device, String reasonCode) {
+        return "{"
+                + "\"incidentId\":\"" + blankToEmpty(incident.getIncidentId()) + "\","
+                + "\"deviceId\":\"" + blankToEmpty(device.getDeviceId()) + "\","
+                + "\"actionType\":\"" + IdempotentConsumerService.ACTION_CREATE_WORK_ORDER + "\","
+                + "\"reasonCode\":\"" + blankToEmpty(reasonCode) + "\","
+                + "\"versionNo\":" + (incident.getVersionNo() == null ? 0 : incident.getVersionNo())
+                + "}";
     }
 
     private boolean ensureReminderWorkOrder(CalibrationProfileEntity profile, DeviceEntity device, LocalDateTime now) {

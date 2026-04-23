@@ -600,3 +600,22 @@ INSERT INTO outbox_event (
 ('OBE-SEED-DEAD-001', 'INCIDENT', 'INC-ALERT-SEED-004', 'INCIDENT_UPDATED',
  '{"incidentId":"INC-ALERT-SEED-004","status":"FALSE_POSITIVE","severity":"HIGH","versionNo":2,"sourceCaseId":"ALCASE-SEED-002","sourceAlertId":"ALERT-SEED-002","traceId":"TRACE-INGEST-SEED-006","occurredAt":"2026-04-24T09:30:00"}',
  'TRACE-INGEST-SEED-006', 'DEAD', 3, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, NULL, NULL, 'seed dead letter sample');
+
+INSERT INTO idempotent_record (
+    idempotent_key, action_type, aggregate_type, aggregate_id, event_id, version_no, status,
+    result_ref_id, attempt_count, first_seen_at, last_seen_at, completed_at, last_error
+) VALUES
+('INC-CAL-SEED-001:CREATE_WORK_ORDER:1', 'CREATE_WORK_ORDER', 'INCIDENT', 'INC-CAL-SEED-001', NULL, 1, 'SUCCESS',
+ 'WO-CAL-SEED-001', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL),
+('INC-ALERT-SEED-001:SEND_NOTIFICATION:1', 'SEND_NOTIFICATION', 'INCIDENT', 'INC-ALERT-SEED-001', 'OBE-SEED-NEW-001', 1, 'SUCCESS',
+ 'NOTIFY-SEED-001', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL),
+('INC-ALERT-SEED-004:WRITEBACK_RESULT:2', 'WRITEBACK_RESULT', 'INCIDENT', 'INC-ALERT-SEED-004', 'OBE-SEED-DEAD-001', 2, 'DEAD',
+ NULL, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'seed writeback consumer failure');
+
+INSERT INTO dead_letter (
+    dead_letter_id, source_event_id, idempotent_key, action_type, aggregate_type, aggregate_id,
+    payload, trace_id, failure_reason, retry_count, status, created_at, resolved_at
+) VALUES
+('DLQ-SEED-WRITEBACK-001', 'OBE-SEED-DEAD-001', 'INC-ALERT-SEED-004:WRITEBACK_RESULT:2', 'WRITEBACK_RESULT', 'INCIDENT', 'INC-ALERT-SEED-004',
+ '{"incidentId":"INC-ALERT-SEED-004","actionType":"WRITEBACK_RESULT","versionNo":2}', 'TRACE-INGEST-SEED-006',
+ 'seed writeback consumer failure', 3, 'OPEN', CURRENT_TIMESTAMP, NULL);

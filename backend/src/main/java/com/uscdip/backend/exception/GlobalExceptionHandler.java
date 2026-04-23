@@ -83,6 +83,9 @@ public class GlobalExceptionHandler {
         if (request != null && request.getRequestURI() != null && request.getRequestURI().startsWith("/api/dq")) {
             return ErrorCode.DQ_QUERY_INVALID;
         }
+        if (request != null && request.getRequestURI() != null && request.getRequestURI().startsWith("/api/alerts")) {
+            return ErrorCode.ALERT_EVALUATION_INVALID;
+        }
         if (request != null && request.getRequestURI() != null && request.getRequestURI().contains("/api/calibration/devices/")
                 && request.getRequestURI().contains("/drift-checks")) {
             return ErrorCode.CALIBRATION_DRIFT_EVALUATION_INVALID;

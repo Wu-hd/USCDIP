@@ -11,6 +11,7 @@
 - B-14 数据质量评分服务（dq_score / dq_flags / 查询接口）
 - B-15 标定与漂移管理接口（标定版本、漂移复核、到期提醒与校正预览）
 - B-16 边缘断网补偿接口（batchNo / seqNo / originalSampleTime、乱序回传、重复幂等与冲突拦截）
+- B-17 告警规则引擎一期骨架（阈值规则、组合规则、自动/手动评估与告警记录查询）
 
 当前项目已添加数据库能力。
 
@@ -49,6 +50,10 @@
    - POST /api/ingest/write-logs/{writeLogId}/retry
    - GET /api/dq/scores
    - GET /api/dq/scores/{sourceRecordId}
+   - POST /api/alerts/evaluate
+   - GET /api/alerts
+   - GET /api/alerts/{alertId}
+   - GET /api/alerts/rules
    - POST /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles/active?metricCode=PRESSURE
@@ -102,6 +107,7 @@
 - B-14 数据质量评分服务：自动评分、dq_flags、查询过滤与告警置信度降权因子
 - B-15 标定与漂移管理接口：版本化标定档案、漂移复核、到期提醒工单、校正预览
 - B-16 边缘断网补偿接口：`batchNo / seqNo / originalSampleTime` 必填、乱序可接受、重复幂等与冲突重复直接拒绝
+- B-17 告警规则引擎一期骨架：阈值/组合规则、DQ 降权置信度、自动触发与手动回放评估
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -917,6 +923,68 @@
 - `BACKFILL_DUPLICATE`
 - `TSDB_WRITE_FAILED`
 
+## B-17 告警规则引擎一期骨架说明
+
+### 1) 目标能力
+- 统一以 `ts_metric` 中已完成 DQ 评分的样本作为规则评估真值，不再引入额外规则中间件。
+- 一期支持两类规则：
+   - 阈值规则：`GT / GTE / LT / LTE / BETWEEN`
+   - 组合规则：`ANY / ALL`
+- 自动触发口径：
+   - 新批次写入 `ts_metric` 并完成 DQ 评分后，同步执行规则评估并生成 `alert_record`
+   - 若规则配置本身异常，会跳过本次自动评估，不回滚已成功的采集写入
+- 手动触发口径：
+   - `POST /api/alerts/evaluate`
+   - 支持 `sourceRecordIds[]` 与 `sourceBatchId` 二选一
+   - `ruleCodes[]` 不传时评估所有启用规则
+
+### 2) 规则决策与置信度
+- 最终告警置信度固定采用：
+   - `alarm_conf_final = alarm_conf_raw x (0.5 + 0.5 x dq_score / 100)`
+- 命中后的决策分档固定为：
+   - `TRIGGERED`：`dq_score >= 70`
+   - `REVIEW_REQUIRED`：`60 <= dq_score < 70`
+   - `DQ_BLOCKED`：`dq_score < 60`
+- 组合规则 raw confidence：
+   - `ANY`：取命中子规则 `alarm_conf_raw` 最大值
+   - `ALL`：取命中子规则 `alarm_conf_raw` 最小值
+
+### 3) 数据库与联调说明
+- 当前项目已经接入数据库。
+- B-17 继续复用已有 H2 / PostgreSQL / TimescaleDB 三套配置：
+   - 默认开发联调：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- B-17 新增表：
+   - `alert_rule`：保存 `rule_code / rule_type / metric_code / operator_code / threshold_* / logic_type / base_confidence / severity / enabled / expression_json`
+   - `alert_record`：保存 `source_record_id / source_batch_id / device_id / rule_code / decision / alert_conf_* / dq_* / metric_* / trace_id`
+- B-17 继续复用：
+   - `ts_metric`：规则评估输入样本源，直接读取 `dq_score / dq_level / dq_alarm_conf_factor`
+   - `device`：补齐 `segment_id / node_id`
+- `src/main/resources/data.sql` 已新增 B-17 专属种子：
+   - 规则种子：`ALR-TH-PRESSURE-HIGH`、`ALR-TH-VIBRATION-HIGH`、`ALR-TH-DQ-ANOMALY`、`ALR-CB-PRESSURE-OR-DQ`、`ALR-CB-PRESSURE-AND-DQ`
+   - 告警种子：`ALERT-SEED-001`、`ALERT-SEED-002`、`ALERT-SEED-003`、`ALERT-SEED-004`
+- H2 默认启动会自动建表并装载以上种子；PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+
+### 4) 接口与联调示例
+- 手动按源记录评估：
+   - `curl -s -X POST http://localhost:8080/api/alerts/evaluate -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"sourceRecordIds\":[\"INGR-SEED-011\"],\"ruleCodes\":[\"ALR-TH-PRESSURE-HIGH\",\"ALR-CB-PRESSURE-OR-DQ\",\"ALR-CB-PRESSURE-AND-DQ\"]}"`
+- 手动按批次评估：
+   - `curl -s -X POST http://localhost:8080/api/alerts/evaluate -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"sourceBatchId\":\"INGB-SEED-MQTT-001\"}"`
+- 查询告警：
+   - `curl -s "http://localhost:8080/api/alerts?page=1&pageSize=10&deviceId=DEV-001" -H "Authorization: Bearer <hz_scope_access_token>"`
+- 查询启用规则：
+   - `curl -s http://localhost:8080/api/alerts/rules -H "Authorization: Bearer <admin_access_token>"`
+- SQL 联调：
+   - `SELECT rule_code, rule_type, metric_code, operator_code, logic_type, enabled FROM alert_rule ORDER BY rule_code;`
+   - `SELECT alert_id, source_record_id, device_id, rule_code, decision, alert_conf_raw, alert_conf_final FROM alert_record ORDER BY created_at DESC;`
+
+### 5) 错误码
+- `ALERT_RULE_NOT_FOUND`
+- `ALERT_RULE_INVALID`
+- `ALERT_EVALUATION_INVALID`
+- `ALERT_RECORD_NOT_FOUND`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -953,7 +1021,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 补偿接口同样复用以上三套数据库配置；H2 默认自动装载 B-16 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 同样复用以上三套数据库配置；H2 默认自动装载补偿与告警规则种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json

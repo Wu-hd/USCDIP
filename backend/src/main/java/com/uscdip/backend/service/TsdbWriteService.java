@@ -14,6 +14,8 @@ import com.uscdip.backend.repository.IngestBatchRepository;
 import com.uscdip.backend.repository.IngestRecordRepository;
 import com.uscdip.backend.repository.TsMetricRepository;
 import com.uscdip.backend.repository.TsWriteLogRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,7 @@ import java.util.stream.Collectors;
 @Service
 public class TsdbWriteService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(TsdbWriteService.class);
     static final String STATUS_PENDING = "PENDING";
     static final String STATUS_SUCCESS = "SUCCESS";
     static final String STATUS_FAILED = "FAILED";
@@ -50,6 +53,7 @@ public class TsdbWriteService {
     private final TsMetricRepository tsMetricRepository;
     private final TsWriteLogRepository tsWriteLogRepository;
     private final DataQualityScoringService dataQualityScoringService;
+    private final AlertRuleEngineService alertRuleEngineService;
     private final ObjectScopeService objectScopeService;
     private final int maxAttempts;
     private final int retryBaseDelaySeconds;
@@ -60,6 +64,7 @@ public class TsdbWriteService {
             TsMetricRepository tsMetricRepository,
             TsWriteLogRepository tsWriteLogRepository,
             DataQualityScoringService dataQualityScoringService,
+            AlertRuleEngineService alertRuleEngineService,
             ObjectScopeService objectScopeService,
             @Value("${backend.tsdb.max-attempts:3}") int maxAttempts,
             @Value("${backend.tsdb.retry-base-delay-seconds:30}") int retryBaseDelaySeconds
@@ -69,6 +74,7 @@ public class TsdbWriteService {
         this.tsMetricRepository = tsMetricRepository;
         this.tsWriteLogRepository = tsWriteLogRepository;
         this.dataQualityScoringService = dataQualityScoringService;
+        this.alertRuleEngineService = alertRuleEngineService;
         this.objectScopeService = objectScopeService;
         this.maxAttempts = maxAttempts;
         this.retryBaseDelaySeconds = retryBaseDelaySeconds;
@@ -194,6 +200,11 @@ public class TsdbWriteService {
         try {
             writeMetrics(batch, records);
             dataQualityScoringService.scoreBatch(batchId);
+            try {
+                alertRuleEngineService.autoEvaluateBatch(batchId);
+            } catch (Exception alertEx) {
+                LOGGER.warn("Alert auto-evaluation skipped for batch {}: {}", batchId, alertEx.getMessage());
+            }
             long durationMs = System.currentTimeMillis() - startedAt;
             log.setStatus(STATUS_SUCCESS);
             log.setSuccessCount(records.size());

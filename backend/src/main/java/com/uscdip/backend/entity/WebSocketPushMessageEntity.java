@@ -26,7 +26,8 @@ import java.time.LocalDateTime;
         },
         indexes = {
                 @Index(name = "idx_ws_push_topic_seq", columnList = "topic,seq_no"),
-                @Index(name = "idx_ws_push_recipient", columnList = "recipient_user_id,seq_no")
+                @Index(name = "idx_ws_push_recipient", columnList = "recipient_user_id,seq_no"),
+                @Index(name = "idx_ws_push_trace", columnList = "trace_id")
         }
 )
 public class WebSocketPushMessageEntity {
@@ -47,6 +48,9 @@ public class WebSocketPushMessageEntity {
 
     @Column(name = "source_notification_id", nullable = false, length = 64)
     private String sourceNotificationId;
+
+    @Column(name = "trace_id", nullable = false, length = 128)
+    private String traceId;
 
     @Column(name = "message_type", nullable = false, length = 64)
     private String messageType;

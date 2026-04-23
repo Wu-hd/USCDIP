@@ -3,6 +3,7 @@ package com.uscdip.backend.support;
 import org.slf4j.MDC;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 
 public final class TraceIdContext {
 
@@ -22,6 +23,28 @@ public final class TraceIdContext {
             return UUID.randomUUID().toString();
         }
         return current;
+    }
+
+    public static void runWithTraceId(String traceId, Runnable action) {
+        withTraceId(traceId, () -> {
+            action.run();
+            return null;
+        });
+    }
+
+    public static <T> T withTraceId(String traceId, Supplier<T> supplier) {
+        String previous = getTraceId();
+        String resolved = isBlank(traceId) ? currentOrGenerate() : traceId.trim();
+        MDC.put(TRACE_ID_KEY, resolved);
+        try {
+            return supplier.get();
+        } finally {
+            if (isBlank(previous)) {
+                MDC.remove(TRACE_ID_KEY);
+            } else {
+                MDC.put(TRACE_ID_KEY, previous);
+            }
+        }
     }
 
     private static boolean isBlank(String value) {

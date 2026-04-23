@@ -69,6 +69,7 @@ class WorkOrderServiceIntegrationTest {
 
         List<OutboxEventEntity> events = outboxEventRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc("WORK_ORDER", firstWorkOrderId);
         Assertions.assertTrue(events.stream().anyMatch(event -> "WORK_ORDER_CREATED".equals(event.getEventType())));
+        assertTraceLinked(events);
     }
 
     @Test
@@ -123,14 +124,14 @@ class WorkOrderServiceIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("CLOSED"))
                 .andExpect(jsonPath("$.data.closeReason").value("验收关闭"));
 
-        List<String> eventTypes = outboxEventRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc("WORK_ORDER", workOrderId).stream()
-                .map(OutboxEventEntity::getEventType)
-                .toList();
+        List<OutboxEventEntity> events = outboxEventRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc("WORK_ORDER", workOrderId);
+        List<String> eventTypes = events.stream().map(OutboxEventEntity::getEventType).toList();
         Assertions.assertTrue(eventTypes.contains("WORK_ORDER_DISPATCHED"));
         Assertions.assertTrue(eventTypes.contains("WORK_ORDER_ACCEPTED"));
         Assertions.assertTrue(eventTypes.contains("WORK_ORDER_COMPLETED"));
         Assertions.assertTrue(eventTypes.contains("WORK_ORDER_WRITEBACK_RECORDED"));
         Assertions.assertTrue(eventTypes.contains("WORK_ORDER_CLOSED"));
+        assertTraceLinked(events);
     }
 
     @Test
@@ -218,5 +219,14 @@ class WorkOrderServiceIntegrationTest {
             }
         }
         return false;
+    }
+
+    private void assertTraceLinked(List<OutboxEventEntity> events) throws Exception {
+        for (OutboxEventEntity event : events) {
+            Assertions.assertNotNull(event.getTraceId());
+            Assertions.assertFalse(event.getTraceId().isBlank());
+            JsonNode payload = objectMapper.readTree(event.getPayload());
+            Assertions.assertEquals(event.getTraceId(), payload.path("traceId").asText());
+        }
     }
 }

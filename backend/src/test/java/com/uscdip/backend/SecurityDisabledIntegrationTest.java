@@ -24,6 +24,11 @@ class SecurityDisabledIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
+        mockMvc.perform(get("/api/realtime-link/spec"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.canonicalFields[0].canonicalName").value("trace_id"));
+
         mockMvc.perform(get("/api/authz/matrix-spec"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));

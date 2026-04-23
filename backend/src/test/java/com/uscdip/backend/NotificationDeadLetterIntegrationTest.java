@@ -67,7 +67,8 @@ class NotificationDeadLetterIntegrationTest {
         Assertions.assertEquals("DEAD", message.getStatus());
         Assertions.assertEquals("DEAD", notificationDeliveryRepository.findByNotificationIdOrderByChannelAsc(message.getNotificationId()).get(0).getStatus());
         Assertions.assertTrue(deadLetterRepository.findByIdempotentKeyOrderByCreatedAtAsc(message.getIdempotentKey()).stream()
-                .anyMatch(deadLetter -> "SEND_NOTIFICATION".equals(deadLetter.getActionType())));
+                .anyMatch(deadLetter -> "SEND_NOTIFICATION".equals(deadLetter.getActionType())
+                        && message.getTraceId().equals(deadLetter.getTraceId())));
     }
 
     private String createWorkOrder(TokenPairResponse token) throws Exception {

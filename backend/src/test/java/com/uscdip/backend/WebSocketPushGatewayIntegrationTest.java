@@ -87,6 +87,7 @@ class WebSocketPushGatewayIntegrationTest {
         String topic = "user.U-INSPECT-001.workorder.notifications";
         List<WebSocketPushPayload> initialReplay = gatewayService.replayPreview("U-INSPECT-001", topic);
         Assertions.assertFalse(initialReplay.isEmpty());
+        Assertions.assertTrue(initialReplay.stream().allMatch(payload -> payload.traceId() != null && !payload.traceId().isBlank()));
 
         WebSocketUserPrincipal inspector = principal("U-INSPECT-001");
         long firstSeq = initialReplay.get(0).seqNo();
@@ -95,6 +96,7 @@ class WebSocketPushGatewayIntegrationTest {
 
         List<WebSocketPushPayload> replayAfterAck = gatewayService.replayPreview("U-INSPECT-001", topic);
         Assertions.assertTrue(replayAfterAck.stream().allMatch(payload -> payload.seqNo() > firstSeq));
+        Assertions.assertTrue(replayAfterAck.stream().allMatch(payload -> payload.traceId() != null && !payload.traceId().isBlank()));
         Assertions.assertTrue(pushMessageRepository.findByTopicAndSeqNoGreaterThanOrderBySeqNoAsc(
                 topic,
                 0L,

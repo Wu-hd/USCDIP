@@ -24,6 +24,7 @@ import com.uscdip.backend.repository.WebSocketAckRepository;
 import com.uscdip.backend.repository.WebSocketConnectionRepository;
 import com.uscdip.backend.repository.WebSocketPushMessageRepository;
 import com.uscdip.backend.repository.WebSocketSubscriptionRepository;
+import com.uscdip.backend.support.TraceIdContext;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -244,6 +245,7 @@ public class WebSocketPushGatewayService {
             message.setTopic(topic);
             message.setRecipientUserId(notification.getRecipientUserId());
             message.setSourceNotificationId(notification.getNotificationId());
+            message.setTraceId(notification.getTraceId());
             message.setMessageType(PUSH_TYPE_WORK_ORDER_NOTIFICATION);
             message.setTitle(notification.getTitle());
             message.setContent(notification.getContent());
@@ -354,12 +356,14 @@ public class WebSocketPushGatewayService {
     }
 
     private void sendPayload(String topic, String userId, WebSocketPushPayload payload) {
-        if (topic.startsWith("user.")) {
-            String targetUserId = topic.substring("user.".length(), topic.length() - USER_QUEUE_TOPIC_SUFFIX.length());
-            messagingTemplateProvider.getIfAvailable().convertAndSendToUser(targetUserId, "/queue/workorder.notifications", payload);
-            return;
-        }
-        messagingTemplateProvider.getIfAvailable().convertAndSend("/topic/" + topic, payload);
+        TraceIdContext.runWithTraceId(payload.traceId(), () -> {
+            if (topic.startsWith("user.")) {
+                String targetUserId = topic.substring("user.".length(), topic.length() - USER_QUEUE_TOPIC_SUFFIX.length());
+                messagingTemplateProvider.getIfAvailable().convertAndSendToUser(targetUserId, "/queue/workorder.notifications", payload);
+                return;
+            }
+            messagingTemplateProvider.getIfAvailable().convertAndSend("/topic/" + topic, payload);
+        });
     }
 
     private void closeConnection(WebSocketConnectionEntity connection, String reason, LocalDateTime now) {
@@ -399,6 +403,7 @@ public class WebSocketPushGatewayService {
                 message.getTopic(),
                 message.getMessageType(),
                 message.getSourceNotificationId(),
+                message.getTraceId(),
                 message.getTitle(),
                 message.getContent(),
                 message.getCreatedAt()

@@ -23,6 +23,7 @@ import com.uscdip.backend.repository.NotificationDeliveryRepository;
 import com.uscdip.backend.repository.NotificationMessageRepository;
 import com.uscdip.backend.repository.OutboxEventRepository;
 import com.uscdip.backend.repository.WorkOrderRepository;
+import com.uscdip.backend.support.TraceIdContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -227,6 +228,7 @@ public class NotificationService {
         WorkOrderEntity workOrder = workOrderRepository.findById(workOrderId)
                 .orElseThrow(() -> new AuthFlowException(ErrorCode.WORK_ORDER_NOT_FOUND, HttpStatus.NOT_FOUND, "Work order not found: " + workOrderId));
         LocalDateTime now = LocalDateTime.now();
+        String traceId = resolveTraceId(event, payload);
         NotificationMessageEntity message = new NotificationMessageEntity();
         message.setNotificationId("NOTIFY-" + UUID.randomUUID());
         message.setSourceEventId(event.getEventId());
@@ -234,6 +236,7 @@ public class NotificationService {
         message.setAggregateType(AGGREGATE_WORK_ORDER);
         message.setAggregateId(workOrderId);
         message.setEventType(normalize(event.getEventType()));
+        message.setTraceId(traceId);
         message.setRecipientUserId(blankToNull(workOrder.getAssigneeUserId()));
         message.setRecipientUsername(blankToNull(workOrder.getAssignee()));
         message.setTitle(buildTitle(event.getEventType(), workOrder));
@@ -317,7 +320,7 @@ public class NotificationService {
                 message.getAggregateType(),
                 message.getAggregateId(),
                 "{\"notificationId\":\"" + message.getNotificationId() + "\",\"channel\":\"" + delivery.getChannel() + "\"}",
-                null,
+                message.getTraceId(),
                 abbreviateError(error),
                 safeAttemptCount(delivery.getAttemptCount()),
                 DeadLetterStatus.OPEN.name(),
@@ -509,6 +512,17 @@ public class NotificationService {
             return node.path(field).asLong();
         }
         return fallback;
+    }
+
+    private String resolveTraceId(OutboxEventEntity event, JsonNode payload) {
+        if (event != null && !isBlank(event.getTraceId())) {
+            return event.getTraceId().trim();
+        }
+        String fromPayload = text(payload, "traceId", null);
+        if (!isBlank(fromPayload)) {
+            return fromPayload.trim();
+        }
+        return TraceIdContext.currentOrGenerate();
     }
 
     private int safeAttemptCount(Integer attemptCount) {

@@ -73,7 +73,9 @@ class NotificationServiceIntegrationTest {
                 .filter(item -> workOrderId.equals(item.getAggregateId()))
                 .findFirst()
                 .orElseThrow();
+        OutboxEventEntity sourceEvent = outboxEventRepository.findById(message.getSourceEventId()).orElseThrow();
         Assertions.assertEquals("WORK_ORDER", message.getAggregateType());
+        Assertions.assertEquals(sourceEvent.getTraceId(), message.getTraceId());
         Assertions.assertEquals("PARTIAL_FAILED", message.getStatus());
         Assertions.assertEquals(3, notificationDeliveryRepository.findByNotificationIdOrderByChannelAsc(message.getNotificationId()).size());
         Assertions.assertEquals(
@@ -166,13 +168,14 @@ class NotificationServiceIntegrationTest {
 
     private void saveWorkOrderOutbox(String eventId, String workOrderId, String eventType, long versionNo, String assignee) {
         LocalDateTime now = LocalDateTime.now();
+        String traceId = "TRACE-" + eventId;
         OutboxEventEntity event = new OutboxEventEntity();
         event.setEventId(eventId);
         event.setAggregateType("WORK_ORDER");
         event.setAggregateId(workOrderId);
         event.setEventType(eventType);
-        event.setPayload("{\"workOrderId\":\"" + workOrderId + "\",\"status\":\"ACCEPTED\",\"assignee\":\"" + assignee + "\",\"versionNo\":" + versionNo + "}");
-        event.setTraceId("TRACE-" + eventId);
+        event.setPayload("{\"workOrderId\":\"" + workOrderId + "\",\"status\":\"ACCEPTED\",\"assignee\":\"" + assignee + "\",\"versionNo\":" + versionNo + ",\"traceId\":\"" + traceId + "\"}");
+        event.setTraceId(traceId);
         event.setStatus(OutboxEventStatus.NEW.name());
         event.setRetryCount(0);
         event.setNextRetryTime(now);

@@ -54,6 +54,7 @@ public class SecurityConfig {
             "/api/menu-boundaries",
             "/api/platforms",
             "/api/platforms/*",
+            "/api/realtime-link/spec",
             "/api/gis/field-spec",
             "/api/gis/convert",
             "/api/gis/depth/validate",

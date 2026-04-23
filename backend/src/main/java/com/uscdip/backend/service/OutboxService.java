@@ -7,6 +7,7 @@ import com.uscdip.backend.entity.OutboxEventEntity;
 import com.uscdip.backend.entity.WorkOrderEntity;
 import com.uscdip.backend.model.OutboxEventStatus;
 import com.uscdip.backend.repository.OutboxEventRepository;
+import com.uscdip.backend.support.TraceIdContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,13 +66,14 @@ public class OutboxService {
             return null;
         }
         LocalDateTime now = occurredAt == null ? LocalDateTime.now() : occurredAt;
+        String traceId = TraceIdContext.currentOrGenerate();
         OutboxEventEntity event = new OutboxEventEntity();
         event.setEventId("OBE-" + UUID.randomUUID());
         event.setAggregateType(AGGREGATE_TYPE_WORK_ORDER);
         event.setAggregateId(workOrder.getWorkOrderId());
         event.setEventType(eventType);
-        event.setPayload(toWorkOrderPayload(workOrder, now));
-        event.setTraceId(null);
+        event.setPayload(toWorkOrderPayload(workOrder, now, traceId));
+        event.setTraceId(traceId);
         event.setStatus(OutboxEventStatus.NEW.name());
         event.setRetryCount(0);
         event.setNextRetryTime(now);
@@ -117,7 +119,7 @@ public class OutboxService {
         }
     }
 
-    private String toWorkOrderPayload(WorkOrderEntity workOrder, LocalDateTime occurredAt) {
+    private String toWorkOrderPayload(WorkOrderEntity workOrder, LocalDateTime occurredAt, String traceId) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("workOrderId", workOrder.getWorkOrderId());
         payload.put("incidentId", workOrder.getIncidentId());
@@ -126,6 +128,7 @@ public class OutboxService {
         payload.put("assignee", workOrder.getAssignee());
         payload.put("versionNo", workOrder.getVersionNo());
         payload.put("writebackType", workOrder.getWritebackType());
+        payload.put("traceId", traceId);
         payload.put("occurredAt", occurredAt);
         try {
             return objectMapper.writeValueAsString(payload);

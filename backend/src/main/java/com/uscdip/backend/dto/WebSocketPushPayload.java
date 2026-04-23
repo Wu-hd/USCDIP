@@ -8,6 +8,7 @@ public record WebSocketPushPayload(
         String topic,
         String type,
         String sourceNotificationId,
+        String traceId,
         String title,
         String content,
         LocalDateTime createdAt

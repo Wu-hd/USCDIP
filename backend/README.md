@@ -5,6 +5,7 @@
 - A-02 统一对象主键与对象链字典（数据库版）
 - A-03 坐标与深度字段冻结（GIS 字段规范、坐标转换、深度校验）
 - A-04 权限模型与数据范围矩阵（RBAC + 数据范围 + topic 订阅范围）
+- A-05 实时链路指标口径表（traceId / eventTime / recvTime / isBackfill / lastAckSeq 统一规范）
 - B-11 设备台账与心跳接口（设备注册、心跳上报、在线状态计算）
 - B-12 统一入站 DTO 与协议适配骨架（统一 DTO、协议适配、接入批次落库）
 - B-13 TSDB 写入与补偿写入服务（在线写入、补偿写入、写入日志与重试）
@@ -22,6 +23,7 @@
 - B-25 模型网关一期框架（模型注册、版本、灰度、回退、规则兜底与审计）
 - B-26 特征视图与算法脱敏接口（默认脱敏特征视图、限时明细授权与访问审计）
 - B-27 统一审计日志服务（跨域审计主表、查询接口与应急旁路专项报表）
+- B-28 Trace 与链路埋点中间件（HTTP、Outbox、通知、WebSocket traceId 透传）
 
 当前项目已添加数据库能力。
 
@@ -38,6 +40,7 @@
    - GET /api/menu-boundaries
    - GET /api/platforms
    - GET /api/platforms/{platformCode}
+   - GET /api/realtime-link/spec
    - GET /api/object-dictionary
    - GET /api/object-dictionary/page?page=1&pageSize=3
    - GET /api/object-chain/segment/{segmentId}
@@ -155,6 +158,7 @@
 - B-25 模型网关一期框架：注册模型、管理版本、灰度发布、激活/回退、模拟推理、失败超时规则兜底与模型域审计
 - B-26 特征视图与算法脱敏接口：算法工程师默认只能查询 `MASKED` 特征，`DETAIL` 明细需限时授权并全量审计
 - B-27 统一审计日志服务：登录、旁路、权限变更、派单、模型回退和高风险访问统一进入 `audit_log`
+- B-28 Trace 与链路埋点中间件：HTTP、Outbox、通知、WebSocket 推送统一透传 `traceId`
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -163,6 +167,7 @@
 - A-04 约束表达：access = entryPermission && menuPermission && dataScope && topicScope
 - A-04 角色覆盖：平台管理员、区域调度员、巡检人员、算法工程师、领导只读
 - A-04 测试约束：跨区订阅拒绝、巡检仅本人任务、算法默认脱敏视图
+- A-05 实时链路口径：`trace_id / event_time / recv_time / is_backfill / last_ack_seq`
 
 ## A-03 接口说明
 
@@ -181,6 +186,19 @@
 - 请求体示例：
    - {"zTop":2.50,"zBottom":-1.20,"buryDepth":3.70,"elevationRef":"MSL","tolerance":0.05}
 - 规则：bury_depth 应满足 |z_top - z_bottom|，支持容差配置。
+
+## A-05 接口说明
+
+### 1) 实时链路指标口径表
+- GET /api/realtime-link/spec
+- 用途：返回 A-05 统一字段口径、链路阶段要求与衍生指标定义。
+- 当前冻结字段：
+   - `trace_id / traceId`
+   - `event_time / eventTime`
+   - `recv_time / recvTime`
+   - `is_backfill / isBackfill`
+   - `last_ack_seq / lastAckSeq`
+- 说明：前端接收与地图渲染阶段当前仅冻结口径，不在本仓库内验收。
 
 ## B-01 契约说明
 
@@ -1376,7 +1394,7 @@
 - 新增表：`websocket_connection / websocket_subscription / websocket_push_message / websocket_ack`。
 - 通知转换 topic：`user.{userId}.workorder.notifications` 与 `region.{regionId}.workorder.notifications`。
 - 客户端重连订阅后，服务端按 `websocket_ack.last_ack_seq` 补发 `seq_no > last_ack_seq` 的消息。
-- 推送 payload 固定包含 `seqNo / messageId / topic / type / sourceNotificationId / title / content / createdAt`。
+- 推送 payload 固定包含 `seqNo / messageId / topic / type / sourceNotificationId / traceId / title / content / createdAt`。
 
 ### 4) 配置项
 - `WEBSOCKET_ALLOWED_ORIGINS`：允许 Origin，默认 `http://localhost:3000,http://localhost:5173,http://localhost:8080`。

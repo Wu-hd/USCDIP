@@ -652,13 +652,13 @@ INSERT INTO outbox_event (
     retry_count, next_retry_time, created_at, updated_at, claimed_by, claimed_at, sent_at, last_error
 ) VALUES
 ('OBE-SEED-WO-DISPATCHED-001', 'WORK_ORDER', 'WO-B22-DISPATCHED-001', 'WORK_ORDER_DISPATCHED',
- '{"workOrderId":"WO-B22-DISPATCHED-001","incidentId":"INC-ALERT-SEED-001","status":"DISPATCHED","assigneeUserId":"U-INSPECT-001","assignee":"zhangsan","versionNo":2,"writebackType":null,"occurredAt":"2026-04-23T09:20:00"}',
+ '{"workOrderId":"WO-B22-DISPATCHED-001","incidentId":"INC-ALERT-SEED-001","status":"DISPATCHED","assigneeUserId":"U-INSPECT-001","assignee":"zhangsan","versionNo":2,"writebackType":null,"traceId":"TRACE-NOTIFY-SEED-001","occurredAt":"2026-04-23T09:20:00"}',
  'TRACE-NOTIFY-SEED-001', 'SENT', 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, NULL, CURRENT_TIMESTAMP, NULL),
 ('OBE-SEED-WO-COMPLETED-001', 'WORK_ORDER', 'WO-B22-COMPLETED-001', 'WORK_ORDER_COMPLETED',
- '{"workOrderId":"WO-B22-COMPLETED-001","incidentId":"INC-CAL-SEED-001","status":"COMPLETED","assigneeUserId":"U-INSPECT-001","assignee":"zhangsan","versionNo":4,"writebackType":"FALSE_POSITIVE","occurredAt":"2026-04-23T14:20:00"}',
+ '{"workOrderId":"WO-B22-COMPLETED-001","incidentId":"INC-CAL-SEED-001","status":"COMPLETED","assigneeUserId":"U-INSPECT-001","assignee":"zhangsan","versionNo":4,"writebackType":"FALSE_POSITIVE","traceId":"TRACE-NOTIFY-SEED-002","occurredAt":"2026-04-23T14:20:00"}',
  'TRACE-NOTIFY-SEED-002', 'SENT', 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, NULL, CURRENT_TIMESTAMP, NULL),
 ('OBE-SEED-WO-CLOSED-001', 'WORK_ORDER', 'WO-B22-CLOSED-001', 'WORK_ORDER_CLOSED',
- '{"workOrderId":"WO-B22-CLOSED-001","incidentId":"INC-CAL-SEED-002","status":"CLOSED","assigneeUserId":"U-INSPECT-001","assignee":"zhangsan","versionNo":5,"writebackType":"MISSED_REPORT","occurredAt":"2026-04-23T16:40:00"}',
+ '{"workOrderId":"WO-B22-CLOSED-001","incidentId":"INC-CAL-SEED-002","status":"CLOSED","assigneeUserId":"U-INSPECT-001","assignee":"zhangsan","versionNo":5,"writebackType":"MISSED_REPORT","traceId":"TRACE-NOTIFY-SEED-003","occurredAt":"2026-04-23T16:40:00"}',
  'TRACE-NOTIFY-SEED-003', 'SENT', 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, NULL, CURRENT_TIMESTAMP, NULL);
 
 INSERT INTO idempotent_record (
@@ -691,18 +691,18 @@ INSERT INTO dead_letter (
 
 INSERT INTO notification_message (
     notification_id, source_event_id, idempotent_key, aggregate_type, aggregate_id, event_type,
-    recipient_user_id, recipient_username, title, content, status, created_at, updated_at, completed_at, last_error
+    trace_id, recipient_user_id, recipient_username, title, content, status, created_at, updated_at, completed_at, last_error
 ) VALUES
 ('NOTIFY-B23-SENT-001', 'OBE-SEED-WO-DISPATCHED-001', 'WO-B22-DISPATCHED-001:SEND_NOTIFICATION:2', 'WORK_ORDER', 'WO-B22-DISPATCHED-001', 'WORK_ORDER_DISPATCHED',
- 'U-INSPECT-001', 'zhangsan', '工单已派发：WO-B22-DISPATCHED-001',
+ 'TRACE-NOTIFY-SEED-001', 'U-INSPECT-001', 'zhangsan', '工单已派发：WO-B22-DISPATCHED-001',
  'eventType=WORK_ORDER_DISPATCHED, workOrderId=WO-B22-DISPATCHED-001, incidentId=INC-ALERT-SEED-001, status=DISPATCHED, assignee=zhangsan',
  'SENT', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL),
 ('NOTIFY-B23-FAILED-001', 'OBE-SEED-WO-COMPLETED-001', 'WO-B22-COMPLETED-001:SEND_NOTIFICATION:4', 'WORK_ORDER', 'WO-B22-COMPLETED-001', 'WORK_ORDER_COMPLETED',
- 'U-INSPECT-001', 'zhangsan', '工单已完成：WO-B22-COMPLETED-001',
+ 'TRACE-NOTIFY-SEED-002', 'U-INSPECT-001', 'zhangsan', '工单已完成：WO-B22-COMPLETED-001',
  'eventType=WORK_ORDER_COMPLETED, workOrderId=WO-B22-COMPLETED-001, incidentId=INC-CAL-SEED-001, status=COMPLETED, assignee=zhangsan',
  'PARTIAL_FAILED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, 'SMS:seed sms channel retry pending'),
 ('NOTIFY-B23-DEAD-001', 'OBE-SEED-WO-CLOSED-001', 'WO-B22-CLOSED-001:SEND_NOTIFICATION:5', 'WORK_ORDER', 'WO-B22-CLOSED-001', 'WORK_ORDER_CLOSED',
- 'U-INSPECT-001', 'zhangsan', '工单已关闭：WO-B22-CLOSED-001',
+ 'TRACE-NOTIFY-SEED-003', 'U-INSPECT-001', 'zhangsan', '工单已关闭：WO-B22-CLOSED-001',
  'eventType=WORK_ORDER_CLOSED, workOrderId=WO-B22-CLOSED-001, incidentId=INC-CAL-SEED-002, status=CLOSED, assignee=zhangsan',
  'DEAD', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'SMS:seed notification sms channel dead letter');
 
@@ -741,17 +741,17 @@ INSERT INTO websocket_subscription (
 ('WSS-SEED-REGION-001', 'WSC-SEED-DISCONNECTED-001', 'STOMP-SEED-002', 'sub-region-001', 'U-DISPATCH-001', 'region.REGION-HZ.workorder.notifications', 'CLOSED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO websocket_push_message (
-    seq_no, message_id, topic, recipient_user_id, source_notification_id, message_type, title, content, payload, created_at
+    seq_no, message_id, topic, recipient_user_id, source_notification_id, trace_id, message_type, title, content, payload, created_at
 ) VALUES
-(100, 'WSP-SEED-USER-001', 'user.U-INSPECT-001.workorder.notifications', 'U-INSPECT-001', 'NOTIFY-B23-SENT-001', 'WORK_ORDER_NOTIFICATION',
+(100, 'WSP-SEED-USER-001', 'user.U-INSPECT-001.workorder.notifications', 'U-INSPECT-001', 'NOTIFY-B23-SENT-001', 'TRACE-NOTIFY-SEED-001', 'WORK_ORDER_NOTIFICATION',
  '工单已派发：WO-B22-DISPATCHED-001',
  'eventType=WORK_ORDER_DISPATCHED, workOrderId=WO-B22-DISPATCHED-001, incidentId=INC-ALERT-SEED-001, status=DISPATCHED, assignee=zhangsan',
- '{"seqNo":100,"messageId":"WSP-SEED-USER-001","topic":"user.U-INSPECT-001.workorder.notifications","type":"WORK_ORDER_NOTIFICATION","sourceNotificationId":"NOTIFY-B23-SENT-001","title":"工单已派发：WO-B22-DISPATCHED-001"}',
+ '{"seqNo":100,"messageId":"WSP-SEED-USER-001","topic":"user.U-INSPECT-001.workorder.notifications","type":"WORK_ORDER_NOTIFICATION","sourceNotificationId":"NOTIFY-B23-SENT-001","traceId":"TRACE-NOTIFY-SEED-001","title":"工单已派发：WO-B22-DISPATCHED-001"}',
  CURRENT_TIMESTAMP),
-(101, 'WSP-SEED-REGION-001', 'region.REGION-HZ.workorder.notifications', 'U-INSPECT-001', 'NOTIFY-B23-SENT-001', 'WORK_ORDER_NOTIFICATION',
+(101, 'WSP-SEED-REGION-001', 'region.REGION-HZ.workorder.notifications', 'U-INSPECT-001', 'NOTIFY-B23-SENT-001', 'TRACE-NOTIFY-SEED-001', 'WORK_ORDER_NOTIFICATION',
  '工单已派发：WO-B22-DISPATCHED-001',
  'eventType=WORK_ORDER_DISPATCHED, workOrderId=WO-B22-DISPATCHED-001, incidentId=INC-ALERT-SEED-001, status=DISPATCHED, assignee=zhangsan',
- '{"seqNo":101,"messageId":"WSP-SEED-REGION-001","topic":"region.REGION-HZ.workorder.notifications","type":"WORK_ORDER_NOTIFICATION","sourceNotificationId":"NOTIFY-B23-SENT-001","title":"工单已派发：WO-B22-DISPATCHED-001"}',
+ '{"seqNo":101,"messageId":"WSP-SEED-REGION-001","topic":"region.REGION-HZ.workorder.notifications","type":"WORK_ORDER_NOTIFICATION","sourceNotificationId":"NOTIFY-B23-SENT-001","traceId":"TRACE-NOTIFY-SEED-001","title":"工单已派发：WO-B22-DISPATCHED-001"}',
  CURRENT_TIMESTAMP);
 
 INSERT INTO websocket_ack (

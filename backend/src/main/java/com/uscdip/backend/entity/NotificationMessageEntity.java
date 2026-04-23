@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_notification_source_event", columnList = "source_event_id"),
                 @Index(name = "idx_notification_aggregate", columnList = "aggregate_type,aggregate_id"),
                 @Index(name = "idx_notification_recipient_status", columnList = "recipient_user_id,recipient_username,status"),
+                @Index(name = "idx_notification_trace", columnList = "trace_id"),
                 @Index(name = "idx_notification_created", columnList = "created_at")
         }
 )
@@ -47,6 +48,9 @@ public class NotificationMessageEntity {
 
     @Column(name = "event_type", nullable = false, length = 64)
     private String eventType;
+
+    @Column(name = "trace_id", nullable = false, length = 128)
+    private String traceId;
 
     @Column(name = "recipient_user_id", length = 64)
     private String recipientUserId;

@@ -3,6 +3,7 @@ package com.uscdip.backend.service;
 import com.uscdip.backend.entity.OutboxEventEntity;
 import com.uscdip.backend.model.OutboxEventStatus;
 import com.uscdip.backend.repository.OutboxEventRepository;
+import com.uscdip.backend.support.TraceIdContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -97,7 +98,7 @@ public class OutboxRelayService {
 
     private void dispatchClaimedEvent(OutboxEventEntity event, LocalDateTime now) {
         try {
-            OutboxDispatchResult result = outboxDispatcher.dispatch(event);
+            OutboxDispatchResult result = TraceIdContext.withTraceId(event.getTraceId(), () -> outboxDispatcher.dispatch(event));
             if (result != null && result.success()) {
                 markSent(event, now);
                 return;

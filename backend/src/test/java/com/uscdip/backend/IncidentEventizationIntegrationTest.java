@@ -11,15 +11,19 @@ import com.uscdip.backend.entity.IncidentEntity;
 import com.uscdip.backend.entity.TsMetricEntity;
 import com.uscdip.backend.repository.AlertCaseRepository;
 import com.uscdip.backend.repository.IncidentRepository;
+import com.uscdip.backend.repository.OutboxEventRepository;
 import com.uscdip.backend.repository.TsMetricRepository;
 import com.uscdip.backend.service.AlertCaseLifecycleService;
 import com.uscdip.backend.service.LocalTokenService;
+import com.uscdip.backend.service.OutboxRelayScheduler;
+import com.uscdip.backend.service.OutboxService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -68,13 +72,20 @@ class IncidentEventizationIntegrationTest {
     private IncidentRepository incidentRepository;
 
     @Autowired
+    private OutboxEventRepository outboxEventRepository;
+
+    @Autowired
     private AlertCaseLifecycleService alertCaseLifecycleService;
+
+    @MockBean
+    private OutboxRelayScheduler outboxRelayScheduler;
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
         registry.add("backend.oidc.enabled", () -> "true");
         registry.add("backend.oidc.issuer-uri", () -> ISSUER_URI);
         registry.add("backend.oidc.access-token-secret", () -> "test-local-access-token-secret");
+        registry.add("backend.outbox.relay-fixed-delay-ms", () -> "3600000");
     }
 
     @AfterAll
@@ -113,6 +124,12 @@ class IncidentEventizationIntegrationTest {
         Assertions.assertEquals(1L, incidentRepository.findAll().stream()
                 .filter(incident -> openCaseId.equals(incident.getSourceCaseId()))
                 .count());
+        Assertions.assertTrue(hasOutboxEvent(openIncident.getIncidentId(), OutboxService.EVENT_INCIDENT_OPENED));
+        Assertions.assertTrue(hasOutboxEvent(openIncident.getIncidentId(), OutboxService.EVENT_INCIDENT_UPDATED));
+        Assertions.assertTrue(outboxEventRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc(
+                        OutboxService.AGGREGATE_TYPE_INCIDENT,
+                        openIncident.getIncidentId()
+                ).stream().allMatch(event -> "NEW".equals(event.getStatus())));
 
         MvcResult reviewResult = mockMvc.perform(post("/api/alerts/evaluate")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -128,6 +145,7 @@ class IncidentEventizationIntegrationTest {
                 .path("data").path("alertRecords").get(0).path("caseId").asText();
         IncidentEntity reviewIncident = incidentRepository.findBySourceCaseId(reviewCaseId).orElseThrow();
         Assertions.assertEquals("PENDING_CONFIRMATION", reviewIncident.getStatus());
+        Assertions.assertTrue(hasOutboxEvent(reviewIncident.getIncidentId(), OutboxService.EVENT_INCIDENT_OPENED));
     }
 
     @Test
@@ -177,6 +195,7 @@ class IncidentEventizationIntegrationTest {
         Assertions.assertEquals("RESOLVED", staleIncidentAfter.getStatus());
         Assertions.assertEquals("AUTO_RECOVERED", staleIncidentAfter.getCloseReason());
         Assertions.assertNotNull(staleIncidentAfter.getResolvedAt());
+        Assertions.assertTrue(hasOutboxEvent(staleIncidentAfter.getIncidentId(), OutboxService.EVENT_INCIDENT_RESOLVED));
     }
 
     @Test
@@ -203,6 +222,7 @@ class IncidentEventizationIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("OPEN"))
                 .andExpect(jsonPath("$.data.confirmedBy").value("U-ADMIN-001"))
                 .andExpect(jsonPath("$.data.confirmedAt").exists());
+        Assertions.assertTrue(hasOutboxEvent("INC-ALERT-SEED-002", OutboxService.EVENT_INCIDENT_CONFIRMED));
 
         mockMvc.perform(post("/api/incidents/INC-ALERT-SEED-001/confirm")
                         .header("Authorization", "Bearer " + adminToken.accessToken()))
@@ -250,6 +270,16 @@ class IncidentEventizationIntegrationTest {
                 LocalDateTime.now()
         );
         return tsMetricRepository.save(metric);
+    }
+
+    private boolean hasOutboxEvent(String incidentId, String eventType) {
+        return outboxEventRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc(
+                        OutboxService.AGGREGATE_TYPE_INCIDENT,
+                        incidentId
+                ).stream()
+                .anyMatch(event -> eventType.equals(event.getEventType())
+                        && event.getPayload().contains("\"incidentId\":\"" + incidentId + "\"")
+                        && event.getTraceId() != null);
     }
 
     private String dqLevel(double dqScore) {

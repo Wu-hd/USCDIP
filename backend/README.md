@@ -14,6 +14,7 @@
 - B-17 告警规则引擎一期骨架（阈值规则、组合规则、自动/手动评估与告警记录查询）
 - B-18 告警去重 / 抑制 / 升级服务（alert_policy / alert_case、去重窗口、抑制窗口、升级与恢复扫描）
 - B-19 事件化服务（incident 事件化、最小 incident API、人工确认与自动恢复）
+- B-20 Outbox 与 Relay（outbox_event、事务事件写入、Relay 认领发送、失败重试与死信）
 
 当前项目已添加数据库能力。
 
@@ -110,6 +111,7 @@
 - B-15 标定与漂移管理接口：版本化标定档案、漂移复核、到期提醒工单、校正预览
 - B-16 边缘断网补偿接口：`batchNo / seqNo / originalSampleTime` 必填、乱序可接受、重复幂等与冲突重复直接拒绝
 - B-17 告警规则引擎一期骨架：阈值/组合规则、DQ 降权置信度、自动触发与手动回放评估
+- B-20 Outbox 与 Relay：事务内写 `outbox_event`，定时 Relay 认领发送，支持失败重试和 DEAD 死信状态
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -1113,6 +1115,56 @@
 - `INCIDENT_NOT_FOUND`
 - `INCIDENT_INVALID_STATE`
 
+## B-20 Outbox 与 Relay 说明
+
+### 1) 目标能力
+- 当前项目已经接入数据库，B-20 是在现有 H2 / PostgreSQL / TimescaleDB 配置上扩展 Outbox 能力，不是重新引入数据库。
+- 业务服务在同一事务中同时写入业务表和 `outbox_event`，一期先接入 B-19 incident 事件化链路。
+- Relay 使用 Spring `@Scheduled` 定时扫描 `NEW / FAILED` 且到期的事件，先认领为 `SENDING`，再通过可替换的 `OutboxDispatcher` 发送。
+- 默认 `LoggingOutboxDispatcher` 只记录结构化日志，不引入 Kafka / Redis / Flyway / Quartz；后续可替换为真实消息总线实现。
+
+### 2) outbox_event 字段与状态
+- 核心字段：`event_id / aggregate_type / aggregate_id / event_type / payload / trace_id / status / retry_count / next_retry_time / created_at / updated_at / claimed_by / claimed_at / sent_at / last_error`。
+- 状态固定为：
+   - `NEW`：待发送
+   - `SENDING`：已被 Relay 实例认领
+   - `SENT`：已发送成功
+   - `FAILED`：发送失败，等待下一次重试
+   - `DEAD`：超过最大重试次数，进入人工处理
+- 目前已接入 incident 事件类型：`INCIDENT_OPENED / INCIDENT_UPDATED / INCIDENT_RESOLVED / INCIDENT_CONFIRMED`。
+- `payload` 固定包含：`incidentId / status / severity / versionNo / sourceCaseId / sourceAlertId / traceId / occurredAt`。
+
+### 3) Relay 配置项
+- `OUTBOX_RELAY_FIXED_DELAY_MS`：Relay 扫描间隔，默认 `30000`
+- `OUTBOX_BATCH_SIZE`：每批认领数量，默认 `20`
+- `OUTBOX_MAX_ATTEMPTS`：最大发送尝试次数，默认 `3`
+- `OUTBOX_RETRY_BASE_DELAY_SECONDS`：指数退避基础秒数，默认 `30`
+- `OUTBOX_CLAIM_TIMEOUT_SECONDS`：`SENDING` 认领超时秒数，默认 `120`
+- `OUTBOX_INSTANCE_ID`：Relay 实例标识，默认 `local-relay-1`
+
+### 4) 数据库与测试数据说明
+- B-20 继续复用已有三套数据库配置：
+   - H2：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL / Timescale 首次联调仍需手动导入测试数据：
+   - `psql -U postgres -d uscdip -f src/main/resources/data.sql`
+- `src/main/resources/data.sql` 已新增 B-20 种子：
+   - `OBE-SEED-NEW-001`：`NEW` 待发送样例
+   - `OBE-SEED-FAILED-001`：`FAILED` 可重试样例
+   - `OBE-SEED-SENT-001`：`SENT` 已发送样例
+   - `OBE-SEED-DEAD-001`：`DEAD` 死信样例
+
+### 5) SQL 联调示例
+- 查看 Outbox 全量状态：
+   - `SELECT event_id, aggregate_id, event_type, status, retry_count, next_retry_time, sent_at, last_error FROM outbox_event ORDER BY created_at;`
+- 按 trace_id 串联 incident 与 outbox：
+   - `SELECT i.incident_id, i.status AS incident_status, o.event_type, o.status AS outbox_status, o.trace_id FROM incident i JOIN outbox_event o ON o.aggregate_id = i.incident_id WHERE o.trace_id = 'TRACE-INGEST-SEED-001';`
+- 启动后观察 Relay 日志：
+   - `mvn spring-boot:run`
+   - 日志中出现 `outbox dispatch eventId=... eventType=... aggregateType=INCIDENT ...` 表示默认日志发送器已接管发送。
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -1149,7 +1201,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 / B-17 / B-18 / B-19 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case 与 incident 事件化种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 / B-18 / B-19 / B-20 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化与 outbox_event 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json

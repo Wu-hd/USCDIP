@@ -583,3 +583,20 @@ INSERT INTO gateway_risk_audit (
 ('EMERGENCY_LOGIN', '/api/auth/emergency/login', 'POST', NULL, NULL, 'ALLOW', 'ALLOW', 'HIGH', '10.10.10.10', 'TRACE-GATEWAY-SEED-001', CURRENT_TIMESTAMP),
 ('AUTH_ADMIN_DISABLE', '/api/auth/admin/users/*/disable', 'POST', 'U-B06-BLOCKED-001', 'STANDARD', 'DENY', 'BLOCKLIST_MATCHED', 'CRITICAL', '203.0.113.77', 'TRACE-GATEWAY-SEED-002', CURRENT_TIMESTAMP),
 ('AUTH_REFRESH', '/api/auth/refresh', 'POST', 'U-DISPATCH-001', 'STANDARD', 'DENY', 'RATE_LIMITED', 'HIGH', '127.0.0.1', 'TRACE-GATEWAY-SEED-003', CURRENT_TIMESTAMP);
+
+INSERT INTO outbox_event (
+    event_id, aggregate_type, aggregate_id, event_type, payload, trace_id, status,
+    retry_count, next_retry_time, created_at, updated_at, claimed_by, claimed_at, sent_at, last_error
+) VALUES
+('OBE-SEED-NEW-001', 'INCIDENT', 'INC-ALERT-SEED-001', 'INCIDENT_OPENED',
+ '{"incidentId":"INC-ALERT-SEED-001","status":"OPEN","severity":"HIGH","versionNo":1,"sourceCaseId":"ALCASE-SEED-001","sourceAlertId":"ALERT-SEED-001","traceId":"TRACE-INGEST-SEED-001","occurredAt":"2026-04-23T08:00:00"}',
+ 'TRACE-INGEST-SEED-001', 'NEW', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, NULL, NULL, NULL),
+('OBE-SEED-FAILED-001', 'INCIDENT', 'INC-ALERT-SEED-002', 'INCIDENT_UPDATED',
+ '{"incidentId":"INC-ALERT-SEED-002","status":"PENDING_CONFIRMATION","severity":"MEDIUM","versionNo":1,"sourceCaseId":"ALCASE-SEED-007","sourceAlertId":"ALERT-SEED-004","traceId":"TRACE-INGEST-SEED-003","occurredAt":"2026-04-22T21:20:00"}',
+ 'TRACE-INGEST-SEED-003', 'FAILED', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, NULL, NULL, 'seed retry candidate'),
+('OBE-SEED-SENT-001', 'INCIDENT', 'INC-ALERT-SEED-003', 'INCIDENT_RESOLVED',
+ '{"incidentId":"INC-ALERT-SEED-003","status":"RESOLVED","severity":"HIGH","versionNo":2,"sourceCaseId":"ALCASE-SEED-006","sourceAlertId":"ALERT-SEED-010","traceId":"TRACE-ALERT-SEED-RECOVERED","occurredAt":"2026-04-22T10:00:00"}',
+ 'TRACE-ALERT-SEED-RECOVERED', 'SENT', 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, NULL, CURRENT_TIMESTAMP, NULL),
+('OBE-SEED-DEAD-001', 'INCIDENT', 'INC-ALERT-SEED-004', 'INCIDENT_UPDATED',
+ '{"incidentId":"INC-ALERT-SEED-004","status":"FALSE_POSITIVE","severity":"HIGH","versionNo":2,"sourceCaseId":"ALCASE-SEED-002","sourceAlertId":"ALERT-SEED-002","traceId":"TRACE-INGEST-SEED-006","occurredAt":"2026-04-24T09:30:00"}',
+ 'TRACE-INGEST-SEED-006', 'DEAD', 3, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, NULL, NULL, 'seed dead letter sample');

@@ -49,15 +49,18 @@ public class IncidentEventizationService {
     private final IncidentRepository incidentRepository;
     private final ObjectScopeBindingRepository objectScopeBindingRepository;
     private final ObjectScopeService objectScopeService;
+    private final OutboxService outboxService;
 
     public IncidentEventizationService(
             IncidentRepository incidentRepository,
             ObjectScopeBindingRepository objectScopeBindingRepository,
-            ObjectScopeService objectScopeService
+            ObjectScopeService objectScopeService,
+            OutboxService outboxService
     ) {
         this.incidentRepository = incidentRepository;
         this.objectScopeBindingRepository = objectScopeBindingRepository;
         this.objectScopeService = objectScopeService;
+        this.outboxService = outboxService;
     }
 
     @Transactional
@@ -115,6 +118,7 @@ public class IncidentEventizationService {
 
         incidentRepository.save(incident);
         syncIncidentScope(incident, now);
+        outboxService.publishIncidentChanged(incident, isNew, now);
     }
 
     @Transactional
@@ -133,6 +137,7 @@ public class IncidentEventizationService {
         incident.setUpdatedAt(now);
         incident.setVersionNo(safeVersion(incident.getVersionNo()) + 1L);
         incidentRepository.save(incident);
+        outboxService.publishIncidentResolved(incident, now);
     }
 
     @Transactional(readOnly = true)
@@ -192,6 +197,7 @@ public class IncidentEventizationService {
         incident.setUpdatedAt(now);
         incident.setVersionNo(safeVersion(incident.getVersionNo()) + 1L);
         incidentRepository.save(incident);
+        outboxService.publishIncidentConfirmed(incident, now);
         return toResponse(incident);
     }
 

@@ -43,3 +43,10 @@ backend:
     retry-fixed-delay-ms: ${TSDB_RETRY_FIXED_DELAY_MS:30000}
     retry-base-delay-seconds: ${TSDB_RETRY_BASE_DELAY_SECONDS:30}
     max-attempts: ${TSDB_MAX_ATTEMPTS:3}
+  outbox:
+    relay-fixed-delay-ms: ${OUTBOX_RELAY_FIXED_DELAY_MS:30000}
+    batch-size: ${OUTBOX_BATCH_SIZE:20}
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:3}
+    retry-base-delay-seconds: ${OUTBOX_RETRY_BASE_DELAY_SECONDS:30}
+    claim-timeout-seconds: ${OUTBOX_CLAIM_TIMEOUT_SECONDS:120}
+    instance-id: ${OUTBOX_INSTANCE_ID:local-relay-1}

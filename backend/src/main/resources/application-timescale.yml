@@ -52,3 +52,9 @@ backend:
     instance-id: ${OUTBOX_INSTANCE_ID:local-relay-1}
   idempotency:
     max-attempts: ${IDEMPOTENCY_MAX_ATTEMPTS:3}
+  notification:
+    channels: ${NOTIFICATION_CHANNELS:IN_APP,SMS,WECHAT}
+    fail-channels: ${NOTIFICATION_FAIL_CHANNELS:}
+    max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:3}
+    retry-base-delay-seconds: ${NOTIFICATION_RETRY_BASE_DELAY_SECONDS:30}
+    retry-fixed-delay-ms: ${NOTIFICATION_RETRY_FIXED_DELAY_MS:30000}

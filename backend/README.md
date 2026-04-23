@@ -17,6 +17,7 @@
 - B-20 Outbox 与 Relay（outbox_event、事务事件写入、Relay 认领发送、失败重试与死信）
 - B-21 幂等键与死信处理（idempotent_record、dead_letter、工单创建幂等消费）
 - B-22 工单服务（创建、派单、接单、转派、完成、关闭、回写与数据范围过滤）
+- B-23 通知服务（稳定工单事件消费、多通道模拟发送、失败重试与死信）
 
 当前项目已添加数据库能力。
 
@@ -68,6 +69,10 @@
    - POST /api/workorders/{workOrderId}/complete
    - POST /api/workorders/{workOrderId}/close
    - POST /api/workorders/{workOrderId}/writeback
+   - GET /api/notifications
+   - GET /api/notifications/{notificationId}
+   - POST /api/notifications/consume-outbox
+   - POST /api/notifications/{notificationId}/retry
    - POST /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles/active?metricCode=PRESSURE
@@ -125,6 +130,7 @@
 - B-20 Outbox 与 Relay：事务内写 `outbox_event`，定时 Relay 认领发送，支持失败重试和 DEAD 死信状态
 - B-21 幂等键与死信处理：消费侧以 `incident_id + action_type + version` 生成幂等键，记录 `idempotent_record`，失败超过阈值写入 `dead_letter`
 - B-22 工单服务：支持一事件多工单、工单状态流转、回写记录、对象范围继承与工单 Outbox 事件
+- B-23 通知服务：只消费稳定工单事件，生成 `notification_message / notification_delivery`，支持多通道模拟发送、重试与死信
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -1277,6 +1283,57 @@
 - 查看工单 Outbox：
    - `SELECT event_id, aggregate_id, event_type, status, payload FROM outbox_event WHERE aggregate_type = 'WORK_ORDER' ORDER BY created_at DESC;`
 
+## B-23 通知服务说明
+
+### 1) 目标能力
+- 当前项目已经接入数据库，B-23 继续复用现有 H2 / PostgreSQL / TimescaleDB 配置，不新增 Redis、Kafka、Flyway 或真实第三方通知 SDK。
+- 通知服务只消费稳定工单 Outbox 事件，不消费原始告警流，避免告警风暴直接放大到通知链路。
+- 新增 `notification_message` 与 `notification_delivery`，一条业务通知按 `IN_APP / SMS / WECHAT / EMAIL` 等通道拆成多条发送记录。
+- 本轮通道为本地模拟发送器：`IN_APP` 写库即成功，其他通道生成本地 target 并按配置模拟成功或失败。
+
+### 2) 事件、幂等与重试
+- 消费事件白名单：`WORK_ORDER_CREATED / WORK_ORDER_DISPATCHED / WORK_ORDER_ACCEPTED / WORK_ORDER_TRANSFERRED / WORK_ORDER_COMPLETED / WORK_ORDER_CLOSED / WORK_ORDER_WRITEBACK_RECORDED`，并预留 `WORK_ORDER_ESCALATED`。
+- 幂等规则复用 B-21：`work_order_id + SEND_NOTIFICATION + versionNo`；`source_event_id` 也唯一约束，重复扫描不会重复生成通知。
+- 通道失败进入 `notification_delivery.FAILED`，到达 `next_retry_at` 后由定时任务或手动接口重试。
+- 超过最大尝试次数后进入 `notification_delivery.DEAD`，同步写入消费侧 `dead_letter`，action type 为 `SEND_NOTIFICATION`。
+
+### 3) 接口与权限
+- `GET /api/notifications`：分页查询，支持 `status / channel / recipient / sourceEventId / workOrderId` 过滤。
+- `GET /api/notifications/{notificationId}`：通知详情，包含各通道 delivery。
+- `POST /api/notifications/consume-outbox`：手动消费稳定工单 Outbox，便于本地联调。
+- `POST /api/notifications/{notificationId}/retry`：手动重试失败或死信通道。
+- 查询使用 `MENU:WORKORDER:READ`，按工单对象范围过滤；通知接收人也可看到自己的通知。手动消费与重试使用 `MENU:WORKORDER:DISPATCH`。
+
+### 4) 配置项
+- `NOTIFICATION_CHANNELS`：默认 `IN_APP,SMS,WECHAT`。
+- `NOTIFICATION_FAIL_CHANNELS`：默认空；测试可配置如 `SMS` 表示首尝试失败，`SMS_ALWAYS` 表示持续失败。
+- `NOTIFICATION_MAX_ATTEMPTS`：通道最大尝试次数，默认 `3`。
+- `NOTIFICATION_RETRY_BASE_DELAY_SECONDS`：指数退避基础秒数，默认 `30`。
+- `NOTIFICATION_RETRY_FIXED_DELAY_MS`：通知重试扫描间隔，默认 `30000`。
+
+### 5) 数据库与测试数据说明
+- B-23 继续复用已有三套数据库配置：
+   - H2：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL / Timescale 首次联调仍需手动导入测试数据：
+   - `psql -U postgres -d uscdip -f src/main/resources/data.sql`
+- `src/main/resources/data.sql` 已新增 B-23 种子：
+   - `OBE-SEED-WO-DISPATCHED-001 / OBE-SEED-WO-COMPLETED-001 / OBE-SEED-WO-CLOSED-001`：稳定工单 Outbox 样例
+   - `NOTIFY-B23-SENT-001 / NOTIFY-B23-FAILED-001 / NOTIFY-B23-DEAD-001`：成功、待重试、死信通知样例
+   - `ND-B23-*`：`IN_APP / SMS / WECHAT` 多通道 delivery 样例
+   - `DLQ-SEED-NOTIFY-SMS-001`：通知通道死信样例
+   - `NOTIFICATION_LIST / NOTIFICATION_DETAIL / NOTIFICATION_CONSUME_OUTBOX / NOTIFICATION_RETRY`：Gateway 路由策略样例
+
+### 6) SQL 联调示例
+- 查看通知主记录：
+   - `SELECT notification_id, source_event_id, aggregate_id, event_type, recipient_username, status, last_error FROM notification_message ORDER BY created_at DESC;`
+- 查看通道发送状态：
+   - `SELECT notification_id, channel, target, status, attempt_count, next_retry_at, sent_at, last_error FROM notification_delivery ORDER BY notification_id, channel;`
+- 串联工单、Outbox、通知与死信：
+   - `SELECT w.work_order_id, o.event_type, n.notification_id, d.channel, d.status, dl.dead_letter_id FROM work_order w JOIN outbox_event o ON o.aggregate_id = w.work_order_id LEFT JOIN notification_message n ON n.source_event_id = o.event_id LEFT JOIN notification_delivery d ON d.notification_id = n.notification_id LEFT JOIN dead_letter dl ON dl.source_event_id = o.event_id WHERE o.aggregate_type = 'WORK_ORDER';`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -1313,7 +1370,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter 与 work_order 闭环种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 / B-23 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter、work_order 闭环与 notification 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json
@@ -1435,6 +1492,8 @@
    - device：3 条
    - incident：4 条
    - work_order：9 条
+   - notification_message：3 条
+   - notification_delivery：9 条
    - model_result：2 条
 - 已生成 B-11 设备台账联调数据：
    - `device`：3 条，覆盖 `ONLINE / WARNING / OFFLINE`

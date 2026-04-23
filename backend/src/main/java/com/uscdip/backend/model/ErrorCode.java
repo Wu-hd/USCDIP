@@ -59,6 +59,8 @@ public enum ErrorCode {
     ALERT_POLICY_NOT_FOUND("ALERT_POLICY_NOT_FOUND", "Alert policy was not found"),
     ALERT_POLICY_INVALID("ALERT_POLICY_INVALID", "Alert policy is invalid"),
     ALERT_CASE_NOT_FOUND("ALERT_CASE_NOT_FOUND", "Alert case was not found"),
+    INCIDENT_NOT_FOUND("INCIDENT_NOT_FOUND", "Incident was not found"),
+    INCIDENT_INVALID_STATE("INCIDENT_INVALID_STATE", "Incident state transition is invalid"),
     CALIBRATION_PROFILE_NOT_FOUND("CALIBRATION_PROFILE_NOT_FOUND", "Calibration profile was not found"),
     CALIBRATION_PROFILE_CONFLICT("CALIBRATION_PROFILE_CONFLICT", "Calibration profile is invalid or conflicts with existing data"),
     CALIBRATION_DRIFT_EVALUATION_INVALID("CALIBRATION_DRIFT_EVALUATION_INVALID", "Calibration drift evaluation payload is invalid"),

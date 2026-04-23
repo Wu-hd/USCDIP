@@ -427,11 +427,26 @@ public class CalibrationManagementService {
                 "INC-CAL-" + UUID.randomUUID(),
                 device.getSegmentId(),
                 device.getNodeId(),
+                device.getDeviceId(),
+                IncidentEventizationService.INCIDENT_TYPE_CALIBRATION_GOVERNANCE,
                 title,
                 severity,
+                severity,
                 INCIDENT_STATUS_OPEN,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 now,
-                now
+                now,
+                1L
         );
         incidentRepository.save(incident);
         syncScopedObject(ObjectScopeService.OBJECT_INCIDENT, incident.getIncidentId(), deviceBinding, now);

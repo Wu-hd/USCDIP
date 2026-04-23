@@ -13,6 +13,7 @@
 - B-16 边缘断网补偿接口（batchNo / seqNo / originalSampleTime、乱序回传、重复幂等与冲突拦截）
 - B-17 告警规则引擎一期骨架（阈值规则、组合规则、自动/手动评估与告警记录查询）
 - B-18 告警去重 / 抑制 / 升级服务（alert_policy / alert_case、去重窗口、抑制窗口、升级与恢复扫描）
+- B-19 事件化服务（incident 事件化、最小 incident API、人工确认与自动恢复）
 
 当前项目已添加数据库能力。
 
@@ -1056,6 +1057,62 @@
 - `ALERT_POLICY_INVALID`
 - `ALERT_CASE_NOT_FOUND`
 
+## B-19 事件化服务说明
+
+### 1) 目标能力
+- B-19 在 B-18 告警 case 基础上补齐事件化，不引入 Outbox、Relay、幂等消费或工单自动创建。
+- 自动链路固定为：
+   - `ingest -> ts_metric -> dq -> alert_rule_engine -> alert_case_lifecycle -> incident_eventization`
+- 手动规则评估同样会在 case 写入后同步触发 incident 创建或更新。
+- 本轮提供最小 incident 查询与确认能力，对齐一期文档里的 `/api/incidents` 与 `/api/incidents/{id}/confirm`。
+
+### 2) 事件化规则与状态机
+- incident 状态机固定为：
+   - `PENDING_CONFIRMATION`
+   - `OPEN`
+   - `RESOLVED`
+   - `CLOSED`
+   - `FALSE_POSITIVE`
+- 事件化口径固定为：
+   - `alert_case.case_status in (ACTIVE, ESCALATED, SUPPRESSED)` 且 `decision_snapshot=TRIGGERED`：创建或更新 `OPEN` incident
+   - `alert_case.case_status=REVIEW_ONLY`：创建或更新 `PENDING_CONFIRMATION` incident
+   - `alert_case.case_status=DQ_BLOCKED`：默认不创建正式 incident
+   - `alert_case.case_status=RECOVERED`：若 incident 尚未终态，则自动转为 `RESOLVED`
+- 去重口径固定为“一活跃 `alert_case` 对应一个 `incident`”；重复命中只刷新原 incident，不重复新开。
+- `POST /api/incidents/{incidentId}/confirm` 仅允许 `PENDING_CONFIRMATION -> OPEN`，并记录 `confirmed_by / confirmed_at`。
+
+### 3) 数据库与测试数据说明
+- 当前项目已经接入数据库，B-19 继续复用已有三套配置：
+   - H2：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- B-19 扩展 `incident` 表：
+   - `incident_type`：区分 `ALERT_EVENT` 与 `CALIBRATION_GOVERNANCE`
+   - `source_case_id / source_alert_id / source_rule_code / source_batch_id / device_id`
+   - `dq_score_snapshot / alert_conf_final / severity_source`
+   - `confirmed_by / confirmed_at / resolved_at / close_reason / trace_id / version_no`
+- `work_order` 本轮不自动写入，仅继续保留后续 B-22 的联动位。
+- `src/main/resources/data.sql` 已补充：
+   - 事件化 incident 种子：覆盖 `OPEN / PENDING_CONFIRMATION / RESOLVED / FALSE_POSITIVE`
+   - 告警事件 incident 均关联现有 `alert_case / alert_record`
+   - 新增 incident 对应的 `object_scope_binding` 与 gateway route policy
+- H2 默认启动会自动建表并装载以上种子；PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+
+### 4) 接口与联调示例
+- 查询事件列表：
+   - `curl -s "http://localhost:8080/api/incidents?page=1&pageSize=10&deviceId=DEV-001&incidentType=ALERT_EVENT" -H "Authorization: Bearer <hz_scope_access_token>"`
+- 查询单条事件：
+   - `curl -s http://localhost:8080/api/incidents/INC-ALERT-SEED-001 -H "Authorization: Bearer <admin_access_token>"`
+- 确认待人工复核事件：
+   - `curl -s -X POST http://localhost:8080/api/incidents/INC-ALERT-SEED-002/confirm -H "Authorization: Bearer <admin_access_token>"`
+- SQL 联调：
+   - `SELECT incident_id, incident_type, device_id, source_case_id, source_rule_code, status, severity, dq_score_snapshot, alert_conf_final FROM incident ORDER BY updated_at DESC;`
+   - `SELECT object_id, region_id, owner_username FROM object_scope_binding WHERE object_type='INCIDENT' ORDER BY object_id;`
+
+### 5) 错误码
+- `INCIDENT_NOT_FOUND`
+- `INCIDENT_INVALID_STATE`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -1092,7 +1149,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 / B-17 / B-18 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略与 case 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 / B-18 / B-19 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case 与 incident 事件化种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json

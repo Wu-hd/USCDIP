@@ -4,6 +4,7 @@ import com.uscdip.backend.entity.IncidentEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface IncidentRepository extends JpaRepository<IncidentEntity, String> {
 
@@ -12,4 +13,8 @@ public interface IncidentRepository extends JpaRepository<IncidentEntity, String
     List<IncidentEntity> findByNodeId(String nodeId);
 
     List<IncidentEntity> findBySegmentIdAndNodeId(String segmentId, String nodeId);
+
+    List<IncidentEntity> findAllByOrderByUpdatedAtDescIncidentIdDesc();
+
+    Optional<IncidentEntity> findBySourceCaseId(String sourceCaseId);
 }

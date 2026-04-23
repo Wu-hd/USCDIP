@@ -63,17 +63,20 @@ public class AlertCaseLifecycleService {
     private final AlertCaseRepository alertCaseRepository;
     private final AlertRecordRepository alertRecordRepository;
     private final ObjectScopeService objectScopeService;
+    private final IncidentEventizationService incidentEventizationService;
 
     public AlertCaseLifecycleService(
             AlertPolicyRepository alertPolicyRepository,
             AlertCaseRepository alertCaseRepository,
             AlertRecordRepository alertRecordRepository,
-            ObjectScopeService objectScopeService
+            ObjectScopeService objectScopeService,
+            IncidentEventizationService incidentEventizationService
     ) {
         this.alertPolicyRepository = alertPolicyRepository;
         this.alertCaseRepository = alertCaseRepository;
         this.alertRecordRepository = alertRecordRepository;
         this.objectScopeService = objectScopeService;
+        this.incidentEventizationService = incidentEventizationService;
     }
 
     @Transactional
@@ -138,6 +141,7 @@ public class AlertCaseLifecycleService {
             }
 
             alertCaseRepository.save(caseEntity);
+            incidentEventizationService.syncIncidentForCase(caseEntity, record);
         }
 
         alertRecordRepository.saveAll(sortedRecords);
@@ -213,6 +217,7 @@ public class AlertCaseLifecycleService {
                 caseEntity.setRecoveredAt(now);
                 caseEntity.setUpdatedAt(now);
                 alertCaseRepository.save(caseEntity);
+                incidentEventizationService.resolveIncidentForRecoveredCase(caseEntity);
                 recovered++;
             }
         }
@@ -267,10 +272,13 @@ public class AlertCaseLifecycleService {
                 normalize(record.getRuleCode()),
                 ACTIVE_CASE_STATUSES
         );
-        LocalDateTime windowStart = resolveTriggerTime(record).minusSeconds(policy.getDedupeWindowSeconds());
+        LocalDateTime triggerTime = resolveTriggerTime(record);
+        LocalDateTime windowStart = triggerTime.minusSeconds(policy.getDedupeWindowSeconds());
         return candidates.stream()
                 .filter(candidate -> matchesCaseObject(candidate, record))
-                .filter(candidate -> candidate.getLastTriggeredAt() != null && !candidate.getLastTriggeredAt().isBefore(windowStart))
+                .filter(candidate -> candidate.getLastTriggeredAt() != null
+                        && !candidate.getLastTriggeredAt().isBefore(windowStart)
+                        && !candidate.getLastTriggeredAt().isAfter(triggerTime))
                 .findFirst()
                 .orElse(null);
     }

@@ -70,6 +70,7 @@ public class ModelGatewayService {
     private final ObjectScopeService objectScopeService;
     private final RuleFallbackService ruleFallbackService;
     private final ObjectMapper objectMapper;
+    private final UnifiedAuditService unifiedAuditService;
 
     public ModelGatewayService(
             ModelRegistryRepository modelRegistryRepository,
@@ -82,7 +83,8 @@ public class ModelGatewayService {
             ObjectScopeBindingRepository objectScopeBindingRepository,
             ObjectScopeService objectScopeService,
             RuleFallbackService ruleFallbackService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            UnifiedAuditService unifiedAuditService
     ) {
         this.modelRegistryRepository = modelRegistryRepository;
         this.modelVersionRepository = modelVersionRepository;
@@ -95,6 +97,7 @@ public class ModelGatewayService {
         this.objectScopeService = objectScopeService;
         this.ruleFallbackService = ruleFallbackService;
         this.objectMapper = objectMapper;
+        this.unifiedAuditService = unifiedAuditService;
     }
 
     @Transactional(readOnly = true)
@@ -139,7 +142,7 @@ public class ModelGatewayService {
                 now
         );
         modelRegistryRepository.save(model);
-        recordOperation(modelCode, null, "REGISTER", context.userId(), null, snapshot(model), now);
+        recordOperation(context, modelCode, null, "REGISTER", null, snapshot(model), now);
         return toResponse(model, List.of());
     }
 
@@ -169,7 +172,7 @@ public class ModelGatewayService {
         );
         modelVersionRepository.save(version);
         touchModel(model, now);
-        recordOperation(model.getModelCode(), versionNo, "VERSION_CREATE", context.userId(), null, snapshot(version), now);
+        recordOperation(context, model.getModelCode(), versionNo, "VERSION_CREATE", null, snapshot(version), now);
         return toVersionResponse(version);
     }
 
@@ -185,7 +188,7 @@ public class ModelGatewayService {
         version.setUpdatedAt(now);
         modelVersionRepository.save(version);
         touchModel(model, now);
-        recordOperation(model.getModelCode(), version.getVersionNo(), "GRAY_PUBLISH", context.userId(), before, snapshot(version), now);
+        recordOperation(context, model.getModelCode(), version.getVersionNo(), "GRAY_PUBLISH", before, snapshot(version), now);
         return toVersionResponse(version);
     }
 
@@ -210,7 +213,7 @@ public class ModelGatewayService {
         target.setUpdatedAt(now);
         modelVersionRepository.save(target);
         touchModel(model, now);
-        recordOperation(model.getModelCode(), target.getVersionNo(), "ACTIVATE", context.userId(), before, versionSetSnapshot(model.getModelCode()), now);
+        recordOperation(context, model.getModelCode(), target.getVersionNo(), "ACTIVATE", before, versionSetSnapshot(model.getModelCode()), now);
         return toVersionResponse(target);
     }
 
@@ -235,7 +238,7 @@ public class ModelGatewayService {
         target.setUpdatedAt(now);
         modelVersionRepository.save(target);
         touchModel(model, now);
-        recordOperation(model.getModelCode(), target.getVersionNo(), "ROLLBACK", context.userId(), before, versionSetSnapshot(model.getModelCode()), now);
+        recordOperation(context, model.getModelCode(), target.getVersionNo(), "ROLLBACK", before, versionSetSnapshot(model.getModelCode()), now);
         return toVersionResponse(target);
     }
 
@@ -262,7 +265,7 @@ public class ModelGatewayService {
         InvocationOutcome outcome = failureReason == null
                 ? modelOutcome(model, selectedVersion.get(), target, requestId, request, latencyMs, now)
                 : fallbackOutcome(model, selectedVersion.orElse(null), target, requestId, request, failureReason, latencyMs, now);
-        recordOperation(model.getModelCode(), outcome.versionNo(), "INFER", context.userId(), null, outcome.outputSummary(), now);
+        recordOperation(context, model.getModelCode(), outcome.versionNo(), "INFER", null, outcome.outputSummary(), now);
         return new ModelInvocationResponse(
                 requestId,
                 model.getModelCode(),
@@ -462,17 +465,26 @@ public class ModelGatewayService {
         modelRegistryRepository.save(model);
     }
 
-    private void recordOperation(String modelCode, String versionNo, String operationType, String operatorUserId, String beforeState, String afterState, LocalDateTime now) {
-        modelOperationAuditRepository.save(new ModelOperationAuditEntity(
+    private void recordOperation(AuthorizationContext context, String modelCode, String versionNo, String operationType, String beforeState, String afterState, LocalDateTime now) {
+        ModelOperationAuditEntity saved = modelOperationAuditRepository.save(new ModelOperationAuditEntity(
                 "MOA-" + UUID.randomUUID(),
                 modelCode,
                 versionNo,
                 operationType,
-                operatorUserId,
+                context.userId(),
                 truncate(beforeState, 2000),
                 truncate(afterState, 2000),
                 now
         ));
+        unifiedAuditService.recordModelOperation(
+                context,
+                "ROLLBACK".equals(operationType) ? "MODEL_ROLLBACK" : "MODEL_" + operationType,
+                modelCode,
+                versionNo,
+                beforeState,
+                afterState,
+                saved.getOperationAuditId()
+        );
     }
 
     private ModelResponse toResponse(ModelRegistryEntity model, List<ModelVersionEntity> versions) {

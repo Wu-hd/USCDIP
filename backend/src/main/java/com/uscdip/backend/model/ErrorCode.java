@@ -71,6 +71,7 @@ public enum ErrorCode {
     FEATURE_VIEW_DENIED("FEATURE_VIEW_DENIED", "Feature view access is denied"),
     FEATURE_VIEW_GRANT_NOT_FOUND("FEATURE_VIEW_GRANT_NOT_FOUND", "Feature view grant was not found"),
     FEATURE_VIEW_INVALID("FEATURE_VIEW_INVALID", "Feature view request is invalid"),
+    AUDIT_LOG_NOT_FOUND("AUDIT_LOG_NOT_FOUND", "Audit log was not found"),
     CALIBRATION_PROFILE_NOT_FOUND("CALIBRATION_PROFILE_NOT_FOUND", "Calibration profile was not found"),
     CALIBRATION_PROFILE_CONFLICT("CALIBRATION_PROFILE_CONFLICT", "Calibration profile is invalid or conflicts with existing data"),
     CALIBRATION_DRIFT_EVALUATION_INVALID("CALIBRATION_DRIFT_EVALUATION_INVALID", "Calibration drift evaluation payload is invalid"),

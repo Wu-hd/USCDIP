@@ -21,6 +21,7 @@
 - B-24 WebSocket 推送网关（STOMP 推送、握手鉴权、订阅授权、ack 与断线补发）
 - B-25 模型网关一期框架（模型注册、版本、灰度、回退、规则兜底与审计）
 - B-26 特征视图与算法脱敏接口（默认脱敏特征视图、限时明细授权与访问审计）
+- B-27 统一审计日志服务（跨域审计主表、查询接口与应急旁路专项报表）
 
 当前项目已添加数据库能力。
 
@@ -89,6 +90,9 @@
    - POST /api/feature-views/grants
    - POST /api/feature-views/grants/{grantId}/revoke
    - GET /api/feature-views/audits
+   - GET /api/audit-logs
+   - GET /api/audit-logs/{auditId}
+   - GET /api/audit-logs/break-glass-report
    - POST /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles/active?metricCode=PRESSURE
@@ -150,6 +154,7 @@
 - B-24 WebSocket 推送网关：`/ws/push` STOMP 推送、握手鉴权、订阅授权、心跳、ack 与断线补发
 - B-25 模型网关一期框架：注册模型、管理版本、灰度发布、激活/回退、模拟推理、失败超时规则兜底与模型域审计
 - B-26 特征视图与算法脱敏接口：算法工程师默认只能查询 `MASKED` 特征，`DETAIL` 明细需限时授权并全量审计
+- B-27 统一审计日志服务：登录、旁路、权限变更、派单、模型回退和高风险访问统一进入 `audit_log`
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -1481,6 +1486,42 @@
 - 串联模型结果特征与调用审计：
    - `SELECT r.model_result_id, r.model_code, r.status, a.result_source, a.failure_reason FROM model_result r LEFT JOIN model_invocation_audit a ON a.model_result_id = r.model_result_id ORDER BY r.created_at DESC;`
 
+## B-27 统一审计日志服务说明
+
+### 1) 目标能力
+- 当前项目已经接入数据库，B-27 继续复用 H2 / PostgreSQL / TimescaleDB 与 JPA 自动建表。
+- 新增统一 `audit_log` 主表，用于跨域查询和报表；既有 `security_audit / gateway_risk_audit / master_data_audit / model_operation_audit / feature_view_access_audit` 不删除，继续保存领域细节。
+- 统一审计覆盖登录、应急旁路、权限变更、工单派单/闭环、模型操作、特征视图授权/明细访问和高风险 Gateway 访问。
+
+### 2) API 与权限
+- `GET /api/audit-logs`：分页查询统一审计，支持 `eventCategory / eventType / sourceModule / actorUserId / authMode / emergencyAccountId / outcome / riskLevel / objectType / objectId / traceId / from / to / emergencyOnly`。
+- `GET /api/audit-logs/{auditId}`：查询统一审计详情。
+- `GET /api/audit-logs/break-glass-report`：查询应急旁路专项报表，只返回 `authMode=BREAK_GLASS`、有 `emergencyAccountId` 或 `eventCategory=BREAK_GLASS` 的记录。
+- 三个接口均要求 `PLATFORM_ADMIN + ENTRY:MGMT`；Gateway 路由策略均启用审计。
+
+### 3) 写入与旁路报表
+- `SecurityAuditService` 写入领域安全审计后，同步写入 `audit_log`。
+- `GatewayPolicyService` 对启用审计的路由和拒绝/限流行为写入统一审计。
+- `WorkOrderService / ModelGatewayService / FeatureViewService` 在关键业务动作成功后写入统一审计。
+- `AuthzGuardAspect` 会识别 `BREAK_GLASS` 本地 token，所有受 `@AuthzGuard` 保护的旁路操作额外写 `BREAK_GLASS_OPERATION`，用于单独出报表。
+
+### 4) 数据库与测试数据说明
+- B-27 继续复用已有三套数据库配置：
+   - H2：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL / Timescale 首次联调仍需手动导入测试数据：`psql -U postgres -d uscdip -f src/main/resources/data.sql`。
+- `src/main/resources/data.sql` 已新增 B-27 种子：登录/Token、应急旁路、权限变更、工单派单、模型回退、导出高风险访问样例，以及 `/api/audit-logs/**` Gateway 路由策略。
+
+### 5) SQL 联调示例
+- 查看统一审计：
+   - `SELECT audit_id, event_category, event_type, actor_user_id, auth_mode, outcome, risk_level, trace_id FROM audit_log ORDER BY event_time DESC;`
+- 查看应急旁路专项报表：
+   - `SELECT audit_id, event_type, actor_user_id, emergency_account_id, request_path, detail FROM audit_log WHERE auth_mode = 'BREAK_GLASS' OR emergency_account_id IS NOT NULL OR event_category = 'BREAK_GLASS' ORDER BY event_time DESC;`
+- 按 trace 串联：
+   - `SELECT event_time, source_module, event_type, object_type, object_id, outcome FROM audit_log WHERE trace_id = 'TRACE-B27-BG-001' ORDER BY event_time;`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -1517,7 +1558,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 / B-23 / B-24 / B-25 / B-26 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter、work_order 闭环、notification、websocket、model gateway 与 feature view 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 / B-23 / B-24 / B-25 / B-26 / B-27 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter、work_order 闭环、notification、websocket、model gateway、feature view 与 unified audit 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json
@@ -1569,6 +1610,8 @@
 - B-26 新增：
    - feature_view_grant
    - feature_view_access_audit
+- B-27 新增：
+   - audit_log
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -1656,6 +1699,7 @@
    - model_operation_audit：3 条
    - feature_view_grant：3 条
    - feature_view_access_audit：3 条
+   - audit_log：7 条
 - 已生成 B-11 设备台账联调数据：
    - `device`：3 条，覆盖 `ONLINE / WARNING / OFFLINE`
    - `device_heartbeat`：3 条历史样例
@@ -1707,7 +1751,7 @@
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
 - 已新增 B-06 Gateway 联调样例：
-   - gateway_route_policy：65 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12/B-13 接入层接口、B-14 评分查询接口、B-15 标定与漂移接口、受保护业务查询、通知、WebSocket、模型网关、特征视图与当前高风险策略）
+   - gateway_route_policy：68 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12/B-13 接入层接口、B-14 评分查询接口、B-15 标定与漂移接口、受保护业务查询、通知、WebSocket、模型网关、特征视图、统一审计与当前高风险策略）
    - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
    - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
    - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
@@ -1767,6 +1811,11 @@
    - `GET /api/feature-views/metrics?metricCode=PRESSURE` 可验证默认脱敏时序特征
    - `GET /api/feature-views/model-results?modelCode=LEAK_DETECTOR` 可验证模型结果脱敏视图
    - `/api/feature-views/**` Gateway 路由策略已写入测试数据
+- 已新增 B-27 统一审计联调样例：
+   - `audit_log`：7 条，覆盖登录/Token、应急旁路、权限变更、工单派单、模型回退和未来导出高风险访问
+   - `GET /api/audit-logs?eventCategory=MODEL` 可验证模型回退统一审计
+   - `GET /api/audit-logs/break-glass-report` 可验证应急旁路专项报表
+   - `/api/audit-logs/**` Gateway 路由策略已写入测试数据
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令

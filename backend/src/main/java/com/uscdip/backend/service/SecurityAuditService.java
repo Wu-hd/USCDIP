@@ -32,9 +32,11 @@ public class SecurityAuditService {
     public static final String EVENT_BREAK_GLASS_ACCESS_REJECTED = "BREAK_GLASS_ACCESS_REJECTED";
 
     private final SecurityAuditRepository securityAuditRepository;
+    private final UnifiedAuditService unifiedAuditService;
 
-    public SecurityAuditService(SecurityAuditRepository securityAuditRepository) {
+    public SecurityAuditService(SecurityAuditRepository securityAuditRepository, UnifiedAuditService unifiedAuditService) {
         this.securityAuditRepository = securityAuditRepository;
+        this.unifiedAuditService = unifiedAuditService;
     }
 
     public void log(
@@ -62,7 +64,7 @@ public class SecurityAuditService {
             String clientIp,
             String userAgent
     ) {
-        securityAuditRepository.save(new SecurityAuditEntity(
+        SecurityAuditEntity saved = securityAuditRepository.save(new SecurityAuditEntity(
                 null,
                 eventType,
                 userId,
@@ -77,6 +79,17 @@ public class SecurityAuditService {
                 TraceIdContext.currentOrGenerate(),
                 LocalDateTime.now()
         ));
+        unifiedAuditService.recordSecurityAudit(
+                eventType,
+                userId,
+                authMode == null ? AuthMode.STANDARD : authMode,
+                emergencyAccountId,
+                outcome,
+                detail,
+                clientIp,
+                userAgent,
+                saved.getId() == null ? null : String.valueOf(saved.getId())
+        );
     }
 
     private String truncate(String value, int maxLength) {

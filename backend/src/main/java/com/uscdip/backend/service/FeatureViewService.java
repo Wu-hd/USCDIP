@@ -67,6 +67,7 @@ public class FeatureViewService {
     private final ModelResultRepository modelResultRepository;
     private final ModelInvocationAuditRepository modelInvocationAuditRepository;
     private final ObjectScopeBindingRepository objectScopeBindingRepository;
+    private final UnifiedAuditService unifiedAuditService;
 
     public FeatureViewService(
             FeatureViewGrantRepository grantRepository,
@@ -76,7 +77,8 @@ public class FeatureViewService {
             NodeRepository nodeRepository,
             ModelResultRepository modelResultRepository,
             ModelInvocationAuditRepository modelInvocationAuditRepository,
-            ObjectScopeBindingRepository objectScopeBindingRepository
+            ObjectScopeBindingRepository objectScopeBindingRepository,
+            UnifiedAuditService unifiedAuditService
     ) {
         this.grantRepository = grantRepository;
         this.auditRepository = auditRepository;
@@ -86,6 +88,7 @@ public class FeatureViewService {
         this.modelResultRepository = modelResultRepository;
         this.modelInvocationAuditRepository = modelInvocationAuditRepository;
         this.objectScopeBindingRepository = objectScopeBindingRepository;
+        this.unifiedAuditService = unifiedAuditService;
     }
 
     public PageResponse<FeatureMetricViewResponse> listMetricFeatures(
@@ -198,7 +201,17 @@ public class FeatureViewService {
                 now,
                 null
         );
-        return toGrantResponse(grantRepository.save(entity));
+        FeatureViewGrantEntity saved = grantRepository.save(entity);
+        unifiedAuditService.recordFeatureViewOperation(
+                context,
+                "FEATURE_VIEW_GRANT_CREATED",
+                saved.getTargetType(),
+                saved.getTargetId(),
+                "SUCCESS",
+                "targetUserId=" + saved.getUserId() + ", expiresAt=" + saved.getExpiresAt(),
+                saved.getGrantId()
+        );
+        return toGrantResponse(saved);
     }
 
     @Transactional
@@ -207,7 +220,17 @@ public class FeatureViewService {
                 .orElseThrow(() -> new AuthFlowException(ErrorCode.FEATURE_VIEW_GRANT_NOT_FOUND, HttpStatus.NOT_FOUND, "Feature view grant not found: " + grantId));
         grant.setStatus(STATUS_REVOKED);
         grant.setRevokedAt(LocalDateTime.now());
-        return toGrantResponse(grantRepository.save(grant));
+        FeatureViewGrantEntity saved = grantRepository.save(grant);
+        unifiedAuditService.recordFeatureViewOperation(
+                context,
+                "FEATURE_VIEW_GRANT_REVOKED",
+                saved.getTargetType(),
+                saved.getTargetId(),
+                "SUCCESS",
+                "targetUserId=" + saved.getUserId(),
+                saved.getGrantId()
+        );
+        return toGrantResponse(saved);
     }
 
     public PageResponse<FeatureViewAuditResponse> listAudits(int page, int pageSize, String userId, String decision) {
@@ -389,7 +412,7 @@ public class FeatureViewService {
             String queryConditions,
             String reason
     ) {
-        auditRepository.save(new FeatureViewAccessAuditEntity(
+        FeatureViewAccessAuditEntity saved = auditRepository.save(new FeatureViewAccessAuditEntity(
                 "FVA-" + UUID.randomUUID(),
                 context.userId(),
                 context.username(),
@@ -403,6 +426,17 @@ public class FeatureViewService {
                 reason,
                 LocalDateTime.now()
         ));
+        if (VIEW_DETAIL.equals(requestedViewLevel) || VIEW_DETAIL.equals(effectiveViewLevel) || "DENIED".equals(decision)) {
+            unifiedAuditService.recordFeatureViewOperation(
+                    context,
+                    "FEATURE_VIEW_" + queryType + "_" + decision,
+                    queryType,
+                    grantId,
+                    decision,
+                    queryConditions + (reason == null ? "" : ", reason=" + reason),
+                    saved.getAuditId()
+            );
+        }
     }
 
     private FeatureViewGrantResponse toGrantResponse(FeatureViewGrantEntity grant) {

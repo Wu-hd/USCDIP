@@ -39,16 +39,19 @@ public class GatewayPolicyService {
     private final GatewayRoutePolicyRepository gatewayRoutePolicyRepository;
     private final GatewayClientRuleRepository gatewayClientRuleRepository;
     private final GatewayRiskAuditRepository gatewayRiskAuditRepository;
+    private final UnifiedAuditService unifiedAuditService;
     private final AntPathMatcher antPathMatcher = new AntPathMatcher();
 
     public GatewayPolicyService(
             GatewayRoutePolicyRepository gatewayRoutePolicyRepository,
             GatewayClientRuleRepository gatewayClientRuleRepository,
-            GatewayRiskAuditRepository gatewayRiskAuditRepository
+            GatewayRiskAuditRepository gatewayRiskAuditRepository,
+            UnifiedAuditService unifiedAuditService
     ) {
         this.gatewayRoutePolicyRepository = gatewayRoutePolicyRepository;
         this.gatewayClientRuleRepository = gatewayClientRuleRepository;
         this.gatewayRiskAuditRepository = gatewayRiskAuditRepository;
+        this.unifiedAuditService = unifiedAuditService;
     }
 
     @Transactional(readOnly = true)
@@ -96,7 +99,7 @@ public class GatewayPolicyService {
         String pathPattern = policy == null ? requestPath : policy.getPathPattern();
         String httpMethod = policy == null ? "*" : policy.getHttpMethod();
         String riskLevel = policy == null ? "LOW" : policy.getRiskLevel();
-        gatewayRiskAuditRepository.save(new GatewayRiskAuditEntity(
+        GatewayRiskAuditEntity saved = gatewayRiskAuditRepository.save(new GatewayRiskAuditEntity(
                 null,
                 routeCode,
                 pathPattern,
@@ -109,6 +112,31 @@ public class GatewayPolicyService {
                 clientIp,
                 TraceIdContext.currentOrGenerate(),
                 LocalDateTime.now()
+        ));
+        unifiedAuditService.record(new UnifiedAuditService.AuditLogCommand(
+                null,
+                UnifiedAuditService.CATEGORY_GATEWAY,
+                "GATEWAY_" + decision,
+                UnifiedAuditService.SOURCE_GATEWAY,
+                userId,
+                null,
+                authMode,
+                null,
+                decision,
+                riskLevel,
+                "ROUTE",
+                routeCode,
+                reasonCode,
+                httpMethod,
+                requestPath,
+                clientIp,
+                null,
+                saved.getTraceId(),
+                "routeCode=" + routeCode + ", reasonCode=" + reasonCode,
+                null,
+                null,
+                "gateway_risk_audit",
+                saved.getId() == null ? null : String.valueOf(saved.getId())
         ));
     }
 

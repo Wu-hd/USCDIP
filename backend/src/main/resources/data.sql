@@ -848,3 +848,46 @@ INSERT INTO gateway_route_policy (
 ('GWP-PROTECTED-FEATURE-GRANT-CREATE-001', 'FEATURE_VIEW_GRANT_CREATE', '/api/feature-views/grants', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('GWP-PROTECTED-FEATURE-GRANT-REVOKE-001', 'FEATURE_VIEW_GRANT_REVOKE', '/api/feature-views/grants/*/revoke', 'POST', TRUE, 'CRITICAL', 'NONE', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('GWP-PROTECTED-FEATURE-AUDIT-LIST-001', 'FEATURE_VIEW_AUDIT_LIST', '/api/feature-views/audits', 'GET', TRUE, 'HIGH', 'PAGE_QUERY', 'USER_OR_IP', 30, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO audit_log (
+    audit_id, event_time, event_category, event_type, source_module, actor_user_id, actor_username,
+    auth_mode, emergency_account_id, outcome, risk_level, object_type, object_id, action,
+    http_method, request_path, client_ip, user_agent, trace_id, detail,
+    before_snapshot, after_snapshot, source_table, source_record_id
+) VALUES
+('AUD-B27-AUTH-LOGIN-001', CURRENT_TIMESTAMP, 'AUTH', 'TOKEN_REFRESH_SUCCESS', 'security', 'U-DISPATCH-001', 'hz_dispatcher',
+ 'STANDARD', NULL, 'SUCCESS', 'HIGH', 'USER', 'U-DISPATCH-001', 'TOKEN_REFRESH_SUCCESS',
+ 'POST', '/api/auth/refresh', '127.0.0.1', 'seed client', 'TRACE-B27-AUTH-001', 'seed token refresh audit',
+ NULL, NULL, 'security_audit', '1'),
+('AUD-B27-BREAK-LOGIN-001', CURRENT_TIMESTAMP, 'BREAK_GLASS', 'BREAK_GLASS_LOGIN_SUCCESS', 'security', 'U-B05-COMMAND-001', 'break_glass_command',
+ 'BREAK_GLASS', 'EA-B05-ACTIVE-001', 'SUCCESS', 'CRITICAL', 'USER', 'U-B05-COMMAND-001', 'BREAK_GLASS_LOGIN_SUCCESS',
+ 'POST', '/api/auth/emergency/login', '127.0.0.1', 'seed client', 'TRACE-B27-BG-001', 'seed break glass login audit',
+ NULL, NULL, 'security_audit', '2'),
+('AUD-B27-BREAK-OP-001', CURRENT_TIMESTAMP, 'BREAK_GLASS', 'BREAK_GLASS_OPERATION', 'authz_guard', 'U-B05-COMMAND-001', 'break_glass_command',
+ 'BREAK_GLASS', 'EA-B05-ACTIVE-001', 'SUCCESS', 'CRITICAL', 'HTTP_ENDPOINT', '/api/workorders', 'BREAK_GLASS_OPERATION',
+ 'GET', '/api/workorders', '127.0.0.1', 'seed client', 'TRACE-B27-BG-001', 'method=WorkOrderController.listWorkOrders, entryPermission=ENTRY:EMGC, menuPermission=MENU:WORKORDER:READ',
+ NULL, NULL, 'authz_guard', 'TOKEN-BG-SEED'),
+('AUD-B27-PERMISSION-001', CURRENT_TIMESTAMP, 'AUTH', 'TOKEN_PERMISSION_REVOKED', 'security', 'U-ADMIN-001', 'platform_admin',
+ 'STANDARD', NULL, 'SUCCESS', 'CRITICAL', 'USER', 'U-DISPATCH-001', 'TOKEN_PERMISSION_REVOKED',
+ 'POST', '/api/auth/admin/users/U-DISPATCH-001/permissions/revoke', '127.0.0.1', 'seed client', 'TRACE-B27-PERM-001', 'seed permission convergence audit',
+ NULL, NULL, 'security_audit', '3'),
+('AUD-B27-WORKORDER-001', CURRENT_TIMESTAMP, 'WORK_ORDER', 'WORK_ORDER_DISPATCHED', 'work_order', 'U-DISPATCH-001', 'hz_dispatcher',
+ 'STANDARD', NULL, 'SUCCESS', 'HIGH', 'WORK_ORDER', 'WO-B22-DISPATCHED-001', 'WORK_ORDER_DISPATCHED',
+ 'POST', '/api/workorders/WO-B22-DISPATCHED-001/dispatch', '127.0.0.1', 'seed client', 'TRACE-B27-WO-001', 'seed work order dispatch audit',
+ NULL, NULL, 'work_order', 'WO-B22-DISPATCHED-001'),
+('AUD-B27-MODEL-ROLLBACK-001', CURRENT_TIMESTAMP, 'MODEL', 'MODEL_ROLLBACK', 'model_gateway', 'U-ADMIN-001', 'platform_admin',
+ 'STANDARD', NULL, 'SUCCESS', 'CRITICAL', 'MODEL', 'LEAK_DETECTOR', 'MODEL_ROLLBACK',
+ 'POST', '/api/models/LEAK_DETECTOR/rollback', '127.0.0.1', 'seed client', 'TRACE-B27-MODEL-001', 'modelCode=LEAK_DETECTOR, versionNo=V0',
+ 'V1:ACTIVE,V2:GRAY,V0:ROLLED_BACK', 'V0:ACTIVE,V1:ROLLED_BACK,V2:ROLLED_BACK', 'model_operation_audit', 'MOA-B25-GRAY-001'),
+('AUD-B27-EXPORT-001', CURRENT_TIMESTAMP, 'GATEWAY', 'GATEWAY_DENY', 'gateway', 'U-DISPATCH-001', 'hz_dispatcher',
+ 'STANDARD', NULL, 'DENY', 'CRITICAL', 'ROUTE', 'FUTURE_EXPORTS', 'RATE_LIMITED',
+ 'POST', '/api/exports/workorders', '127.0.0.1', 'seed client', 'TRACE-B27-EXPORT-001', 'seed future export high-risk audit',
+ NULL, NULL, 'gateway_risk_audit', '4');
+
+INSERT INTO gateway_route_policy (
+    policy_id, route_code, path_pattern, http_method, auth_required, risk_level, validation_profile,
+    rate_limit_scope, rate_limit_capacity, rate_limit_window_seconds, audit_enabled, enabled, created_at, updated_at
+) VALUES
+('GWP-PROTECTED-AUDIT-LIST-001', 'AUDIT_LOG_LIST', '/api/audit-logs', 'GET', TRUE, 'HIGH', 'PAGE_QUERY', 'USER_OR_IP', 30, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-AUDIT-DETAIL-001', 'AUDIT_LOG_DETAIL', '/api/audit-logs/*', 'GET', TRUE, 'HIGH', 'NONE', 'USER_OR_IP', 30, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-AUDIT-BREAK-GLASS-001', 'AUDIT_BREAK_GLASS_REPORT', '/api/audit-logs/break-glass-report', 'GET', TRUE, 'CRITICAL', 'PAGE_QUERY', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

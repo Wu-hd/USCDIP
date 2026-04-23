@@ -52,6 +52,7 @@ public class WorkOrderService {
     private final AuthorizationService authorizationService;
     private final UserAccountRepository userAccountRepository;
     private final OutboxService outboxService;
+    private final UnifiedAuditService unifiedAuditService;
 
     public WorkOrderService(
             WorkOrderRepository workOrderRepository,
@@ -60,7 +61,8 @@ public class WorkOrderService {
             ObjectScopeService objectScopeService,
             AuthorizationService authorizationService,
             UserAccountRepository userAccountRepository,
-            OutboxService outboxService
+            OutboxService outboxService,
+            UnifiedAuditService unifiedAuditService
     ) {
         this.workOrderRepository = workOrderRepository;
         this.incidentRepository = incidentRepository;
@@ -69,6 +71,7 @@ public class WorkOrderService {
         this.authorizationService = authorizationService;
         this.userAccountRepository = userAccountRepository;
         this.outboxService = outboxService;
+        this.unifiedAuditService = unifiedAuditService;
     }
 
     @Transactional(readOnly = true)
@@ -124,6 +127,7 @@ public class WorkOrderService {
         workOrderRepository.save(workOrder);
         syncWorkOrderScope(workOrder, incidentBinding, now);
         outboxService.publishWorkOrderEvent(workOrder, OutboxService.EVENT_WORK_ORDER_CREATED, now);
+        recordAudit(context, OutboxService.EVENT_WORK_ORDER_CREATED, workOrder, "incidentId=" + incident.getIncidentId());
         return toResponse(workOrder);
     }
 
@@ -136,6 +140,7 @@ public class WorkOrderService {
         workOrderRepository.save(workOrder);
         syncScopeFromAssignee(workOrder, now);
         outboxService.publishWorkOrderEvent(workOrder, OutboxService.EVENT_WORK_ORDER_DISPATCHED, now);
+        recordAudit(context, OutboxService.EVENT_WORK_ORDER_DISPATCHED, workOrder, "assignee=" + workOrder.getAssignee());
         return toResponse(workOrder);
     }
 
@@ -152,6 +157,7 @@ public class WorkOrderService {
         touch(workOrder, now);
         workOrderRepository.save(workOrder);
         outboxService.publishWorkOrderEvent(workOrder, OutboxService.EVENT_WORK_ORDER_ACCEPTED, now);
+        recordAudit(context, OutboxService.EVENT_WORK_ORDER_ACCEPTED, workOrder, "acceptedBy=" + context.userId());
         return toResponse(workOrder);
     }
 
@@ -172,6 +178,7 @@ public class WorkOrderService {
         workOrderRepository.save(workOrder);
         syncScopeFromAssignee(workOrder, now);
         outboxService.publishWorkOrderEvent(workOrder, OutboxService.EVENT_WORK_ORDER_TRANSFERRED, now);
+        recordAudit(context, OutboxService.EVENT_WORK_ORDER_TRANSFERRED, workOrder, "assignee=" + workOrder.getAssignee());
         return toResponse(workOrder);
     }
 
@@ -189,6 +196,7 @@ public class WorkOrderService {
         touch(workOrder, now);
         workOrderRepository.save(workOrder);
         outboxService.publishWorkOrderEvent(workOrder, OutboxService.EVENT_WORK_ORDER_COMPLETED, now);
+        recordAudit(context, OutboxService.EVENT_WORK_ORDER_COMPLETED, workOrder, "completedBy=" + context.userId());
         return toResponse(workOrder);
     }
 
@@ -206,6 +214,7 @@ public class WorkOrderService {
         touch(workOrder, now);
         workOrderRepository.save(workOrder);
         outboxService.publishWorkOrderEvent(workOrder, OutboxService.EVENT_WORK_ORDER_CLOSED, now);
+        recordAudit(context, OutboxService.EVENT_WORK_ORDER_CLOSED, workOrder, "closedBy=" + context.userId());
         return toResponse(workOrder);
     }
 
@@ -219,7 +228,17 @@ public class WorkOrderService {
         touch(workOrder, now);
         workOrderRepository.save(workOrder);
         outboxService.publishWorkOrderEvent(workOrder, OutboxService.EVENT_WORK_ORDER_WRITEBACK_RECORDED, now);
+        recordAudit(context, OutboxService.EVENT_WORK_ORDER_WRITEBACK_RECORDED, workOrder, "writebackType=" + workOrder.getWritebackType());
         return toResponse(workOrder);
+    }
+
+    private void recordAudit(AuthorizationContext context, String eventType, WorkOrderEntity workOrder, String detail) {
+        unifiedAuditService.recordWorkOrderOperation(
+                context,
+                eventType,
+                workOrder.getWorkOrderId(),
+                detail + ", status=" + workOrder.getStatus() + ", incidentId=" + workOrder.getIncidentId()
+        );
     }
 
     private WorkOrderEntity requireAccessibleForDispatch(AuthorizationContext context, String workOrderId) {

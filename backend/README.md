@@ -20,6 +20,7 @@
 - B-23 通知服务（稳定工单事件消费、多通道模拟发送、失败重试与死信）
 - B-24 WebSocket 推送网关（STOMP 推送、握手鉴权、订阅授权、ack 与断线补发）
 - B-25 模型网关一期框架（模型注册、版本、灰度、回退、规则兜底与审计）
+- B-26 特征视图与算法脱敏接口（默认脱敏特征视图、限时明细授权与访问审计）
 
 当前项目已添加数据库能力。
 
@@ -83,6 +84,11 @@
    - POST /api/models/{modelCode}/versions/{versionNo}/activate
    - POST /api/models/{modelCode}/rollback
    - POST /api/models/{modelCode}/infer
+   - GET /api/feature-views/metrics
+   - GET /api/feature-views/model-results
+   - POST /api/feature-views/grants
+   - POST /api/feature-views/grants/{grantId}/revoke
+   - GET /api/feature-views/audits
    - POST /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles/active?metricCode=PRESSURE
@@ -143,6 +149,7 @@
 - B-23 通知服务：只消费稳定工单事件，生成 `notification_message / notification_delivery`，支持多通道模拟发送、重试与死信
 - B-24 WebSocket 推送网关：`/ws/push` STOMP 推送、握手鉴权、订阅授权、心跳、ack 与断线补发
 - B-25 模型网关一期框架：注册模型、管理版本、灰度发布、激活/回退、模拟推理、失败超时规则兜底与模型域审计
+- B-26 特征视图与算法脱敏接口：算法工程师默认只能查询 `MASKED` 特征，`DETAIL` 明细需限时授权并全量审计
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -1432,6 +1439,48 @@
 - 查看模型操作审计：
    - `SELECT model_code, version_no, operation_type, operator_user_id, created_at FROM model_operation_audit ORDER BY created_at DESC;`
 
+## B-26 特征视图与算法脱敏接口说明
+
+### 1) 目标能力
+- 当前项目已经接入数据库，B-26 继续复用 H2 / PostgreSQL / TimescaleDB 与 JPA 自动建表。
+- 面向算法工程师提供默认 `MASKED` 特征视图，避免直接暴露生产明细主键、设备名称、设施名称、精确坐标或 `geometry_2d`。
+- `DETAIL` 明细视图必须由具备 `ENTRY:DIAG + MENU:MODEL:WRITE` 的用户创建限时授权，授权过期或撤销后自动拒绝。
+
+### 2) API 与权限
+- `GET /api/feature-views/metrics`：按 `segmentId / nodeId / deviceId / metricCode / startTime / endTime` 查询时序特征，需要 `ENTRY:DIAG + MENU:MODEL:READ`。
+- `GET /api/feature-views/model-results`：查询模型结果特征摘要，串联 `model_result / model_invocation_audit`，需要 `ENTRY:DIAG + MENU:MODEL:READ`。
+- `POST /api/feature-views/grants`：创建限时明细授权，需要 `ENTRY:DIAG + MENU:MODEL:WRITE`。
+- `POST /api/feature-views/grants/{grantId}/revoke`：撤销授权，需要 `ENTRY:DIAG + MENU:MODEL:WRITE`。
+- `GET /api/feature-views/audits`：查询特征视图访问审计，需要 `ENTRY:DIAG + MENU:MODEL:WRITE`。
+
+### 3) 脱敏与明细授权
+- `MASKED` 返回稳定哈希 ID、区域、对象类型、指标、时间桶、DQ 分数、坐标粗粒度桶和可训练特征值。
+- `MASKED` 不返回 `sourceRecordId / deviceId / deviceName / segmentId / nodeId / geometry2d` 等生产明细字段。
+- `DETAIL` 在有效授权命中时返回原始对象 ID、设备名称和精确 `geometry_2d`；授权目标支持 `GLOBAL / SEGMENT / NODE / DEVICE`。
+- 无授权、授权过期或授权已撤销时，`DETAIL` 查询返回 `FEATURE_VIEW_DENIED`，并写入拒绝审计。
+
+### 4) 审计与 Gateway
+- `feature_view_grant` 保存用户、授权视图级别、目标范围、原因、授权人、过期时间和状态。
+- `feature_view_access_audit` 记录每次 `MASKED / DETAIL / DENIED` 查询的用户、条件、结果条数、命中授权和拒绝原因。
+- `/api/feature-views/**` 已加入 Gateway 路由策略；明细授权、撤销和审计查询按高风险或关键操作记录。
+
+### 5) 数据库与测试数据说明
+- B-26 继续复用已有三套数据库配置：
+   - H2：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL / Timescale 首次联调仍需手动导入测试数据：`psql -U postgres -d uscdip -f src/main/resources/data.sql`。
+- `src/main/resources/data.sql` 已新增 B-26 种子：有效、过期、撤销三类 `feature_view_grant`，`MASKED / DETAIL / DENIED` 三类 `feature_view_access_audit`，以及 `/api/feature-views/**` Gateway 路由策略。
+
+### 6) SQL 联调示例
+- 查看明细授权：
+   - `SELECT grant_id, user_id, view_level, target_type, target_id, status, expires_at FROM feature_view_grant ORDER BY created_at DESC;`
+- 查看访问审计：
+   - `SELECT user_id, query_type, requested_view_level, effective_view_level, decision, result_count, reason FROM feature_view_access_audit ORDER BY created_at DESC;`
+- 串联模型结果特征与调用审计：
+   - `SELECT r.model_result_id, r.model_code, r.status, a.result_source, a.failure_reason FROM model_result r LEFT JOIN model_invocation_audit a ON a.model_result_id = r.model_result_id ORDER BY r.created_at DESC;`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -1468,7 +1517,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 / B-23 / B-24 / B-25 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter、work_order 闭环、notification、websocket 与 model gateway 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 / B-23 / B-24 / B-25 / B-26 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter、work_order 闭环、notification、websocket、model gateway 与 feature view 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json
@@ -1517,6 +1566,9 @@
    - model_version
    - model_invocation_audit
    - model_operation_audit
+- B-26 新增：
+   - feature_view_grant
+   - feature_view_access_audit
 - B-05 在认证链路上新增字段：
    - auth_session.auth_mode
    - auth_session.emergency_account_id
@@ -1602,6 +1654,8 @@
    - model_version：5 条
    - model_invocation_audit：2 条
    - model_operation_audit：3 条
+   - feature_view_grant：3 条
+   - feature_view_access_audit：3 条
 - 已生成 B-11 设备台账联调数据：
    - `device`：3 条，覆盖 `ONLINE / WARNING / OFFLINE`
    - `device_heartbeat`：3 条历史样例
@@ -1653,7 +1707,7 @@
    - auth_session / auth_refresh_token: `BREAK_GLASS` 样例记录
    - security_audit: `BREAK_GLASS_ACCOUNT_ACTIVATED / BREAK_GLASS_LOGIN_SUCCESS / BREAK_GLASS_ACCOUNT_REVOKED`
 - 已新增 B-06 Gateway 联调样例：
-   - gateway_route_policy：60 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12/B-13 接入层接口、B-14 评分查询接口、B-15 标定与漂移接口、受保护业务查询、通知、WebSocket、模型网关与当前高风险策略）
+   - gateway_route_policy：65 条（公共规范接口、B-08 主数据接口、B-10 GIS 查询接口、B-11 设备台账接口、B-12/B-13 接入层接口、B-14 评分查询接口、B-15 标定与漂移接口、受保护业务查询、通知、WebSocket、模型网关、特征视图与当前高风险策略）
    - gateway_client_rule：3 条（1 条 IP allowlist、1 条 IP blocklist、1 条用户 blocklist）
    - gateway_risk_audit：3 条（ALLOW / BLOCKLIST_MATCHED / RATE_LIMITED）
    - user_account: `U-B06-BLOCKED-001` 作为用户级 blocklist 样例
@@ -1707,6 +1761,12 @@
    - `MR-B25-MODEL-001`：成功推理结果样例
    - `MR-B25-FALLBACK-001`：超时后规则兜底结果样例
    - `model_invocation_audit` 可直接查看 `MODEL / RULE_FALLBACK` 两类结果来源
+- 已新增 B-26 特征视图联调样例：
+   - `feature_view_grant`：有效、过期、撤销三类明细授权样例
+   - `feature_view_access_audit`：`MASKED / DETAIL / DENIED` 三类访问审计样例
+   - `GET /api/feature-views/metrics?metricCode=PRESSURE` 可验证默认脱敏时序特征
+   - `GET /api/feature-views/model-results?modelCode=LEAK_DETECTOR` 可验证模型结果脱敏视图
+   - `/api/feature-views/**` Gateway 路由策略已写入测试数据
 - 说明：
    - 仓库不保存旁路账号明文口令
    - `data.sql` 仅保存 BCrypt 哈希样例；联调时建议通过激活接口重新设置测试口令

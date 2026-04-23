@@ -8,4 +8,6 @@ import java.util.List;
 public interface ModelInvocationAuditRepository extends JpaRepository<ModelInvocationAuditEntity, String> {
 
     List<ModelInvocationAuditEntity> findByModelCodeOrderByCreatedAtDesc(String modelCode);
+
+    List<ModelInvocationAuditEntity> findByModelResultIdIn(List<String> modelResultIds);
 }

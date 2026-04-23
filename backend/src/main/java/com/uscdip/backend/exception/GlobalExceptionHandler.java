@@ -89,6 +89,9 @@ public class GlobalExceptionHandler {
         if (request != null && request.getRequestURI() != null && request.getRequestURI().startsWith("/api/models")) {
             return ErrorCode.MODEL_GATEWAY_INVALID;
         }
+        if (request != null && request.getRequestURI() != null && request.getRequestURI().startsWith("/api/feature-views")) {
+            return ErrorCode.FEATURE_VIEW_INVALID;
+        }
         if (request != null && request.getRequestURI() != null && request.getRequestURI().contains("/api/calibration/devices/")
                 && request.getRequestURI().contains("/drift-checks")) {
             return ErrorCode.CALIBRATION_DRIFT_EVALUATION_INVALID;

@@ -820,3 +820,31 @@ INSERT INTO gateway_route_policy (
 ('GWP-PROTECTED-MODEL-ACTIVATE-001', 'MODEL_ACTIVATE', '/api/models/*/versions/*/activate', 'POST', TRUE, 'CRITICAL', 'NONE', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('GWP-PROTECTED-MODEL-ROLLBACK-001', 'MODEL_ROLLBACK', '/api/models/*/rollback', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('GWP-PROTECTED-MODEL-INFER-001', 'MODEL_INFER', '/api/models/*/infer', 'POST', TRUE, 'HIGH', 'JSON_BODY', 'USER_OR_IP', 30, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO feature_view_grant (
+    grant_id, user_id, view_level, target_type, target_id, reason, granted_by, expires_at, status, created_at, revoked_at
+) VALUES
+('FVG-B26-ACTIVE-001', 'U-ALGO-001', 'DETAIL', 'SEGMENT', 'SEG-001', 'B-26 active detail grant for troubleshooting', 'U-ADMIN-001', TIMESTAMP '2026-12-31 23:59:59', 'ACTIVE', CURRENT_TIMESTAMP, NULL),
+('FVG-B26-EXPIRED-001', 'U-ALGO-001', 'DETAIL', 'DEVICE', 'DEV-002', 'B-26 expired detail grant sample', 'U-ADMIN-001', TIMESTAMP '2026-01-01 00:00:00', 'ACTIVE', CURRENT_TIMESTAMP, NULL),
+('FVG-B26-REVOKED-001', 'U-ALGO-001', 'DETAIL', 'NODE', 'NODE-002', 'B-26 revoked detail grant sample', 'U-ADMIN-001', TIMESTAMP '2026-12-31 23:59:59', 'REVOKED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO feature_view_access_audit (
+    audit_id, user_id, username, query_type, requested_view_level, effective_view_level, decision,
+    grant_id, result_count, query_conditions, reason, created_at
+) VALUES
+('FVA-B26-MASKED-001', 'U-ALGO-001', 'algo_user', 'METRICS', 'MASKED', 'MASKED', 'ALLOW', NULL, 3,
+ 'segmentId=SEG-001, metricOrModel=PRESSURE', NULL, CURRENT_TIMESTAMP),
+('FVA-B26-DETAIL-001', 'U-ALGO-001', 'algo_user', 'METRICS', 'DETAIL', 'DETAIL', 'ALLOW', 'FVG-B26-ACTIVE-001', 3,
+ 'segmentId=SEG-001, metricOrModel=PRESSURE', NULL, CURRENT_TIMESTAMP),
+('FVA-B26-DENIED-001', 'U-ALGO-001', 'algo_user', 'MODEL_RESULTS', 'DETAIL', 'MASKED', 'DENIED', NULL, 0,
+ 'segmentId=SEG-002, metricOrModel=LEAK_DETECTOR', 'DETAIL view requires an active time-limited grant', CURRENT_TIMESTAMP);
+
+INSERT INTO gateway_route_policy (
+    policy_id, route_code, path_pattern, http_method, auth_required, risk_level, validation_profile,
+    rate_limit_scope, rate_limit_capacity, rate_limit_window_seconds, audit_enabled, enabled, created_at, updated_at
+) VALUES
+('GWP-PROTECTED-FEATURE-METRICS-001', 'FEATURE_VIEW_METRICS', '/api/feature-views/metrics', 'GET', TRUE, 'HIGH', 'PAGE_QUERY', 'USER_OR_IP', 60, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-FEATURE-MODEL-RESULTS-001', 'FEATURE_VIEW_MODEL_RESULTS', '/api/feature-views/model-results', 'GET', TRUE, 'HIGH', 'PAGE_QUERY', 'USER_OR_IP', 60, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-FEATURE-GRANT-CREATE-001', 'FEATURE_VIEW_GRANT_CREATE', '/api/feature-views/grants', 'POST', TRUE, 'CRITICAL', 'JSON_BODY', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-FEATURE-GRANT-REVOKE-001', 'FEATURE_VIEW_GRANT_REVOKE', '/api/feature-views/grants/*/revoke', 'POST', TRUE, 'CRITICAL', 'NONE', 'USER_OR_IP', 10, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('GWP-PROTECTED-FEATURE-AUDIT-LIST-001', 'FEATURE_VIEW_AUDIT_LIST', '/api/feature-views/audits', 'GET', TRUE, 'HIGH', 'PAGE_QUERY', 'USER_OR_IP', 30, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

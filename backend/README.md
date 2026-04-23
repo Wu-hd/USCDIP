@@ -16,6 +16,7 @@
 - B-19 事件化服务（incident 事件化、最小 incident API、人工确认与自动恢复）
 - B-20 Outbox 与 Relay（outbox_event、事务事件写入、Relay 认领发送、失败重试与死信）
 - B-21 幂等键与死信处理（idempotent_record、dead_letter、工单创建幂等消费）
+- B-22 工单服务（创建、派单、接单、转派、完成、关闭、回写与数据范围过滤）
 
 当前项目已添加数据库能力。
 
@@ -58,6 +59,15 @@
    - GET /api/alerts
    - GET /api/alerts/{alertId}
    - GET /api/alerts/rules
+   - GET /api/workorders
+   - GET /api/workorders/{workOrderId}
+   - POST /api/workorders
+   - POST /api/workorders/{workOrderId}/dispatch
+   - POST /api/workorders/{workOrderId}/accept
+   - POST /api/workorders/{workOrderId}/transfer
+   - POST /api/workorders/{workOrderId}/complete
+   - POST /api/workorders/{workOrderId}/close
+   - POST /api/workorders/{workOrderId}/writeback
    - POST /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles
    - GET /api/calibration/devices/{deviceId}/profiles/active?metricCode=PRESSURE
@@ -114,6 +124,7 @@
 - B-17 告警规则引擎一期骨架：阈值/组合规则、DQ 降权置信度、自动触发与手动回放评估
 - B-20 Outbox 与 Relay：事务内写 `outbox_event`，定时 Relay 认领发送，支持失败重试和 DEAD 死信状态
 - B-21 幂等键与死信处理：消费侧以 `incident_id + action_type + version` 生成幂等键，记录 `idempotent_record`，失败超过阈值写入 `dead_letter`
+- B-22 工单服务：支持一事件多工单、工单状态流转、回写记录、对象范围继承与工单 Outbox 事件
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -1095,7 +1106,7 @@
    - `source_case_id / source_alert_id / source_rule_code / source_batch_id / device_id`
    - `dq_score_snapshot / alert_conf_final / severity_source`
    - `confirmed_by / confirmed_at / resolved_at / close_reason / trace_id / version_no`
-- `work_order` 本轮不自动写入，仅继续保留后续 B-22 的联动位。
+- `work_order` 在 B-19 阶段仅保留联动位；B-22 已补齐工单服务的创建、派单、状态流转与回写能力。
 - `src/main/resources/data.sql` 已补充：
    - 事件化 incident 种子：覆盖 `OPEN / PENDING_CONFIRMATION / RESOLVED / FALSE_POSITIVE`
    - 告警事件 incident 均关联现有 `alert_case / alert_record`
@@ -1210,6 +1221,62 @@
 - 串联 incident、工单与幂等记录：
    - `SELECT i.incident_id, w.work_order_id, r.idempotent_key, r.status FROM incident i JOIN work_order w ON w.incident_id = i.incident_id JOIN idempotent_record r ON r.result_ref_id = w.work_order_id WHERE r.action_type = 'CREATE_WORK_ORDER';`
 
+## B-22 工单服务说明
+
+### 1) 目标能力
+- 当前项目已经接入数据库，B-22 继续复用现有 H2 / PostgreSQL / TimescaleDB 配置，不新增 Redis、Kafka、Flyway 或其他中间件。
+- `work_order` 保留一事件多工单能力，`incident_id` 不做唯一业务约束；工单创建接口允许同一 incident 生成多个不同工单。
+- 新增工单闭环字段：`work_order_type / priority / description / assignee_user_id / sla_due_at / created_by / dispatched_by / accepted_by / completed_by / closed_by / dispatched_at / accepted_at / completed_at / closed_at / completion_summary / close_reason / writeback_type / writeback_reason / writeback_at / version_no`。
+- 新工单会继承 incident 的 `object_scope_binding` 区域范围；派单和转派会同步工单责任人范围，继续复用 B-07 `ObjectScopeService` 的区域调度、巡检本人任务和管理员范围逻辑。
+
+### 2) 状态机与回写规则
+- 合法状态流：`CREATED -> DISPATCHED -> ACCEPTED -> COMPLETED -> CLOSED`。
+- 转派：`DISPATCHED / ACCEPTED -> DISPATCHED`，更新 `assignee_user_id / assignee / sla_due_at / dispatched_by / dispatched_at`，并清空接单与完成字段。
+- 人工关闭：`CREATED / DISPATCHED / ACCEPTED / COMPLETED -> CLOSED`，记录 `close_reason / closed_by / closed_at`。
+- 回写：`POST /api/workorders/{workOrderId}/writeback` 仅记录 `writeback_type / writeback_reason / writeback_at`，不等同关闭动作。
+- 非法状态流返回 `WORK_ORDER_INVALID_STATE`。
+
+### 3) 接口与权限
+- `GET /api/workorders`：分页查询，支持 `status / incidentId / assignee / workOrderType` 过滤，并按当前用户数据范围过滤。
+- `GET /api/workorders/{workOrderId}`：工单详情。
+- `POST /api/workorders`：基于 incident 创建工单。
+- `POST /api/workorders/{workOrderId}/dispatch`：派单。
+- `POST /api/workorders/{workOrderId}/accept`：接单。
+- `POST /api/workorders/{workOrderId}/transfer`：转派。
+- `POST /api/workorders/{workOrderId}/complete`：完成。
+- `POST /api/workorders/{workOrderId}/close`：关闭。
+- `POST /api/workorders/{workOrderId}/writeback`：误报、漏报或其他回写。
+- 查询需要 `MENU:WORKORDER:READ`；创建、派单、转派、关闭、回写需要 `MENU:WORKORDER:DISPATCH`；接单和完成允许当前 assignee 或具备派单权限的用户操作。
+
+### 4) Outbox 事件
+- 工单状态变更会写入 `outbox_event`，`aggregate_type=WORK_ORDER`。
+- 已支持事件类型：`WORK_ORDER_CREATED / WORK_ORDER_DISPATCHED / WORK_ORDER_ACCEPTED / WORK_ORDER_TRANSFERRED / WORK_ORDER_COMPLETED / WORK_ORDER_CLOSED / WORK_ORDER_WRITEBACK_RECORDED`。
+- B-21 的消费侧幂等能力继续保留；B-22 创建接口不把 `incident_id + CREATE_WORK_ORDER + version` 作为工单业务唯一键。
+
+### 5) 数据库与测试数据说明
+- B-22 继续复用已有三套数据库配置：
+   - H2：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL / Timescale 首次联调仍需手动导入测试数据：
+   - `psql -U postgres -d uscdip -f src/main/resources/data.sql`
+- `src/main/resources/data.sql` 已新增 B-22 种子：
+   - `WO-B22-CREATED-001 / WO-B22-DISPATCHED-001 / WO-B22-ACCEPTED-001 / WO-B22-COMPLETED-001 / WO-B22-CLOSED-001`：覆盖多状态工单样例
+   - `WO-B22-CREATED-001` 与 `WO-B22-DISPATCHED-001`：同一 incident 多工单样例
+   - `WO-B22-COMPLETED-001 / WO-B22-CLOSED-001`：`FALSE_POSITIVE / MISSED_REPORT` 回写样例
+   - `WORKORDER_LIST / WORKORDER_DETAIL / WORKORDER_CREATE / WORKORDER_DISPATCH / WORKORDER_ACCEPT / WORKORDER_TRANSFER / WORKORDER_COMPLETE / WORKORDER_CLOSE / WORKORDER_WRITEBACK`：Gateway 路由策略样例
+
+### 6) SQL 联调示例
+- 查看工单状态分布：
+   - `SELECT status, COUNT(*) FROM work_order GROUP BY status ORDER BY status;`
+- 验证一事件多工单：
+   - `SELECT incident_id, COUNT(*) AS work_order_count FROM work_order GROUP BY incident_id HAVING COUNT(*) > 1;`
+- 查看工单数据范围：
+   - `SELECT w.work_order_id, w.status, b.region_id, b.owner_username FROM work_order w JOIN object_scope_binding b ON b.object_id = w.work_order_id WHERE b.object_type = 'WORK_ORDER' ORDER BY w.work_order_id;`
+- 查看工单 Outbox：
+   - `SELECT event_id, aggregate_id, event_type, status, payload FROM outbox_event WHERE aggregate_type = 'WORK_ORDER' ORDER BY created_at DESC;`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -1246,7 +1313,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record 与 dead_letter 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter 与 work_order 闭环种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json
@@ -1367,7 +1434,7 @@
    - facility：3 条
    - device：3 条
    - incident：4 条
-   - work_order：4 条
+   - work_order：9 条
    - model_result：2 条
 - 已生成 B-11 设备台账联调数据：
    - `device`：3 条，覆盖 `ONLINE / WARNING / OFFLINE`

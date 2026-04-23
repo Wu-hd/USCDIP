@@ -478,16 +478,21 @@ public class CalibrationManagementService {
                 buildWorkOrderPayload(incident, device, reasonCode),
                 incident.getTraceId(),
                 () -> {
-                    WorkOrderEntity workOrder = new WorkOrderEntity(
-                            "WO-CAL-" + UUID.randomUUID(),
-                            incident.getIncidentId(),
-                            device.getSegmentId(),
-                            device.getNodeId(),
-                            blankToNull(deviceBinding.getOwnerUsername()),
-                            WORK_ORDER_STATUS_CREATED,
-                            now,
-                            now
-                    );
+                    WorkOrderEntity workOrder = new WorkOrderEntity();
+                    workOrder.setWorkOrderId("WO-CAL-" + UUID.randomUUID());
+                    workOrder.setIncidentId(incident.getIncidentId());
+                    workOrder.setSegmentId(device.getSegmentId());
+                    workOrder.setNodeId(device.getNodeId());
+                    workOrder.setWorkOrderType("CALIBRATION_GOVERNANCE");
+                    workOrder.setPriority("HIGH");
+                    workOrder.setDescription(incident.getTitle());
+                    workOrder.setAssigneeUserId(blankToNull(deviceBinding.getOwnerUserId()));
+                    workOrder.setAssignee(blankToNull(deviceBinding.getOwnerUsername()));
+                    workOrder.setStatus(WORK_ORDER_STATUS_CREATED);
+                    workOrder.setCreatedBy("SYSTEM");
+                    workOrder.setCreatedAt(now);
+                    workOrder.setUpdatedAt(now);
+                    workOrder.setVersionNo(1L);
                     workOrderRepository.save(workOrder);
                     syncScopedObject(ObjectScopeService.OBJECT_WORK_ORDER, workOrder.getWorkOrderId(), deviceBinding, now);
                     return workOrder.getWorkOrderId();

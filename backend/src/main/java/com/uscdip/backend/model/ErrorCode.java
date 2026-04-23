@@ -61,6 +61,8 @@ public enum ErrorCode {
     ALERT_CASE_NOT_FOUND("ALERT_CASE_NOT_FOUND", "Alert case was not found"),
     INCIDENT_NOT_FOUND("INCIDENT_NOT_FOUND", "Incident was not found"),
     INCIDENT_INVALID_STATE("INCIDENT_INVALID_STATE", "Incident state transition is invalid"),
+    WORK_ORDER_NOT_FOUND("WORK_ORDER_NOT_FOUND", "Work order was not found"),
+    WORK_ORDER_INVALID_STATE("WORK_ORDER_INVALID_STATE", "Work order state transition is invalid"),
     CALIBRATION_PROFILE_NOT_FOUND("CALIBRATION_PROFILE_NOT_FOUND", "Calibration profile was not found"),
     CALIBRATION_PROFILE_CONFLICT("CALIBRATION_PROFILE_CONFLICT", "Calibration profile is invalid or conflicts with existing data"),
     CALIBRATION_DRIFT_EVALUATION_INVALID("CALIBRATION_DRIFT_EVALUATION_INVALID", "Calibration drift evaluation payload is invalid"),

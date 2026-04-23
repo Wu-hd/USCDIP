@@ -21,6 +21,12 @@ public record AlertRecordResponse(
         String metricValue,
         LocalDateTime eventTime,
         String traceId,
+        String caseId,
+        String dedupeKey,
+        String processStatus,
+        Boolean suppressed,
+        Integer escalationLevel,
+        LocalDateTime processedAt,
         LocalDateTime createdAt
 ) {
 }

@@ -12,6 +12,7 @@
 - B-15 标定与漂移管理接口（标定版本、漂移复核、到期提醒与校正预览）
 - B-16 边缘断网补偿接口（batchNo / seqNo / originalSampleTime、乱序回传、重复幂等与冲突拦截）
 - B-17 告警规则引擎一期骨架（阈值规则、组合规则、自动/手动评估与告警记录查询）
+- B-18 告警去重 / 抑制 / 升级服务（alert_policy / alert_case、去重窗口、抑制窗口、升级与恢复扫描）
 
 当前项目已添加数据库能力。
 
@@ -985,6 +986,76 @@
 - `ALERT_EVALUATION_INVALID`
 - `ALERT_RECORD_NOT_FOUND`
 
+## B-18 告警去重 / 抑制 / 升级服务说明
+
+### 1) 目标能力
+- B-18 继续复用 B-17 的规则评估结果，不引入 Redis、Kafka、Drools 等新中间件。
+- 自动链路固定为：
+   - `ingest -> ts_metric -> dq -> alert_rule_engine -> alert_dedup_service`
+- 手动链路固定为：
+   - `POST /api/alerts/evaluate`
+   - 先生成原始 `alert_record`，再立即进入去重 / 抑制 / 升级处理
+- 本轮只处理告警层，不自动联动 `incident / work_order`。
+
+### 2) 去重 / 抑制 / 升级 / 恢复口径
+- 去重 key 固定按 `object + rule_code + active_window_start` 生成并持久化到 `dedupe_key`。
+- 同一对象判定优先使用 `device_id`；若后续存在无设备告警，再退化到 `segment_id + node_id`。
+- 去重窗口：
+   - 同一 `rule_code`
+   - 且命中时间仍落在活跃 case 的 `dedupe_window_seconds` 内
+   - 满足后归并到同一 `alert_case`
+- 抑制窗口：
+   - 新 case 首条命中为可见告警
+   - 同 case 后续命中若仍落在 `suppressed_until` 之前，则 `alert_record.process_status=SUPPRESSED`
+   - 被抑制命中仍会刷新 `last_triggered_at / hit_count`，但不会增加 `unsuppressed_hit_count`
+- 升级规则：
+   - 仅 `decision=TRIGGERED` 参与自动升级
+   - 默认阈值：`L1=3`、`L2=5`
+   - 严重级别固定按 `LOW -> MEDIUM -> HIGH -> CRITICAL` 上调，封顶 `CRITICAL`
+- DQ 联动：
+   - `dq_score >= 85`：按原阈值升级
+   - `70 <= dq_score < 85`：升级阈值整体上调一档，默认等效 `L1=5 / L2=7`
+   - `REVIEW_REQUIRED`：case 状态为 `REVIEW_ONLY`，允许建 case / 去重 / 抑制，但不自动升级
+   - `DQ_BLOCKED`：case 状态为 `DQ_BLOCKED`，允许建 case / 去重，但不自动升级
+- 恢复规则：
+   - 若 `now - last_triggered_at > recovery_window_seconds`，则定时扫描将 case 标记为 `RECOVERED`
+   - 已恢复 case 不再复用，新命中会新开 case
+
+### 3) 数据库与测试数据说明
+- 当前项目已经接入数据库，B-18 继续复用已有三套配置：
+   - H2：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- B-18 新增表：
+   - `alert_policy`：保存 `rule_code / dedupe_window_seconds / suppress_window_seconds / recovery_window_seconds / escalate_threshold_* / enabled`
+   - `alert_case`：保存 `dedupe_key / device_id / rule_code / case_status / hit_count / unsuppressed_hit_count / escalation_level / suppressed_until / recovered_at`
+- B-18 扩展表：
+   - `alert_record`：新增 `case_id / dedupe_key / process_status / suppressed / escalation_level / processed_at`
+- `src/main/resources/data.sql` 已补充：
+   - 策略种子：`APOL-SEED-001` 到 `APOL-SEED-005`
+   - case 种子：覆盖 `ACTIVE / SUPPRESSED / ESCALATED / RECOVERED / REVIEW_ONLY / DQ_BLOCKED`
+   - 告警明细种子：覆盖同对象同规则窗口内重复命中、抑制命中、升级命中、恢复前历史命中
+- H2 默认启动会自动建表并装载以上种子；PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+
+### 4) 接口与联调示例
+- 手动触发评估并观察 case 摘要：
+   - `curl -s -X POST http://localhost:8080/api/alerts/evaluate -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"sourceRecordIds\":[\"INGR-SEED-007\",\"INGR-SEED-008\",\"INGR-SEED-009\"],\"ruleCodes\":[\"ALR-TH-PRESSURE-HIGH\"]}"`
+- 查询告警明细：
+   - `curl -s "http://localhost:8080/api/alerts?page=1&pageSize=10&deviceId=DEV-001&ruleCode=ALR-TH-PRESSURE-HIGH" -H "Authorization: Bearer <hz_scope_access_token>"`
+- 查询告警 case：
+   - `curl -s "http://localhost:8080/api/alerts/cases?page=1&pageSize=10&deviceId=DEV-001&caseStatus=ESCALATED" -H "Authorization: Bearer <hz_scope_access_token>"`
+- 查询策略：
+   - `curl -s http://localhost:8080/api/alerts/policies -H "Authorization: Bearer <admin_access_token>"`
+- SQL 联调：
+   - `SELECT rule_code, dedupe_window_seconds, suppress_window_seconds, recovery_window_seconds, escalate_threshold_l1, escalate_threshold_l2 FROM alert_policy ORDER BY rule_code;`
+   - `SELECT case_id, device_id, rule_code, case_status, hit_count, unsuppressed_hit_count, escalation_level, suppressed_until, recovered_at FROM alert_case ORDER BY updated_at DESC;`
+   - `SELECT alert_id, case_id, rule_code, process_status, suppressed, escalation_level, event_time FROM alert_record ORDER BY created_at DESC;`
+
+### 5) 错误码
+- `ALERT_POLICY_NOT_FOUND`
+- `ALERT_POLICY_INVALID`
+- `ALERT_CASE_NOT_FOUND`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -1021,7 +1092,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 / B-17 同样复用以上三套数据库配置；H2 默认自动装载补偿与告警规则种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 / B-18 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略与 case 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json

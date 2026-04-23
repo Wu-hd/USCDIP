@@ -22,7 +22,8 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_alert_record_device_created", columnList = "device_id,created_at"),
                 @Index(name = "idx_alert_record_batch_created", columnList = "source_batch_id,created_at"),
-                @Index(name = "idx_alert_record_rule_created", columnList = "rule_code,created_at")
+                @Index(name = "idx_alert_record_rule_created", columnList = "rule_code,created_at"),
+                @Index(name = "idx_alert_record_case_created", columnList = "case_id,created_at")
         }
 )
 public class AlertRecordEntity {
@@ -81,6 +82,24 @@ public class AlertRecordEntity {
 
     @Column(name = "trace_id", length = 128)
     private String traceId;
+
+    @Column(name = "case_id", length = 64)
+    private String caseId;
+
+    @Column(name = "dedupe_key", length = 255)
+    private String dedupeKey;
+
+    @Column(name = "process_status", length = 32)
+    private String processStatus;
+
+    @Column(name = "suppressed")
+    private Boolean suppressed;
+
+    @Column(name = "escalation_level")
+    private Integer escalationLevel;
+
+    @Column(name = "processed_at")
+    private LocalDateTime processedAt;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

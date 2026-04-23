@@ -2,6 +2,7 @@ package com.uscdip.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.uscdip.backend.dto.AlertCaseProcessingSummary;
 import com.uscdip.backend.dto.AlertEvaluateRequest;
 import com.uscdip.backend.dto.AlertEvaluateResponse;
 import com.uscdip.backend.dto.AlertRecordResponse;
@@ -59,6 +60,7 @@ public class AlertRuleEngineService {
     private final TsMetricRepository tsMetricRepository;
     private final DeviceRepository deviceRepository;
     private final ObjectScopeService objectScopeService;
+    private final AlertCaseLifecycleService alertCaseLifecycleService;
     private final ObjectMapper objectMapper;
 
     public AlertRuleEngineService(
@@ -67,6 +69,7 @@ public class AlertRuleEngineService {
             TsMetricRepository tsMetricRepository,
             DeviceRepository deviceRepository,
             ObjectScopeService objectScopeService,
+            AlertCaseLifecycleService alertCaseLifecycleService,
             ObjectMapper objectMapper
     ) {
         this.alertRuleRepository = alertRuleRepository;
@@ -74,6 +77,7 @@ public class AlertRuleEngineService {
         this.tsMetricRepository = tsMetricRepository;
         this.deviceRepository = deviceRepository;
         this.objectScopeService = objectScopeService;
+        this.alertCaseLifecycleService = alertCaseLifecycleService;
         this.objectMapper = objectMapper;
     }
 
@@ -94,6 +98,10 @@ public class AlertRuleEngineService {
                 metrics.size(),
                 outcome.evaluatedRuleCount(),
                 outcome.records().size(),
+                outcome.processingSummary().openedCaseCount(),
+                outcome.processingSummary().dedupedCount(),
+                outcome.processingSummary().suppressedCount(),
+                outcome.processingSummary().escalatedCount(),
                 outcome.records().stream().map(this::toRecordResponse).toList()
         );
     }
@@ -186,13 +194,22 @@ public class AlertRuleEngineService {
                         hit.metricValue(),
                         metric.getEventTime(),
                         metric.getTraceId(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
                         now
                 ));
             }
         }
 
         List<AlertRecordEntity> saved = persist && !toPersist.isEmpty() ? alertRecordRepository.saveAll(toPersist) : toPersist;
-        return new EvaluationOutcome(saved, rules.size());
+        AlertCaseProcessingSummary processingSummary = persist && !saved.isEmpty()
+                ? alertCaseLifecycleService.processAlerts(saved)
+                : AlertCaseProcessingSummary.empty();
+        return new EvaluationOutcome(saved, rules.size(), processingSummary);
     }
 
     private List<TsMetricEntity> resolveMetricsForRequest(AlertEvaluateRequest request) {
@@ -514,6 +531,12 @@ public class AlertRuleEngineService {
                 entity.getMetricValue(),
                 entity.getEventTime(),
                 entity.getTraceId(),
+                entity.getCaseId(),
+                entity.getDedupeKey(),
+                entity.getProcessStatus(),
+                entity.getSuppressed(),
+                entity.getEscalationLevel(),
+                entity.getProcessedAt(),
                 entity.getCreatedAt()
         );
     }
@@ -530,7 +553,11 @@ public class AlertRuleEngineService {
         return new AuthFlowException(ErrorCode.ALERT_RULE_INVALID, HttpStatus.BAD_REQUEST, message);
     }
 
-    private record EvaluationOutcome(List<AlertRecordEntity> records, int evaluatedRuleCount) {
+    private record EvaluationOutcome(
+            List<AlertRecordEntity> records,
+            int evaluatedRuleCount,
+            AlertCaseProcessingSummary processingSummary
+    ) {
     }
 
     private record EvaluationValue(boolean applicable, Double numericValue, String metricCode, String displayValue) {

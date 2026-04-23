@@ -58,3 +58,15 @@ backend:
     max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:3}
     retry-base-delay-seconds: ${NOTIFICATION_RETRY_BASE_DELAY_SECONDS:30}
     retry-fixed-delay-ms: ${NOTIFICATION_RETRY_FIXED_DELAY_MS:30000}
+  websocket:
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8080}
+    max-connections: ${WEBSOCKET_MAX_CONNECTIONS:200}
+    max-connections-per-user: ${WEBSOCKET_MAX_CONNECTIONS_PER_USER:5}
+    frame-size-limit-bytes: ${WEBSOCKET_FRAME_SIZE_LIMIT_BYTES:65536}
+    send-buffer-size-limit-bytes: ${WEBSOCKET_SEND_BUFFER_SIZE_LIMIT_BYTES:524288}
+    send-time-limit-ms: ${WEBSOCKET_SEND_TIME_LIMIT_MS:15000}
+    idle-timeout-seconds: ${WEBSOCKET_IDLE_TIMEOUT_SECONDS:120}
+    heartbeat-interval-ms: ${WEBSOCKET_HEARTBEAT_INTERVAL_MS:30000}
+    replay-batch-size: ${WEBSOCKET_REPLAY_BATCH_SIZE:50}
+    idle-scan-fixed-delay-ms: ${WEBSOCKET_IDLE_SCAN_FIXED_DELAY_MS:30000}
+    notification-bridge-fixed-delay-ms: ${WEBSOCKET_NOTIFICATION_BRIDGE_FIXED_DELAY_MS:30000}

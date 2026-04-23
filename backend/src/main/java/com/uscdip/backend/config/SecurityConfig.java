@@ -46,7 +46,8 @@ public class SecurityConfig {
             "/api/auth/login-url",
             "/api/auth/callback",
             "/api/auth/refresh",
-            "/api/auth/emergency/login"
+            "/api/auth/emergency/login",
+            "/ws/push"
     };
 
     private static final String[] PUBLIC_SPEC_ENDPOINTS = {

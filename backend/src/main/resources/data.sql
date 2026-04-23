@@ -718,3 +718,44 @@ INSERT INTO notification_delivery (
 ('ND-B23-DEAD-INAPP-001', 'NOTIFY-B23-DEAD-001', 'IN_APP', 'in-app://U-INSPECT-001', 'SENT', 1, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL),
 ('ND-B23-DEAD-SMS-001', 'NOTIFY-B23-DEAD-001', 'SMS', 'sms://U-INSPECT-001', 'DEAD', 3, NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'seed notification sms channel dead letter'),
 ('ND-B23-DEAD-WECHAT-001', 'NOTIFY-B23-DEAD-001', 'WECHAT', 'wechat://U-INSPECT-001', 'SENT', 1, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL);
+
+INSERT INTO gateway_route_policy (
+    policy_id, route_code, path_pattern, http_method, auth_required, risk_level, validation_profile,
+    rate_limit_scope, rate_limit_capacity, rate_limit_window_seconds, audit_enabled, enabled, created_at, updated_at
+) VALUES
+('GWP-PROTECTED-WS-PUSH-001', 'WEBSOCKET_PUSH_HANDSHAKE', '/ws/push', 'GET', TRUE, 'HIGH', 'NONE', 'USER_OR_IP', 200, 60, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO websocket_connection (
+    connection_id, stomp_session_id, user_id, username, client_ip, user_agent, status,
+    connected_at, disconnected_at, last_seen_at, close_reason
+) VALUES
+('WSC-SEED-CONNECTED-001', 'STOMP-SEED-001', 'U-INSPECT-001', 'zhangsan', '127.0.0.1', 'seed websocket client', 'CONNECTED',
+ CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP, NULL),
+('WSC-SEED-DISCONNECTED-001', 'STOMP-SEED-002', 'U-DISPATCH-001', 'hz_dispatcher', '127.0.0.1', 'seed websocket client', 'DISCONNECTED',
+ CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'CLIENT_DISCONNECT');
+
+INSERT INTO websocket_subscription (
+    subscription_row_id, connection_id, stomp_session_id, subscription_id, user_id, topic, status, subscribed_at, closed_at
+) VALUES
+('WSS-SEED-USER-001', 'WSC-SEED-CONNECTED-001', 'STOMP-SEED-001', 'sub-user-001', 'U-INSPECT-001', 'user.U-INSPECT-001.workorder.notifications', 'ACTIVE', CURRENT_TIMESTAMP, NULL),
+('WSS-SEED-REGION-001', 'WSC-SEED-DISCONNECTED-001', 'STOMP-SEED-002', 'sub-region-001', 'U-DISPATCH-001', 'region.REGION-HZ.workorder.notifications', 'CLOSED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO websocket_push_message (
+    seq_no, message_id, topic, recipient_user_id, source_notification_id, message_type, title, content, payload, created_at
+) VALUES
+(100, 'WSP-SEED-USER-001', 'user.U-INSPECT-001.workorder.notifications', 'U-INSPECT-001', 'NOTIFY-B23-SENT-001', 'WORK_ORDER_NOTIFICATION',
+ '工单已派发：WO-B22-DISPATCHED-001',
+ 'eventType=WORK_ORDER_DISPATCHED, workOrderId=WO-B22-DISPATCHED-001, incidentId=INC-ALERT-SEED-001, status=DISPATCHED, assignee=zhangsan',
+ '{"seqNo":100,"messageId":"WSP-SEED-USER-001","topic":"user.U-INSPECT-001.workorder.notifications","type":"WORK_ORDER_NOTIFICATION","sourceNotificationId":"NOTIFY-B23-SENT-001","title":"工单已派发：WO-B22-DISPATCHED-001"}',
+ CURRENT_TIMESTAMP),
+(101, 'WSP-SEED-REGION-001', 'region.REGION-HZ.workorder.notifications', 'U-INSPECT-001', 'NOTIFY-B23-SENT-001', 'WORK_ORDER_NOTIFICATION',
+ '工单已派发：WO-B22-DISPATCHED-001',
+ 'eventType=WORK_ORDER_DISPATCHED, workOrderId=WO-B22-DISPATCHED-001, incidentId=INC-ALERT-SEED-001, status=DISPATCHED, assignee=zhangsan',
+ '{"seqNo":101,"messageId":"WSP-SEED-REGION-001","topic":"region.REGION-HZ.workorder.notifications","type":"WORK_ORDER_NOTIFICATION","sourceNotificationId":"NOTIFY-B23-SENT-001","title":"工单已派发：WO-B22-DISPATCHED-001"}',
+ CURRENT_TIMESTAMP);
+
+INSERT INTO websocket_ack (
+    ack_id, user_id, topic, last_ack_seq, updated_at
+) VALUES
+('U-INSPECT-001:user.U-INSPECT-001.workorder.notifications', 'U-INSPECT-001', 'user.U-INSPECT-001.workorder.notifications', 99, CURRENT_TIMESTAMP),
+('U-DISPATCH-001:region.REGION-HZ.workorder.notifications', 'U-DISPATCH-001', 'region.REGION-HZ.workorder.notifications', 100, CURRENT_TIMESTAMP);

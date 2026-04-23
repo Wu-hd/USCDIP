@@ -131,6 +131,7 @@
 - B-21 幂等键与死信处理：消费侧以 `incident_id + action_type + version` 生成幂等键，记录 `idempotent_record`，失败超过阈值写入 `dead_letter`
 - B-22 工单服务：支持一事件多工单、工单状态流转、回写记录、对象范围继承与工单 Outbox 事件
 - B-23 通知服务：只消费稳定工单事件，生成 `notification_message / notification_delivery`，支持多通道模拟发送、重试与死信
+- B-24 WebSocket 推送网关：`/ws/push` STOMP 推送、握手鉴权、订阅授权、心跳、ack 与断线补发
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -1334,6 +1335,52 @@
 - 串联工单、Outbox、通知与死信：
    - `SELECT w.work_order_id, o.event_type, n.notification_id, d.channel, d.status, dl.dead_letter_id FROM work_order w JOIN outbox_event o ON o.aggregate_id = w.work_order_id LEFT JOIN notification_message n ON n.source_event_id = o.event_id LEFT JOIN notification_delivery d ON d.notification_id = n.notification_id LEFT JOIN dead_letter dl ON dl.source_event_id = o.event_id WHERE o.aggregate_type = 'WORK_ORDER';`
 
+## B-24 WebSocket 推送网关说明
+
+### 1) 目标能力
+- 当前项目已经接入数据库，B-24 继续复用 H2 / PostgreSQL / TimescaleDB 与 JPA 自动建表。
+- 新增 Spring WebSocket/STOMP endpoint：`/ws/push`。本地为 `ws://localhost:8080/ws/push`，生产 WSS 由 TLS/反向代理或 Boot SSL 承载。
+- 首版推送范围以 B-23 `notification_message` 为补发源，把工单通知转换成可订阅、可 ack、可重连补发的 WebSocket 消息。
+
+### 2) 握手、订阅与消息目的地
+- 握手鉴权支持两种方式：`Authorization: Bearer <accessToken>` 或 `?access_token=<accessToken>`。
+- broker 前缀：`/topic`、`/queue`、`/user`；应用消息前缀：`/app`。
+- 订阅示例：区域调度订阅 `/topic/region.REGION-HZ.workorder.notifications`；巡检本人订阅 `/user/queue/workorder.notifications`。
+- 应用消息：`SEND /app/push/heartbeat` 刷新活跃时间；`SEND /app/push/ack` 请求体为 `{"topic":"user.U-INSPECT-001.workorder.notifications","lastAckSeq":100}`。
+- 订阅授权复用 `TopicAuthorizationService`，入口 `ENTRY:EMGC`，菜单 `MENU:WORKORDER:READ`；非法 Origin、无效 token、跨区或他人 topic 会被拒绝。
+
+### 3) 持久化、ack 与补发
+- 新增表：`websocket_connection / websocket_subscription / websocket_push_message / websocket_ack`。
+- 通知转换 topic：`user.{userId}.workorder.notifications` 与 `region.{regionId}.workorder.notifications`。
+- 客户端重连订阅后，服务端按 `websocket_ack.last_ack_seq` 补发 `seq_no > last_ack_seq` 的消息。
+- 推送 payload 固定包含 `seqNo / messageId / topic / type / sourceNotificationId / title / content / createdAt`。
+
+### 4) 配置项
+- `WEBSOCKET_ALLOWED_ORIGINS`：允许 Origin，默认 `http://localhost:3000,http://localhost:5173,http://localhost:8080`。
+- `WEBSOCKET_MAX_CONNECTIONS` / `WEBSOCKET_MAX_CONNECTIONS_PER_USER`：总连接数和单用户连接数限制。
+- `WEBSOCKET_FRAME_SIZE_LIMIT_BYTES` / `WEBSOCKET_SEND_BUFFER_SIZE_LIMIT_BYTES` / `WEBSOCKET_SEND_TIME_LIMIT_MS`：帧大小、发送缓冲和发送超时。
+- `WEBSOCKET_IDLE_TIMEOUT_SECONDS / WEBSOCKET_HEARTBEAT_INTERVAL_MS / WEBSOCKET_REPLAY_BATCH_SIZE`：空闲关闭、心跳间隔和补发批量大小。
+- `WEBSOCKET_IDLE_SCAN_FIXED_DELAY_MS / WEBSOCKET_NOTIFICATION_BRIDGE_FIXED_DELAY_MS`：空闲扫描与通知桥接扫描间隔。
+
+### 5) 数据库与测试数据说明
+- B-24 继续复用已有三套数据库配置：
+   - H2：`src/main/resources/application.yml`
+   - PostgreSQL：`src/main/resources/application-postgres.yml`
+   - TimescaleDB：`src/main/resources/application-timescale.yml`
+- H2 默认启动会自动建表并执行 `src/main/resources/data.sql`。
+- PostgreSQL / Timescale 首次联调仍需手动导入测试数据：`psql -U postgres -d uscdip -f src/main/resources/data.sql`。
+- `src/main/resources/data.sql` 已新增 B-24 种子：`WSC-SEED-*` 连接样例、`WSS-SEED-*` 订阅样例、`WSP-SEED-*` 推送消息样例、`websocket_ack` ack 水位样例，以及 `WEBSOCKET_PUSH_HANDSHAKE` Gateway 路由策略样例。
+
+### 6) SQL 联调示例
+- 查看连接与订阅：
+   - `SELECT c.connection_id, c.user_id, c.status, s.topic, s.status AS sub_status FROM websocket_connection c LEFT JOIN websocket_subscription s ON s.connection_id = c.connection_id ORDER BY c.connected_at DESC;`
+- 查看待补发消息：
+   - `SELECT seq_no, topic, source_notification_id, title FROM websocket_push_message WHERE seq_no > 99 ORDER BY seq_no;`
+- 查看 ack 水位：
+   - `SELECT user_id, topic, last_ack_seq, updated_at FROM websocket_ack ORDER BY user_id, topic;`
+- 串联通知与推送：
+   - `SELECT n.notification_id, n.aggregate_id, p.seq_no, p.topic, a.last_ack_seq FROM notification_message n JOIN websocket_push_message p ON p.source_notification_id = n.notification_id LEFT JOIN websocket_ack a ON a.topic = p.topic ORDER BY p.seq_no;`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -1370,7 +1417,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
-- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 / B-23 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter、work_order 闭环与 notification 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
+- B-16 / B-17 / B-18 / B-19 / B-20 / B-21 / B-22 / B-23 / B-24 同样复用以上三套数据库配置；H2 默认自动装载补偿、告警规则、告警策略、case、incident 事件化、outbox_event、idempotent_record、dead_letter、work_order 闭环、notification 与 websocket 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json

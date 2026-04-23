@@ -10,6 +10,7 @@
 - B-13 TSDB 写入与补偿写入服务（在线写入、补偿写入、写入日志与重试）
 - B-14 数据质量评分服务（dq_score / dq_flags / 查询接口）
 - B-15 标定与漂移管理接口（标定版本、漂移复核、到期提醒与校正预览）
+- B-16 边缘断网补偿接口（batchNo / seqNo / originalSampleTime、乱序回传、重复幂等与冲突拦截）
 
 当前项目已添加数据库能力。
 
@@ -100,6 +101,7 @@
 - B-13 TSDB 写入与补偿写入服务：在线/补偿写入、写入日志、失败重试与 Timescale 目标口径
 - B-14 数据质量评分服务：自动评分、dq_flags、查询过滤与告警置信度降权因子
 - B-15 标定与漂移管理接口：版本化标定档案、漂移复核、到期提醒工单、校正预览
+- B-16 边缘断网补偿接口：`batchNo / seqNo / originalSampleTime` 必填、乱序可接受、重复幂等与冲突重复直接拒绝
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -871,6 +873,50 @@
 - `CALIBRATION_DRIFT_EVALUATION_INVALID`
 - `CALIBRATION_CORRECTION_PREVIEW_INVALID`
 
+## B-16 边缘断网补偿接口说明
+
+### 1) 目标能力
+- 继续复用 `POST /api/ingest/backfill` 作为边缘断网补偿主入口，要求固定携带 `batchNo / seqNo / originalSampleTime / isBackfill=true`。
+- 补偿批次允许乱序回传，不要求 `seqNo` 按到达顺序递增；样本时间仍以 `eventTime / originalSampleTime` 为真值。
+- 完全相同的重复补偿按幂等成功处理，不重复写入 `ts_metric`。
+- 相同 `deviceId + metricCode + batchNo + seqNo` 但载荷不同，直接返回 `409 BACKFILL_DUPLICATE`，不再以 `201 + tsdbWrite=FAILED` 吞掉业务冲突。
+
+### 2) 接口与口径
+- `POST /api/ingest/backfill`
+   - 请求体固定包含：`protocolType / sourceType / sourceKey / traceId / batchNo / seqNo / originalSampleTime / isBackfill / metrics[]`
+   - 每条 `metrics[]` 固定包含：`deviceId / metricCode / value / eventTime / recvTime / deviceTime`
+- 幂等重复：
+   - 命中同一 `deviceId + metricCode + batchNo + seqNo` 且 `metricValue / eventTime / recvTime / deviceTime / originalSampleTime / traceId` 全部一致时返回 `201`
+   - `ts_metric` 不新增重复样本
+- 冲突重复：
+   - 命中同一 `deviceId + metricCode + batchNo + seqNo` 但载荷不一致时返回 `409`
+   - 错误码固定为 `BACKFILL_DUPLICATE`
+
+### 3) 数据库与联调说明
+- 当前项目已经接入数据库。
+- 默认开发联调使用 H2；可选使用 PostgreSQL / TimescaleDB，配置文件分别为 `application.yml`、`application-postgres.yml`、`application-timescale.yml`。
+- B-16 继续复用现有表，不新增数据库类型：
+   - `ingest_batch`：保存补偿批次元信息与 `batch_no / seq_no / original_sample_time / is_backfill`
+   - `ts_metric`：保存最终补偿样本与 `batch_no / seq_no / original_sample_time / late_arrival / latency_ms`
+   - `ts_write_log`：保存补偿写入尝试与状态
+- `src/main/resources/data.sql` 已新增 B-16 专属种子：
+   - `INGB-SEED-B16-STD-001`：标准补偿样例
+   - `INGB-SEED-B16-OOO-SEQ2 / INGB-SEED-B16-OOO-SEQ1`：乱序 `seqNo` 样例
+
+### 4) 联调示例
+- 标准补偿写入：
+   - `curl -s -X POST http://localhost:8080/api/ingest/backfill -H "Authorization: Bearer <admin_access_token>" -H "Content-Type: application/json" -d "{\"protocolType\":\"MQTT\",\"sourceType\":\"EDGE_GATEWAY\",\"sourceKey\":\"EDGE-HZ-GW-B16\",\"traceId\":\"TRACE-B16-001\",\"batchNo\":\"BATCH-B16-001\",\"seqNo\":1,\"originalSampleTime\":\"2026-04-21T08:00:00\",\"isBackfill\":true,\"metrics\":[{\"deviceId\":\"DEV-001\",\"metricCode\":\"PRESSURE\",\"value\":0.91,\"eventTime\":\"2026-04-21T08:00:00\",\"recvTime\":\"2026-04-24T08:00:00\",\"deviceTime\":\"2026-04-21T07:59:58\"}]}"` 
+- 冲突重复示例：
+   - 首次发送后，再把同一 `batchNo=BATCH-B16-001`、`seqNo=1` 的 `value` 改为其他值重复提交，应返回 `409 BACKFILL_DUPLICATE`
+- 查询种子数据：
+   - `SELECT batch_id, batch_no, seq_no, original_sample_time FROM ingest_batch WHERE batch_id LIKE 'INGB-SEED-B16-%' ORDER BY batch_no, seq_no DESC;`
+   - `SELECT source_record_id, batch_no, seq_no, is_backfill, latency_ms FROM ts_metric WHERE source_batch_id LIKE 'INGB-SEED-B16-%' ORDER BY batch_no, seq_no DESC;`
+
+### 5) 错误码
+- `BACKFILL_PAYLOAD_INVALID`
+- `BACKFILL_DUPLICATE`
+- `TSDB_WRITE_FAILED`
+
 ## 数据库配置说明
 
 ### 默认数据库（开发/联调）
@@ -907,6 +953,7 @@
 - 说明：
    - 默认开发和测试仍使用 H2
    - Timescale profile 基于 PostgreSQL 配置扩展，不会在 H2 启动阶段执行 Timescale 专属 SQL
+- B-16 补偿接口同样复用以上三套数据库配置；H2 默认自动装载 B-16 种子，PostgreSQL / Timescale 首次联调仍需手动导入 `src/main/resources/data.sql`
 
 ### A-04 数据库存储（本轮新增）
 - 资源配置文件：src/main/resources/a04-authz-matrix.json
@@ -1034,15 +1081,18 @@
    - `device_heartbeat`：3 条历史样例
    - `DEV-002` 的 `calibrationDueAt` 已过期，可直接验证 `calibrationExpired=true`
 - 已生成 B-12 接入层联调数据：
-   - `ingest_batch`：5 条，覆盖 `MQTT / MODBUS / NB_IOT / FLATLINE / INVALID`
-   - `ingest_record`：10 条，覆盖 MQTT、Modbus、NB-IoT 回填、平线样本和量程异常样本
+   - `ingest_batch`：8 条，覆盖 `MQTT / MODBUS / NB_IOT / B16_STANDARD / B16_OUT_OF_ORDER / FLATLINE / INVALID`
+   - `ingest_record`：13 条，覆盖 MQTT、Modbus、NB-IoT 回填、B-16 标准补偿、B-16 乱序补偿、平线样本和量程异常样本
    - `INGB-SEED-NBIOT-001` 可直接验证 `isBackfill=true`
+   - `INGB-SEED-B16-STD-001` 可直接验证 B-16 标准补偿批次
+   - `INGB-SEED-B16-OOO-SEQ2 / INGB-SEED-B16-OOO-SEQ1` 可直接验证乱序 `seqNo` 口径
    - `INGB-SEED-FLAT-001` 可直接验证平线窗口
    - `INGB-SEED-INVALID-001` 可直接验证量程异常与低质量评分
 - 已生成 B-13 / B-14 时序与质量联调数据：
-   - `ts_write_log`：5 条成功写入样例
-   - `ts_metric`：10 条时序样例，均带 `dq_score / dq_level / dq_flags`
+   - `ts_write_log`：8 条成功写入样例
+   - `ts_metric`：13 条时序样例，均带 `dq_score / dq_level / dq_flags`
    - `INGR-SEED-004`：回填 + 延迟样例，对应 `C` 级质量
+   - `INGR-SEED-011 / INGR-SEED-012 / INGR-SEED-013`：B-16 补偿样例，覆盖标准补偿与乱序补偿
    - `INGR-SEED-009`：平线样例，带 `STABILITY_FLATLINE`
    - `INGR-SEED-010`：量程异常 + 延迟样例，对应 `D` 级质量
 - 已生成 B-15 标定与漂移联调数据：

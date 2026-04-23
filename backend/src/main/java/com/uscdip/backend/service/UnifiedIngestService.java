@@ -157,6 +157,13 @@ public class UnifiedIngestService {
 
     @Transactional
     public UnifiedIngestBatchResponse ingestBackfill(BackfillIngestRequest request) {
+        if (!Boolean.TRUE.equals(request.isBackfill())) {
+            throw new AuthFlowException(
+                    ErrorCode.BACKFILL_PAYLOAD_INVALID,
+                    HttpStatus.BAD_REQUEST,
+                    "isBackfill must be true"
+            );
+        }
         IngestProtocolType protocolType = parseProtocol(request.protocolType());
         List<UnifiedIngestMetricDto> normalizedMetrics = normalizeMetrics(
                 protocolType,

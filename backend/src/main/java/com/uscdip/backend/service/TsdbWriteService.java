@@ -209,21 +209,24 @@ public class TsdbWriteService {
             batch.setLastWriteAt(LocalDateTime.now());
             ingestBatchRepository.save(batch);
             return new AttemptResult(log, toSummary(log));
+        } catch (AuthFlowException ex) {
+            long durationMs = System.currentTimeMillis() - startedAt;
+            boolean propagateImmediately = shouldPropagateBusinessBackfillError(batch, ex);
+            markAttemptFailed(log, batch, records.size(), durationMs, ex.getMessage(), shouldAutoRetry(attemptNo) && !propagateImmediately);
+            if (propagateImmediately) {
+                throw ex;
+            }
+            if (failOnWriteError) {
+                throw new AuthFlowException(
+                        ErrorCode.TSDB_WRITE_FAILED,
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "TSDB write failed for batch: " + batchId
+                );
+            }
+            return new AttemptResult(log, toSummary(log));
         } catch (Exception ex) {
             long durationMs = System.currentTimeMillis() - startedAt;
-            log.setStatus(STATUS_FAILED);
-            log.setSuccessCount(0);
-            log.setFailedCount(records.size());
-            log.setDurationMs(durationMs);
-            log.setLastError(abbreviateError(ex.getMessage()));
-            log.setNextRetryAt(shouldAutoRetry(attemptNo) ? computeNextRetryAt(attemptNo) : null);
-            log.setUpdatedAt(LocalDateTime.now());
-            tsWriteLogRepository.save(log);
-
-            batch.setTsdbWriteStatus(STATUS_FAILED);
-            batch.setLastWriteLogId(log.getWriteLogId());
-            batch.setLastWriteAt(LocalDateTime.now());
-            ingestBatchRepository.save(batch);
+            markAttemptFailed(log, batch, records.size(), durationMs, ex.getMessage(), shouldAutoRetry(attemptNo));
 
             if (failOnWriteError) {
                 throw new AuthFlowException(
@@ -329,6 +332,29 @@ public class TsdbWriteService {
         return Duration.between(record.getEventTime(), record.getRecvTime()).toMillis();
     }
 
+    private void markAttemptFailed(
+            TsWriteLogEntity log,
+            IngestBatchEntity batch,
+            int requestedCount,
+            long durationMs,
+            String errorMessage,
+            boolean autoRetryEligible
+    ) {
+        log.setStatus(STATUS_FAILED);
+        log.setSuccessCount(0);
+        log.setFailedCount(requestedCount);
+        log.setDurationMs(durationMs);
+        log.setLastError(abbreviateError(errorMessage));
+        log.setNextRetryAt(autoRetryEligible ? computeNextRetryAt(log.getAttemptNo() == null ? 1 : log.getAttemptNo()) : null);
+        log.setUpdatedAt(LocalDateTime.now());
+        tsWriteLogRepository.save(log);
+
+        batch.setTsdbWriteStatus(STATUS_FAILED);
+        batch.setLastWriteLogId(log.getWriteLogId());
+        batch.setLastWriteAt(LocalDateTime.now());
+        ingestBatchRepository.save(batch);
+    }
+
     private LocalDateTime computeNextRetryAt(int attemptNo) {
         long delaySeconds = (long) retryBaseDelaySeconds * (1L << Math.max(0, attemptNo - 1));
         return LocalDateTime.now().plusSeconds(delaySeconds);
@@ -422,6 +448,14 @@ public class TsdbWriteService {
             return "TSDB write failed";
         }
         return message.length() <= ERROR_MAX_LENGTH ? message : message.substring(0, ERROR_MAX_LENGTH);
+    }
+
+    private boolean shouldPropagateBusinessBackfillError(IngestBatchEntity batch, AuthFlowException ex) {
+        if (batch == null || !batch.isBackfill() || ex == null || ex.getErrorCode() == null) {
+            return false;
+        }
+        return ex.getErrorCode() == ErrorCode.BACKFILL_DUPLICATE
+                || ex.getErrorCode() == ErrorCode.BACKFILL_PAYLOAD_INVALID;
     }
 
     private record AttemptResult(TsWriteLogEntity log, TsdbWriteSummary summary) {

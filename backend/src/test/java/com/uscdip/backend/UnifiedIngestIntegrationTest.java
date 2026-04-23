@@ -164,13 +164,21 @@ class UnifiedIngestIntegrationTest {
         TokenPairResponse adminToken = localTokenService.issueForUser("U-ADMIN-001", "127.0.0.1", "JUnit");
         TokenPairResponse regionalToken = localTokenService.issueForUser("U-B07-HZ-001", "127.0.0.1", "JUnit");
 
-                mockMvc.perform(get("/api/ingest/batches")
+        mockMvc.perform(get("/api/ingest/batches")
                         .param("page", "1")
                         .param("pageSize", "10")
                         .header("Authorization", "Bearer " + regionalToken.accessToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(4))
-                .andExpect(jsonPath("$.data.items[*].batchId", hasItems("INGB-SEED-MQTT-001", "INGB-SEED-MODBUS-001", "INGB-SEED-FLAT-001", "INGB-SEED-INVALID-001")))
+                .andExpect(jsonPath("$.data.total").value(7))
+                .andExpect(jsonPath("$.data.items[*].batchId", hasItems(
+                        "INGB-SEED-MQTT-001",
+                        "INGB-SEED-MODBUS-001",
+                        "INGB-SEED-B16-STD-001",
+                        "INGB-SEED-B16-OOO-SEQ2",
+                        "INGB-SEED-B16-OOO-SEQ1",
+                        "INGB-SEED-FLAT-001",
+                        "INGB-SEED-INVALID-001"
+                )))
                 .andExpect(jsonPath("$.data.items[*].batchId", not(hasItems("INGB-SEED-NBIOT-001"))));
 
         mockMvc.perform(get("/api/ingest/batches/INGB-SEED-NBIOT-001")

@@ -1,5 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router';
 
+import { getAccessToken } from '@/services/api';
+import { checkPermissions, isManagedPlatformCode } from '@/services/permissions';
+import { useAuthStore } from '@/stores/auth';
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -18,11 +22,20 @@ const router = createRouter({
       component: () => import('@/views/AuthCallbackView.vue')
     },
     {
+      path: '/forbidden',
+      name: 'forbidden',
+      component: () => import('@/views/ForbiddenView.vue')
+    },
+    {
       path: '/mgmt',
       name: 'mgmt-placeholder',
       component: () => import('@/views/PlatformPlaceholderView.vue'),
       meta: {
-        platformCode: 'MGMT'
+        requiresAuth: true,
+        platformCode: 'MGMT',
+        entryPermission: 'ENTRY:MGMT',
+        menuPermission: 'MENU:ASSET:READ',
+        permissionLabel: '综合管理平台'
       }
     },
     {
@@ -30,7 +43,11 @@ const router = createRouter({
       name: 'emgc-placeholder',
       component: () => import('@/views/PlatformPlaceholderView.vue'),
       meta: {
-        platformCode: 'EMGC'
+        requiresAuth: true,
+        platformCode: 'EMGC',
+        entryPermission: 'ENTRY:EMGC',
+        menuPermission: 'MENU:WORKORDER:READ',
+        permissionLabel: '应急指挥平台'
       }
     },
     {
@@ -38,7 +55,11 @@ const router = createRouter({
       name: 'diag-placeholder',
       component: () => import('@/views/PlatformPlaceholderView.vue'),
       meta: {
-        platformCode: 'DIAG'
+        requiresAuth: true,
+        platformCode: 'DIAG',
+        entryPermission: 'ENTRY:DIAG',
+        menuPermission: 'MENU:MODEL:READ',
+        permissionLabel: '智能诊断中枢'
       }
     },
     {
@@ -49,6 +70,71 @@ const router = createRouter({
   scrollBehavior() {
     return { top: 0 };
   }
+});
+
+router.beforeEach(async (to) => {
+  if (!to.meta.requiresAuth) {
+    return true;
+  }
+
+  const authStore = useAuthStore();
+  authStore.bindSessionEvents();
+
+  if (!getAccessToken()) {
+    return {
+      path: '/portal',
+      query: {
+        auth: 'required',
+        redirect: to.fullPath
+      }
+    };
+  }
+
+  const hasUser = await authStore.ensureCurrentUser();
+  if (!hasUser) {
+    return {
+      path: '/portal',
+      query: {
+        auth: 'required',
+        redirect: to.fullPath
+      }
+    };
+  }
+
+  const platformCode = String(to.meta.platformCode ?? '');
+  const permissionLabel = String(to.meta.permissionLabel ?? platformCode);
+  const entryPermission = String(to.meta.entryPermission ?? '');
+  const menuPermission = String(to.meta.menuPermission ?? '');
+
+  if (!isManagedPlatformCode(platformCode) || !entryPermission || !menuPermission) {
+    return {
+      path: '/forbidden',
+      query: {
+        reason: 'ROUTE_PERMISSION_META_INVALID',
+        from: to.fullPath
+      }
+    };
+  }
+
+  const result = checkPermissions(
+    authStore.user,
+    [entryPermission, menuPermission],
+    permissionLabel
+  );
+  if (result.allowed) {
+    return true;
+  }
+
+  return {
+    path: '/forbidden',
+    query: {
+      reason: 'PERMISSION_DENIED',
+      from: to.fullPath,
+      platform: platformCode,
+      required: result.requiredPermissions.join(','),
+      missing: result.missingPermissions.join(',')
+    }
+  };
 });
 
 export default router;

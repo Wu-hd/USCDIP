@@ -11,6 +11,7 @@ import {
   DatabaseZap,
   ExternalLink,
   Loader2,
+  LockKeyhole,
   LogIn,
   LogOut,
   RefreshCcw,
@@ -22,9 +23,15 @@ import {
 } from 'lucide-vue-next';
 import { storeToRefs } from 'pinia';
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { ApiClientError } from '@/services/api';
+import {
+  checkPlatformEntry,
+  checkPlatformRoute,
+  filterManagedPlatforms,
+  PLATFORM_PERMISSION_REQUIREMENTS
+} from '@/services/permissions';
 import {
   getMenuBoundaries,
   getNotifications,
@@ -51,6 +58,7 @@ interface TodoPanel<T> {
 }
 
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore();
 const {
   status,
@@ -106,10 +114,13 @@ const portalBoundary = computed(() =>
 );
 
 const visiblePlatforms = computed(() =>
-  platforms.value.filter((platform) => ['MGMT', 'EMGC', 'DIAG'].includes(platform.platformCode))
+  filterManagedPlatforms(platforms.value)
 );
 
 const todoTotal = computed(() => workOrders.value.total + notifications.value.total);
+const portalNotice = computed(() =>
+  route.query.auth === 'required' ? '请先登录并具备对应平台权限后再进入业务平台。' : ''
+);
 
 const authStatusLabel = computed(() => {
   if (status.value === 'authenticated') {
@@ -169,6 +180,25 @@ function getPlatformAccent(code: string) {
     platformAccentMap[code as keyof typeof platformAccentMap] ??
     'from-blue-500/20 to-slate-400/10 text-blue-200'
   );
+}
+
+function getPlatformEntryCheck(platform: PlatformBoundary) {
+  return checkPlatformEntry(user.value, platform.platformCode);
+}
+
+function getPlatformRouteCheck(platform: PlatformBoundary) {
+  return checkPlatformRoute(user.value, platform.platformCode as 'MGMT' | 'EMGC' | 'DIAG');
+}
+
+function getPlatformRequirement(code: string) {
+  return PLATFORM_PERMISSION_REQUIREMENTS[code as keyof typeof PLATFORM_PERMISSION_REQUIREMENTS];
+}
+
+function getPlatformCardClass(platform: PlatformBoundary) {
+  if (!getPlatformEntryCheck(platform).allowed) {
+    return 'cursor-not-allowed border-amber-400/20 bg-amber-400/[0.055] opacity-80';
+  }
+  return 'cursor-pointer border-white/10 bg-white/[0.055] hover:border-white/25 hover:bg-white/[0.085]';
 }
 
 function formatTime(value: string | null | undefined) {
@@ -286,6 +316,9 @@ async function refreshAll() {
 }
 
 function openPlatform(platform: PlatformBoundary) {
+  if (!getPlatformEntryCheck(platform).allowed) {
+    return;
+  }
   router.push(platform.routePrefix);
 }
 
@@ -351,6 +384,14 @@ onMounted(() => {
         </div>
       </header>
 
+      <div
+        v-if="portalNotice"
+        class="rounded-lg border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-50"
+        role="alert"
+      >
+        {{ portalNotice }}
+      </div>
+
       <section class="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.7fr)]">
         <div class="glass-panel overflow-hidden p-5 sm:p-6">
           <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -370,7 +411,7 @@ onMounted(() => {
               <div class="glass-panel-muted p-3">
                 <p class="text-xs text-slate-400">三平台入口</p>
                 <p class="mt-1 font-display text-2xl font-semibold text-white">
-                  {{ visiblePlatforms.length }}
+                  {{ authStore.accessiblePlatformCount }} / {{ visiblePlatforms.length }}
                 </p>
               </div>
               <div class="glass-panel-muted p-3">
@@ -392,8 +433,11 @@ onMounted(() => {
             <button
               v-for="platform in visiblePlatforms"
               :key="platform.platformCode"
-              class="group min-h-[220px] cursor-pointer rounded-lg border border-white/10 bg-white/[0.055] p-5 text-left shadow-glow transition-colors duration-200 hover:border-white/25 hover:bg-white/[0.085] focus-ring"
+              class="group min-h-[244px] rounded-lg border p-5 text-left shadow-glow transition-colors duration-200 focus-ring disabled:cursor-not-allowed"
+              :class="getPlatformCardClass(platform)"
               type="button"
+              :disabled="!getPlatformEntryCheck(platform).allowed"
+              :aria-describedby="`${platform.platformCode}-permission-state`"
               @click="openPlatform(platform)"
             >
               <div
@@ -413,15 +457,43 @@ onMounted(() => {
                   </p>
                 </div>
                 <ArrowRight
+                  v-if="getPlatformEntryCheck(platform).allowed"
                   class="mt-1 h-5 w-5 shrink-0 text-slate-400 transition-colors duration-200 group-hover:text-white"
+                />
+                <LockKeyhole
+                  v-else
+                  class="mt-1 h-5 w-5 shrink-0 text-amber-200"
+                  aria-hidden="true"
                 />
               </div>
               <p class="mt-4 line-clamp-3 text-sm leading-6 text-slate-300">
                 {{ platform.description }}
               </p>
-              <div class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-blue-100">
-                进入平台
-                <ExternalLink class="h-4 w-4" />
+              <div
+                :id="`${platform.platformCode}-permission-state`"
+                class="mt-5 rounded-lg border px-3 py-2 text-sm"
+                :class="getPlatformEntryCheck(platform).allowed ? 'border-blue-400/20 bg-blue-400/10 text-blue-100' : 'border-amber-400/20 bg-amber-400/10 text-amber-100'"
+              >
+                <div class="flex items-center gap-2 font-semibold">
+                  <ExternalLink
+                    v-if="getPlatformEntryCheck(platform).allowed"
+                    class="h-4 w-4"
+                    aria-hidden="true"
+                  />
+                  <LockKeyhole v-else class="h-4 w-4" aria-hidden="true" />
+                  <span>
+                    {{ getPlatformEntryCheck(platform).allowed ? '入口权限已通过' : '入口已锁定' }}
+                  </span>
+                </div>
+                <p class="mt-1 font-mono text-xs">
+                  {{ getPlatformRequirement(platform.platformCode)?.entryPermission ?? '-' }}
+                </p>
+                <p
+                  v-if="getPlatformEntryCheck(platform).allowed && !getPlatformRouteCheck(platform).allowed"
+                  class="mt-1 text-xs text-amber-100"
+                >
+                  仍缺少 {{ getPlatformRouteCheck(platform).missingPermissions.join(' / ') }}
+                </p>
               </div>
             </button>
           </div>
@@ -466,6 +538,18 @@ onMounted(() => {
                 <dt class="text-slate-400">Access 剩余</dt>
                 <dd class="min-w-0 truncate text-right text-slate-100">
                   {{ accessTokenRemainingLabel }}
+                </dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-slate-400">角色</dt>
+                <dd class="min-w-0 truncate text-right text-slate-100">
+                  {{ authStore.roleSummary }}
+                </dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-slate-400">权限</dt>
+                <dd class="min-w-0 truncate text-right text-slate-100">
+                  {{ authStore.permissionSummary }}
                 </dd>
               </div>
               <div class="flex justify-between gap-3">

@@ -87,6 +87,46 @@ export interface AuthMePayload {
   snapshot: Record<string, unknown>;
 }
 
+export type PlatformCode = 'PORTAL' | 'MGMT' | 'EMGC' | 'DIAG' | 'SUPPORT';
+export type ManagedPlatformCode = 'MGMT' | 'EMGC' | 'DIAG';
+
+export interface UserPermissionSnapshot {
+  userId: string;
+  username: string;
+  displayName: string;
+  roleCodes: string[];
+  permissionCodes: string[];
+  dataScopeRule: string;
+  authorizedRegions: string[];
+  authorizedAssignees: string[];
+  dataViewConstraint: string;
+  topicPatterns: string[];
+  maskedFeatureOnly: boolean;
+}
+
+export interface RoutePermissionMeta {
+  requiresAuth: boolean;
+  platformCode: ManagedPlatformCode;
+  entryPermission: string;
+  menuPermission: string;
+  permissionLabel: string;
+}
+
+export interface PermissionCheckResult {
+  allowed: boolean;
+  requiredPermissions: string[];
+  missingPermissions: string[];
+  reason: string;
+}
+
+export interface ButtonPermissionConfig {
+  key: string;
+  label: string;
+  description: string;
+  requiredPermissions: string[];
+  tone: 'read' | 'write' | 'dispatch' | 'model';
+}
+
 export interface WorkOrderResponse {
   workOrderId: string;
   incidentId: string;

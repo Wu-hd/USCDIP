@@ -8,6 +8,12 @@ import {
   getAccessTokenRemainingMs
 } from '@/services/api';
 import { savePendingOidcState } from '@/services/auth';
+import {
+  countAccessiblePlatforms,
+  extractPermissionSnapshot,
+  hasAllPermissions as userHasAllPermissions,
+  hasPermission as userHasPermission
+} from '@/services/permissions';
 import { getCurrentUser, getLoginDescriptor, logout } from '@/services/portal';
 import type { AuthMePayload, AuthRefreshState } from '@/types/api';
 
@@ -58,7 +64,20 @@ export const useAuthStore = defineStore('auth', {
         return `${minutes} 分 ${seconds} 秒`;
       }
       return `${seconds} 秒`;
-    }
+    },
+    permissionSnapshot: (state) => extractPermissionSnapshot(state.user),
+    roleSummary: (state) => {
+      const roles = extractPermissionSnapshot(state.user).roleCodes;
+      return roles.length ? roles.join(' / ') : '未授权';
+    },
+    permissionSummary: (state) => {
+      const permissions = extractPermissionSnapshot(state.user).permissionCodes;
+      return permissions.length ? `${permissions.length} 项权限` : '无权限快照';
+    },
+    accessiblePlatformCount: (state) => countAccessiblePlatforms(state.user),
+    hasPermission: (state) => (permission: string) => userHasPermission(state.user, permission),
+    hasAllPermissions: (state) => (permissions: string[]) =>
+      userHasAllPermissions(state.user, permissions)
   },
   actions: {
     bindSessionEvents() {
@@ -81,6 +100,16 @@ export const useAuthStore = defineStore('auth', {
         }
       });
       this.sessionEventsBound = true;
+    },
+    async ensureCurrentUser() {
+      if (this.isAuthenticated && this.user) {
+        return true;
+      }
+      await this.loadCurrentUser();
+      return this.isAuthenticated;
+    },
+    async refreshPermissionSnapshot() {
+      await this.loadCurrentUser();
     },
     async loadCurrentUser() {
       this.bindSessionEvents();

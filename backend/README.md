@@ -2055,6 +2055,14 @@
    - `TOKEN_REFRESH_EXPIRED / TOKEN_REFRESH_REVOKED / TOKEN_REFRESH_REPLAY_DETECTED / TOKEN_REFRESH_INVALID` 会触发本地强制登出，清理 token pair，并在 Portal 登录态面板显示原因与 traceId。
    - `POST /api/auth/logout` 无论后端返回成功、401 还是 OIDC disabled，前端都会清理本地 token pair 并回到未登录态。
    - 联调建议：先通过 OIDC callback 获取真实 token pair，再访问 `/portal`；可用旧 refresh token 或已撤销 token 验证强制登出路径。
+- F-04 路由守卫与按钮级权限控制已接入前端权限快照：
+   - 前端路由 `/mgmt`、`/emgc`、`/diag` 分别校验 `ENTRY:MGMT + MENU:ASSET:READ`、`ENTRY:EMGC + MENU:WORKORDER:READ`、`ENTRY:DIAG + MENU:MODEL:READ`。
+   - `/portal` 保持三平台卡片可见；无 `ENTRY:*` 的平台卡片会显示锁定态，不隐藏入口，也不会跳转业务平台。
+   - 已登录但缺少路由权限时进入 `/forbidden`，页面展示 required/missing 权限、当前角色、权限快照摘要与 traceId，并可刷新权限快照。
+   - 平台占位页仅展示按钮级权限状态，不执行真实业务编辑；写类按钮分别校验 `MENU:ASSET:WRITE`、`MENU:WORKORDER:DISPATCH`、`MENU:MODEL:WRITE`。
+   - 联调角色预期：平台管理员可进入 MGMT/EMGC/DIAG；区域调度员可进入 MGMT/EMGC；巡检人员只进入 EMGC；算法工程师只进入 DIAG；领导只读进入 EMGC 且写按钮锁定。
+   - 权限快照验证：`curl -s http://localhost:8080/api/authz/users/<userId>/snapshot -H "Authorization: Bearer <access_token>"`，确认 `snapshot.permissionCodes` 与前端展示一致。
+   - 后端最终校验仍以 `AuthzGuardAspect` 为准；可用 `POST /api/authz/check` 验证 ENTRY、MENU、dataScope、topicScope 联合鉴权。
 - 在 B-11 上补设备台账、心跳上报和在线状态计算。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

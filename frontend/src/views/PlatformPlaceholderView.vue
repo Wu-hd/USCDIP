@@ -5,17 +5,30 @@ import {
   Building2,
   Command,
   Construction,
+  Database,
   DoorOpen,
+  LockKeyhole,
+  Pencil,
   Route
 } from 'lucide-vue-next';
+import { storeToRefs } from 'pinia';
 import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 
 import { ApiClientError } from '@/services/api';
 import { getPlatform } from '@/services/platform';
-import type { PlatformBoundary } from '@/types/api';
+import {
+  checkPermissions,
+  isManagedPlatformCode,
+  PLATFORM_ACTIONS,
+  PLATFORM_PERMISSION_REQUIREMENTS
+} from '@/services/permissions';
+import { useAuthStore } from '@/stores/auth';
+import type { ButtonPermissionConfig, ManagedPlatformCode, PlatformBoundary } from '@/types/api';
 
 const route = useRoute();
+const authStore = useAuthStore();
+const { user, roleSummary, permissionSummary } = storeToRefs(authStore);
 const platform = ref<PlatformBoundary | null>(null);
 const state = ref<'loading' | 'ready' | 'error'>('loading');
 const message = ref('正在读取平台边界');
@@ -30,6 +43,15 @@ const iconMap = {
 };
 
 const pageIcon = computed(() => iconMap[platformCode.value as keyof typeof iconMap] ?? Route);
+const managedPlatformCode = computed<ManagedPlatformCode | null>(() =>
+  isManagedPlatformCode(platformCode.value) ? platformCode.value : null
+);
+const routeRequirement = computed(() =>
+  managedPlatformCode.value ? PLATFORM_PERMISSION_REQUIREMENTS[managedPlatformCode.value] : null
+);
+const actionConfigs = computed(() =>
+  managedPlatformCode.value ? PLATFORM_ACTIONS[managedPlatformCode.value] : []
+);
 
 async function loadPlatform() {
   state.value = 'loading';
@@ -48,6 +70,20 @@ async function loadPlatform() {
     }
     message.value = '平台边界读取失败';
   }
+}
+
+function checkAction(action: ButtonPermissionConfig) {
+  return checkPermissions(user.value, action.requiredPermissions, action.label);
+}
+
+function actionToneClass(action: ButtonPermissionConfig) {
+  if (!checkAction(action).allowed) {
+    return 'border-amber-400/20 bg-amber-400/10 text-amber-100';
+  }
+  if (action.tone === 'write' || action.tone === 'dispatch' || action.tone === 'model') {
+    return 'border-orange-400/25 bg-orange-400/10 text-orange-100 hover:border-orange-300/40 hover:bg-orange-400/15';
+  }
+  return 'border-blue-400/25 bg-blue-400/10 text-blue-100 hover:border-blue-300/40 hover:bg-blue-400/15';
 }
 
 onMounted(() => {
@@ -102,6 +138,79 @@ onMounted(() => {
                 </p>
               </div>
             </div>
+
+            <div class="mt-6 grid gap-3 md:grid-cols-3">
+              <div class="rounded-lg border border-white/10 bg-white/[0.045] p-4">
+                <p class="text-xs text-slate-400">入口权限</p>
+                <p class="mt-2 font-mono text-sm text-blue-100">
+                  {{ routeRequirement?.entryPermission ?? '-' }}
+                </p>
+              </div>
+              <div class="rounded-lg border border-white/10 bg-white/[0.045] p-4">
+                <p class="text-xs text-slate-400">菜单权限</p>
+                <p class="mt-2 font-mono text-sm text-blue-100">
+                  {{ routeRequirement?.menuPermission ?? '-' }}
+                </p>
+              </div>
+              <div class="rounded-lg border border-white/10 bg-white/[0.045] p-4">
+                <p class="text-xs text-slate-400">当前角色</p>
+                <p class="mt-2 line-clamp-2 text-sm text-white">{{ roleSummary }}</p>
+              </div>
+            </div>
+
+            <section class="mt-6 rounded-lg border border-white/10 bg-white/[0.045] p-4">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="text-sm font-semibold text-white">按钮级权限</p>
+                  <p class="mt-1 text-sm text-slate-400">{{ permissionSummary }}</p>
+                </div>
+                <Database class="h-5 w-5 text-blue-200" aria-hidden="true" />
+              </div>
+
+              <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                <button
+                  v-for="action in actionConfigs"
+                  :key="action.key"
+                  class="min-h-[132px] rounded-lg border p-4 text-left transition-colors duration-200 focus-ring disabled:cursor-not-allowed disabled:opacity-80"
+                  :class="actionToneClass(action)"
+                  type="button"
+                  :disabled="!checkAction(action).allowed"
+                  :aria-disabled="!checkAction(action).allowed"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="font-semibold text-white">{{ action.label }}</p>
+                      <p class="mt-1 text-sm leading-5 text-slate-300">{{ action.description }}</p>
+                    </div>
+                    <Pencil
+                      v-if="checkAction(action).allowed"
+                      class="h-5 w-5 shrink-0 text-current"
+                      aria-hidden="true"
+                    />
+                    <LockKeyhole
+                      v-else
+                      class="h-5 w-5 shrink-0 text-current"
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <span
+                      v-for="permission in action.requiredPermissions"
+                      :key="permission"
+                      class="rounded-md border border-white/10 bg-black/15 px-2 py-1 font-mono text-xs"
+                    >
+                      {{ permission }}
+                    </span>
+                  </div>
+                  <p
+                    v-if="!checkAction(action).allowed"
+                    class="mt-3 text-xs leading-5 text-amber-100"
+                  >
+                    缺少 {{ checkAction(action).missingPermissions.join(' / ') }}
+                  </p>
+                </button>
+              </div>
+            </section>
 
             <div class="mt-6 rounded-lg border border-amber-400/20 bg-amber-400/10 p-4 text-sm leading-6 text-amber-50">
               <div class="flex gap-3">

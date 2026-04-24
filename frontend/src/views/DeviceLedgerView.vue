@@ -737,6 +737,13 @@ function formatBuffer(value: number | null | undefined) {
               <p class="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-5 text-slate-300">
                 {{ selectedDevice.onlineStatusReason || 'HEARTBEAT_OK' }}
               </p>
+              <RouterLink
+                class="secondary-button focus-ring mt-3 w-full"
+                :to="{ path: '/mgmt/trends', query: { deviceId: selectedDevice.deviceId, metricCode: 'PRESSURE' } }"
+              >
+                <Activity class="h-4 w-4" />
+                查看趋势
+              </RouterLink>
             </section>
 
             <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">

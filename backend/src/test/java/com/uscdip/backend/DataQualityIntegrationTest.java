@@ -161,11 +161,22 @@ class DataQualityIntegrationTest {
         mockMvc.perform(get("/api/dq/scores")
                         .param("dqLevel", "D")
                         .param("deviceId", "DEV-001")
+                        .param("startTime", "2026-04-23T00:00:00")
+                        .param("endTime", "2026-04-24T23:59:59")
                         .header("Authorization", "Bearer " + regionalToken.accessToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.items[*].sourceRecordId", hasItems("INGR-SEED-010")))
                 .andExpect(jsonPath("$.data.items[*].sourceRecordId", not(hasItems("INGR-SEED-004"))));
+
+        mockMvc.perform(get("/api/dq/scores")
+                        .param("deviceId", "DEV-001")
+                        .param("metricCode", "PRESSURE")
+                        .param("endTime", "2026-04-21T23:59:59")
+                        .header("Authorization", "Bearer " + adminToken.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[*].sourceRecordId", hasItems("INGR-SEED-011")))
+                .andExpect(jsonPath("$.data.items[*].sourceRecordId", not(hasItems("INGR-SEED-010"))));
 
         mockMvc.perform(get("/api/dq/scores/INGR-SEED-004")
                         .header("Authorization", "Bearer " + regionalToken.accessToken()))
@@ -197,6 +208,13 @@ class DataQualityIntegrationTest {
         mockMvc.perform(get("/api/dq/scores")
                         .param("minScore", "90")
                         .param("maxScore", "20")
+                        .header("Authorization", "Bearer " + adminToken.accessToken()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("DQ_QUERY_INVALID"));
+
+        mockMvc.perform(get("/api/dq/scores")
+                        .param("startTime", "2026-04-25T00:00:00")
+                        .param("endTime", "2026-04-24T00:00:00")
                         .header("Authorization", "Bearer " + adminToken.accessToken()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("DQ_QUERY_INVALID"));

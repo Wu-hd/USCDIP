@@ -98,12 +98,14 @@ public class DataQualityScoringService {
             Double minScore,
             Double maxScore,
             String sourceBatchId,
-            Boolean isBackfill
+            Boolean isBackfill,
+            LocalDateTime startTime,
+            LocalDateTime endTime
     ) {
-        validateQuery(dqLevel, minScore, maxScore);
+        validateQuery(dqLevel, minScore, maxScore, startTime, endTime);
         List<TsMetricEntity> metrics = filterVisibleMetrics(context, tsMetricRepository.findAllByOrderByDqScoredAtDescEventTimeDesc());
         List<DataQualityScoreResponse> items = metrics.stream()
-                .filter(metric -> matches(metric, deviceId, metricCode, dqLevel, minScore, maxScore, sourceBatchId, isBackfill))
+                .filter(metric -> matches(metric, deviceId, metricCode, dqLevel, minScore, maxScore, sourceBatchId, isBackfill, startTime, endTime))
                 .map(this::toResponse)
                 .toList();
         return paginate(items, page, pageSize);
@@ -287,7 +289,9 @@ public class DataQualityScoringService {
             Double minScore,
             Double maxScore,
             String sourceBatchId,
-            Boolean isBackfill
+            Boolean isBackfill,
+            LocalDateTime startTime,
+            LocalDateTime endTime
     ) {
         if (hasText(deviceId) && !deviceId.equalsIgnoreCase(metric.getDeviceId())) {
             return false;
@@ -307,10 +311,16 @@ public class DataQualityScoringService {
         if (hasText(sourceBatchId) && !sourceBatchId.equalsIgnoreCase(metric.getSourceBatchId())) {
             return false;
         }
-        return isBackfill == null || metric.isBackfill() == isBackfill;
+        if (isBackfill != null && metric.isBackfill() != isBackfill) {
+            return false;
+        }
+        if (startTime != null && (metric.getEventTime() == null || metric.getEventTime().isBefore(startTime))) {
+            return false;
+        }
+        return endTime == null || (metric.getEventTime() != null && !metric.getEventTime().isAfter(endTime));
     }
 
-    private void validateQuery(String dqLevel, Double minScore, Double maxScore) {
+    private void validateQuery(String dqLevel, Double minScore, Double maxScore, LocalDateTime startTime, LocalDateTime endTime) {
         if (hasText(dqLevel) && !Set.of("A", "B", "C", "D").contains(dqLevel.trim().toUpperCase())) {
             throw new AuthFlowException(ErrorCode.DQ_QUERY_INVALID, HttpStatus.BAD_REQUEST, "dqLevel must be one of A/B/C/D");
         }
@@ -322,6 +332,9 @@ public class DataQualityScoringService {
         }
         if (minScore != null && maxScore != null && minScore > maxScore) {
             throw new AuthFlowException(ErrorCode.DQ_QUERY_INVALID, HttpStatus.BAD_REQUEST, "minScore must not be greater than maxScore");
+        }
+        if (startTime != null && endTime != null && startTime.isAfter(endTime)) {
+            throw new AuthFlowException(ErrorCode.DQ_QUERY_INVALID, HttpStatus.BAD_REQUEST, "startTime must not be later than endTime");
         }
     }
 

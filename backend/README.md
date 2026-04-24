@@ -888,7 +888,8 @@
 
 ### 2) B-14 接口
 - `GET /api/dq/scores`
-   - 支持 `deviceId / metricCode / dqLevel / minScore / maxScore / sourceBatchId / isBackfill`
+   - 支持 `deviceId / metricCode / dqLevel / minScore / maxScore / sourceBatchId / isBackfill / startTime / endTime`
+   - `startTime / endTime` 按 `event_time` 过滤，使用 ISO DateTime；`startTime` 晚于 `endTime` 返回 `DQ_QUERY_INVALID`
 - `GET /api/dq/scores/{sourceRecordId}`
 
 ### 3) 数据库与联调说明
@@ -2097,6 +2098,12 @@
    - 点击设备行调用 `GET /api/device-ledger/devices/{deviceId}` 打开右侧详情面板，展示心跳链路、缓冲水位、异常标记、对象链、标定到期和 versionNo。
    - 在线状态直接展示后端返回的 `onlineStatus / onlineStatusReason`，不在前端按布尔值重算；页面指标为当前查询页聚合。
    - 联调建议：访问 `http://localhost:5173/mgmt/devices`，验证 `DEV-001` 在线正常、`DEV-002` 高缓冲预警且标定过期、`DEV-003` 心跳超时离线；筛选 `status=WARNING` 和 `calibrationExpired=true` 时 Network 请求参数应同步变化。
-- 继续推进 F-10 时序趋势图页。
+- F-10 时序趋势图页已新增 `/mgmt/trends`：
+   - 页面入口位于 `/mgmt` 综合管理平台，占用权限 `ENTRY:MGMT + MENU:ASSET:READ`；设备台账详情可携带 `deviceId` 跳转趋势页。
+   - `GET /api/dq/scores` 已新增 `startTime / endTime` 查询参数，按 `ts_metric.event_time` 过滤；`startTime > endTime` 返回 `DQ_QUERY_INVALID`。
+   - 趋势页调用 `GET /api/dq/scores?page=1&pageSize=100&deviceId=DEV-001&metricCode=PRESSURE&startTime=...&endTime=...`，展示指标折线、DQ 虚线、补偿样本琥珀标记和低质量红色点。
+   - 下方明细表展示 `sourceRecordId / eventTime / metricValue / isBackfill / dqScore / dqLevel / dqFlags / recvTime / deviceTime`；后端 total 超过 pageSize 时显示分页截断提示。
+   - 联调建议：访问 `http://localhost:5173/mgmt/trends?deviceId=DEV-001&metricCode=PRESSURE`；筛选 `isBackfill=true` 验证补偿样本，筛选 `dqLevel=D` 验证低质量点与 `dqFlags`。
+- 继续推进 F-11 实时告警列表 + WebSocket 客户端。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

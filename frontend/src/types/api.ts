@@ -344,6 +344,40 @@ export interface DeviceLedgerResponse {
   versionNo: number | null;
 }
 
+export interface DataQualityScoreResponse {
+  sourceRecordId: string;
+  sourceBatchId: string;
+  deviceId: string;
+  metricCode: string;
+  metricValue: string;
+  eventTime: string | null;
+  recvTime: string | null;
+  deviceTime: string | null;
+  isBackfill: boolean;
+  dqScore: number | null;
+  dqLevel: string | null;
+  dqFlags: string | null;
+  dqCompleteness: number | null;
+  dqValidity: number | null;
+  dqTimeliness: number | null;
+  dqConsistency: number | null;
+  dqStability: number | null;
+  dqAlarmConfFactor: number | null;
+  dqScoredAt: string | null;
+}
+
+export interface TrendMetricPoint {
+  sourceRecordId: string;
+  eventTime: string;
+  timestamp: number;
+  metricValue: number;
+  dqScore: number | null;
+  dqLevel: string | null;
+  dqFlags: string[];
+  isBackfill: boolean;
+  raw: DataQualityScoreResponse;
+}
+
 export interface IncidentResponse {
   incidentId: string;
   incidentType: string;

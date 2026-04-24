@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   ArrowLeft,
+  Activity,
   BrainCircuit,
   Building2,
   Command,
@@ -228,6 +229,13 @@ onMounted(() => {
               >
                 <RadioTower class="h-4 w-4" />
                 设备台账
+              </RouterLink>
+              <RouterLink
+                class="secondary-button focus-ring w-full sm:w-auto"
+                to="/mgmt/trends"
+              >
+                <Activity class="h-4 w-4" />
+                时序趋势
               </RouterLink>
             </div>
 

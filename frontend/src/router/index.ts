@@ -63,6 +63,18 @@ const router = createRouter({
       }
     },
     {
+      path: '/mgmt/trends',
+      name: 'mgmt-trends',
+      component: () => import('@/views/TrendAnalyticsView.vue'),
+      meta: {
+        requiresAuth: true,
+        platformCode: 'MGMT',
+        entryPermission: 'ENTRY:MGMT',
+        menuPermission: 'MENU:ASSET:READ',
+        permissionLabel: '时序趋势'
+      }
+    },
+    {
       path: '/emgc',
       name: 'emgc-placeholder',
       component: () => import('@/views/PlatformPlaceholderView.vue'),

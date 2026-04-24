@@ -39,21 +39,30 @@ import { RouterLink } from 'vue-router';
 
 import { ApiClientError } from '@/services/api';
 import { getAlerts } from '@/services/alerts';
+import { getDeviceLedgerDevice, getDeviceLedgerDevices } from '@/services/deviceLedger';
 import { getGisObjectDetail, pickGisObject, queryGisBbox } from '@/services/gis';
-import { getMasterDataPage } from '@/services/masterData';
+import { getIncidents } from '@/services/incidents';
+import { getMasterDataDetail, getMasterDataPage } from '@/services/masterData';
+import { getWorkOrders } from '@/services/workorders';
 import type {
   AlertRecordResponse,
+  AssetDetailContext,
+  AssetDetailTab,
+  AssetDetailTabState,
   AssetSearchIndexState,
   AssetSearchResult,
   AssetSearchType,
+  DeviceLedgerResponse,
   GisBboxQuery,
   GisObjectPickResponse,
   GisObjectRecordResponse,
   GisObjectType,
+  IncidentResponse,
   MapLayerConfig,
   MapLayerKey,
   MapLayerState,
-  MasterDataRecordResponse
+  MasterDataRecordResponse,
+  WorkOrderResponse
 } from '@/types/api';
 
 type GisLayerKey = MapLayerKey;
@@ -159,6 +168,14 @@ const assetSearchTypes: Array<{ key: AssetSearchType; label: string; shortLabel:
   { key: 'DEVICE', label: '设备', shortLabel: 'DEVICE' }
 ];
 
+const detailTabConfigs: Array<{ key: AssetDetailTab; label: string; icon: typeof Search }> = [
+  { key: 'profile', label: '基础档案', icon: DatabaseZap },
+  { key: 'devices', label: '关联设备', icon: RadioTower },
+  { key: 'alerts', label: '历史告警', icon: AlertTriangle },
+  { key: 'incidents', label: '事件', icon: CircuitBoard },
+  { key: 'workorders', label: '工单', icon: Route }
+];
+
 const defaultLayerState: Record<GisLayerKey, MapLayerState> = {
   SEGMENT: { visible: true, opacity: 80, legendCollapsed: false },
   DEVICE: { visible: true, opacity: 80, legendCollapsed: false },
@@ -211,6 +228,15 @@ const searchKeyword = ref('');
 const selectedSearchType = ref<AssetSearchType>('ALL');
 const searchResults = ref<AssetSearchResult[]>([]);
 const locatingAssetKey = ref('');
+const activeDetailTab = ref<AssetDetailTab>('profile');
+const detailContext = reactive<AssetDetailContext>({
+  objectKey: '',
+  profile: createDetailTabState<MasterDataRecordResponse | null>(null),
+  devices: createDetailTabState<DeviceLedgerResponse[]>([]),
+  alerts: createDetailTabState<AlertRecordResponse[]>([]),
+  incidents: createDetailTabState<IncidentResponse[]>([]),
+  workorders: createDetailTabState<WorkOrderResponse[]>([])
+});
 let searchDebounceTimer: ReturnType<typeof window.setTimeout> | null = null;
 const layerState = reactive(loadLayerState());
 
@@ -231,11 +257,18 @@ const activeSearchTypes = computed(() =>
 const searchReachedLimit = computed(() =>
   activeSearchTypes.value.some((type) => assetIndexState[type].reachedLimit)
 );
+const activeDetailTabState = computed(() => detailContext[activeDetailTab.value]);
 const selectedRelatedEntries = computed(() =>
   selectedObject.value ? Object.entries(selectedObject.value.relatedObjectIds ?? {}) : []
 );
 const selectedAttributeEntries = computed(() =>
   selectedObject.value ? Object.entries(selectedObject.value.attributes ?? {}) : []
+);
+const selectedProfileAttributeEntries = computed(() =>
+  detailContext.profile.data ? Object.entries(detailContext.profile.data.attributes ?? {}) : []
+);
+const selectedProfileRelatedEntries = computed(() =>
+  detailContext.profile.data ? Object.entries(detailContext.profile.data.relatedObjectIds ?? {}) : []
 );
 
 function createAssetIndexState(): AssetSearchIndexState {
@@ -244,6 +277,15 @@ function createAssetIndexState(): AssetSearchIndexState {
     loadedPages: 0,
     total: 0,
     reachedLimit: false,
+    traceId: '',
+    message: ''
+  };
+}
+
+function createDetailTabState<T>(data: T): AssetDetailTabState<T> {
+  return {
+    status: 'idle',
+    data,
     traceId: '',
     message: ''
   };
@@ -434,6 +476,363 @@ function scheduleAssetSearch() {
   searchDebounceTimer = window.setTimeout(() => {
     void runAssetSearch();
   }, ASSET_SEARCH_DEBOUNCE_MS);
+}
+
+function resetDetailContext(nextObjectKey: string) {
+  detailContext.objectKey = nextObjectKey;
+  Object.assign(detailContext.profile, createDetailTabState<MasterDataRecordResponse | null>(null));
+  Object.assign(detailContext.devices, createDetailTabState<DeviceLedgerResponse[]>([]));
+  Object.assign(detailContext.alerts, createDetailTabState<AlertRecordResponse[]>([]));
+  Object.assign(detailContext.incidents, createDetailTabState<IncidentResponse[]>([]));
+  Object.assign(detailContext.workorders, createDetailTabState<WorkOrderResponse[]>([]));
+}
+
+function prepareDetailContext(object: GisObjectRecordResponse) {
+  const key = objectKey(object);
+  if (detailContext.objectKey !== key) {
+    resetDetailContext(key);
+  }
+}
+
+function setDetailTabState<T>(
+  state: AssetDetailTabState<T>,
+  status: AssetDetailTabState<T>['status'],
+  data: T,
+  message: string,
+  traceId = ''
+) {
+  state.status = status;
+  state.data = data;
+  state.message = message;
+  state.traceId = traceId;
+}
+
+function setActiveDetailTab(tab: AssetDetailTab) {
+  activeDetailTab.value = tab;
+  void loadDetailTab(tab);
+}
+
+function refreshActiveDetailTab() {
+  void loadDetailTab(activeDetailTab.value, true);
+}
+
+async function loadDetailTab(tab: AssetDetailTab, force = false) {
+  if (!selectedObject.value) {
+    return;
+  }
+
+  const state = detailContext[tab];
+  if (!force && (state.status === 'ready' || state.status === 'empty' || state.status === 'loading')) {
+    return;
+  }
+
+  if (tab === 'profile') {
+    await loadProfileTab();
+  } else if (tab === 'devices') {
+    await loadDevicesTab(force);
+  } else if (tab === 'alerts') {
+    await loadAlertsTab(force);
+  } else if (tab === 'incidents') {
+    await loadIncidentsTab(force);
+  } else {
+    await loadWorkordersTab(force);
+  }
+}
+
+async function loadProfileTab() {
+  if (!selectedObject.value || !isKnownGisObjectType(selectedObject.value.objectType)) {
+    setDetailTabState(detailContext.profile, 'empty', null, '当前对象缺少可查询的主数据类型');
+    return;
+  }
+
+  setDetailTabState(detailContext.profile, 'loading', detailContext.profile.data, '正在读取主数据档案');
+  try {
+    const response = await getMasterDataDetail(selectedObject.value.objectType, selectedObject.value.objectId);
+    setDetailTabState(
+      detailContext.profile,
+      response.data ? 'ready' : 'empty',
+      response.data,
+      response.data ? '基础档案已同步' : '后端未返回主数据档案',
+      response.traceId
+    );
+  } catch (error) {
+    setDetailError(detailContext.profile, error, null, '基础档案读取失败');
+  }
+}
+
+async function loadDevicesTab(force = false) {
+  if (!selectedObject.value) {
+    return;
+  }
+
+  setDetailTabState(detailContext.devices, 'loading', detailContext.devices.data, '正在读取关联设备');
+  try {
+    const devices = await fetchRelatedDevices(selectedObject.value, force);
+    setDetailTabState(
+      detailContext.devices,
+      devices.length ? 'ready' : 'empty',
+      devices,
+      devices.length ? `已关联 ${devices.length} 台设备` : '当前对象暂无关联设备'
+    );
+  } catch (error) {
+    setDetailError(detailContext.devices, error, [], '关联设备读取失败');
+  }
+}
+
+async function loadAlertsTab(force = false) {
+  if (!selectedObject.value) {
+    return;
+  }
+
+  setDetailTabState(detailContext.alerts, 'loading', detailContext.alerts.data, '正在聚合历史告警');
+  try {
+    const devices = await fetchRelatedDevices(selectedObject.value, force);
+    const deviceIds = devices.map((device) => device.deviceId);
+    if (!deviceIds.length) {
+      setDetailTabState(detailContext.alerts, 'empty', [], '无关联设备，暂无法聚合历史告警');
+      return;
+    }
+    const responses = await Promise.all(deviceIds.map((deviceId) => getAlerts(1, 20, { deviceId })));
+    const alertsForDevices = uniqueBy(
+      responses.flatMap((response) => response.data?.items ?? []),
+      (alert) => alert.alertId
+    );
+    setDetailTabState(
+      detailContext.alerts,
+      alertsForDevices.length ? 'ready' : 'empty',
+      alertsForDevices,
+      alertsForDevices.length ? `已聚合 ${alertsForDevices.length} 条历史告警` : '关联设备暂无历史告警',
+      responses.find((response) => response.traceId)?.traceId ?? ''
+    );
+  } catch (error) {
+    setDetailError(detailContext.alerts, error, [], '历史告警读取失败');
+  }
+}
+
+async function loadIncidentsTab(force = false) {
+  if (!selectedObject.value) {
+    return;
+  }
+
+  setDetailTabState(detailContext.incidents, 'loading', detailContext.incidents.data, '正在聚合事件');
+  try {
+    const incidents = await fetchRelatedIncidents(selectedObject.value, force);
+    setDetailTabState(
+      detailContext.incidents,
+      incidents.length ? 'ready' : 'empty',
+      incidents,
+      incidents.length ? `已聚合 ${incidents.length} 个事件` : '关联设备暂无事件'
+    );
+  } catch (error) {
+    setDetailError(detailContext.incidents, error, [], '事件读取失败');
+  }
+}
+
+async function loadWorkordersTab(force = false) {
+  if (!selectedObject.value) {
+    return;
+  }
+
+  setDetailTabState(detailContext.workorders, 'loading', detailContext.workorders.data, '正在聚合工单');
+  try {
+    const incidents = await fetchRelatedIncidents(selectedObject.value, force);
+    if (!incidents.length) {
+      setDetailTabState(detailContext.workorders, 'empty', [], '暂无事件，未关联工单');
+      return;
+    }
+    const responses = await Promise.all(
+      incidents.map((incident) => getWorkOrders(1, 20, { incidentId: incident.incidentId }))
+    );
+    const workorders = uniqueBy(
+      responses.flatMap((response) => response.data?.items ?? []),
+      (workorder) => workorder.workOrderId
+    );
+    setDetailTabState(
+      detailContext.workorders,
+      workorders.length ? 'ready' : 'empty',
+      workorders,
+      workorders.length ? `已聚合 ${workorders.length} 张工单` : '事件暂无关联工单',
+      responses.find((response) => response.traceId)?.traceId ?? ''
+    );
+  } catch (error) {
+    setDetailError(detailContext.workorders, error, [], '工单读取失败，可能缺少应急工单权限');
+  }
+}
+
+async function fetchRelatedDevices(object: GisObjectRecordResponse, force = false) {
+  if (!force && detailContext.devices.status === 'ready') {
+    return detailContext.devices.data;
+  }
+
+  const directDeviceIds = relatedIds(object, 'deviceIds');
+  const results: DeviceLedgerResponse[] = [];
+  let listResponseTraceId = '';
+
+  if (object.objectType === 'DEVICE') {
+    const response = await getDeviceLedgerDevice(object.objectId);
+    listResponseTraceId = response.traceId;
+    if (response.data) {
+      results.push(response.data);
+    }
+  } else if (object.objectType === 'SEGMENT') {
+    const response = await getDeviceLedgerDevices(1, 50, { segmentId: object.objectId });
+    listResponseTraceId = response.traceId;
+    results.push(...(response.data?.items ?? []));
+  } else if (object.objectType === 'NODE') {
+    const response = await getDeviceLedgerDevices(1, 50, { nodeId: object.objectId });
+    listResponseTraceId = response.traceId;
+    results.push(...(response.data?.items ?? []));
+  } else if (object.objectType === 'FACILITY') {
+    const response = await getDeviceLedgerDevices(1, 50, { facilityId: object.objectId });
+    listResponseTraceId = response.traceId;
+    results.push(...(response.data?.items ?? []));
+  }
+
+  const loadedIds = new Set(results.map((device) => device.deviceId));
+  const fallbackIds = directDeviceIds.filter((deviceId) => !loadedIds.has(deviceId));
+  if (fallbackIds.length) {
+    const fallbackResponses = await Promise.all(fallbackIds.map((deviceId) => getDeviceLedgerDevice(deviceId)));
+    fallbackResponses.forEach((response) => {
+      if (response.data) {
+        results.push(response.data);
+      }
+    });
+    listResponseTraceId = fallbackResponses.find((response) => response.traceId)?.traceId ?? listResponseTraceId;
+  }
+
+  const uniqueDevices = uniqueBy(results, (device) => device.deviceId);
+  setDetailTabState(
+    detailContext.devices,
+    uniqueDevices.length ? 'ready' : 'empty',
+    uniqueDevices,
+    uniqueDevices.length ? `已关联 ${uniqueDevices.length} 台设备` : '当前对象暂无关联设备',
+    listResponseTraceId
+  );
+  return uniqueDevices;
+}
+
+async function fetchRelatedIncidents(object: GisObjectRecordResponse, force = false) {
+  if (!force && detailContext.incidents.status === 'ready') {
+    return detailContext.incidents.data;
+  }
+
+  const devices = await fetchRelatedDevices(object, force);
+  const deviceIds = devices.map((device) => device.deviceId);
+  if (!deviceIds.length) {
+    setDetailTabState(detailContext.incidents, 'empty', [], '无关联设备，暂无法聚合事件');
+    return [];
+  }
+
+  const responses = await Promise.all(deviceIds.map((deviceId) => getIncidents(1, 20, { deviceId })));
+  const incidents = uniqueBy(
+    responses.flatMap((response) => response.data?.items ?? []),
+    (incident) => incident.incidentId
+  );
+  setDetailTabState(
+    detailContext.incidents,
+    incidents.length ? 'ready' : 'empty',
+    incidents,
+    incidents.length ? `已聚合 ${incidents.length} 个事件` : '关联设备暂无事件',
+    responses.find((response) => response.traceId)?.traceId ?? ''
+  );
+  return incidents;
+}
+
+function setDetailError<T>(state: AssetDetailTabState<T>, error: unknown, fallback: T, fallbackMessage: string) {
+  state.status = 'error';
+  state.data = fallback;
+  if (error instanceof ApiClientError) {
+    state.traceId = error.traceId ?? '';
+    state.message = error.message;
+    return;
+  }
+  state.traceId = '';
+  state.message = fallbackMessage;
+}
+
+function relatedIds(object: GisObjectRecordResponse, key: string) {
+  const entries = Object.entries(object.relatedObjectIds ?? {});
+  const matched = entries.find(([entryKey]) => entryKey.toLowerCase() === key.toLowerCase());
+  return matched?.[1] ?? [];
+}
+
+function relatedKeyToObjectType(key: string): GisObjectType | null {
+  const normalized = key.toLowerCase();
+  if (normalized.includes('device')) {
+    return 'DEVICE';
+  }
+  if (normalized.includes('segment')) {
+    return 'SEGMENT';
+  }
+  if (normalized.includes('node')) {
+    return 'NODE';
+  }
+  if (normalized.includes('facility')) {
+    return 'FACILITY';
+  }
+  return null;
+}
+
+function uniqueBy<T>(items: T[], keyGetter: (item: T) => string | null | undefined) {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  items.forEach((item) => {
+    const key = keyGetter(item);
+    if (!key || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    result.push(item);
+  });
+  return result;
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) {
+    return '-';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString('zh-CN', { hour12: false });
+}
+
+function statusToneClass(status: string | null | undefined) {
+  const normalized = status?.toUpperCase() ?? '';
+  if (['ONLINE', 'ACTIVE', 'OPEN', 'TRIGGERED', 'CREATED', 'DISPATCHED', 'ACCEPTED'].includes(normalized)) {
+    return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100';
+  }
+  if (['WARNING', 'PENDING_CONFIRMATION', 'ESCALATED', 'SUPPRESSED'].includes(normalized)) {
+    return 'border-amber-400/20 bg-amber-400/10 text-amber-100';
+  }
+  if (['OFFLINE', 'HIGH', 'CRITICAL', 'CLOSED', 'FALSE_POSITIVE'].includes(normalized)) {
+    return 'border-rose-400/20 bg-rose-400/10 text-rose-100';
+  }
+  return 'border-white/10 bg-white/[0.045] text-slate-200';
+}
+
+async function openRelatedAsset(objectType: string, objectId: string) {
+  if (!isKnownGisObjectType(objectType)) {
+    return;
+  }
+  detailTraceId.value = '';
+  try {
+    const response = await getGisObjectDetail(objectType, objectId, INITIAL_QUERY.displaySrid);
+    if (response.data) {
+      detailTraceId.value = response.traceId;
+      await selectObject(response.data, false);
+      renderSearchHighlight(response.data);
+      focusSelectedOnMap();
+    }
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      detailTraceId.value = error.traceId ?? '';
+      message.value = error.message;
+      return;
+    }
+    message.value = '关联对象读取失败';
+  }
 }
 
 function cloneDefaultLayerState(): Record<GisLayerKey, MapLayerState> {
@@ -833,6 +1232,9 @@ async function selectObject(object: GisObjectRecordResponse, loadDetail = true) 
   clearSearchHighlight();
   selectedObject.value = object;
   isDrawerOpen.value = true;
+  activeDetailTab.value = 'profile';
+  prepareDetailContext(object);
+  void loadDetailTab('profile', true);
   updateObjectLayerStyles();
 
   if (!loadDetail) {
@@ -843,6 +1245,10 @@ async function selectObject(object: GisObjectRecordResponse, loadDetail = true) 
     const response = await getGisObjectDetail(object.objectType, object.objectId, INITIAL_QUERY.displaySrid);
     selectedObject.value = response.data ?? object;
     detailTraceId.value = response.traceId;
+    if (response.data) {
+      prepareDetailContext(response.data);
+      void loadDetailTab('profile', true);
+    }
     updateObjectLayerStyles();
   } catch (error) {
     if (error instanceof ApiClientError) {
@@ -1520,66 +1926,235 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <dl class="mt-5 grid gap-3 text-sm">
-              <div class="flex justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.045] px-3 py-2">
-                <dt class="text-slate-400">regionId</dt>
-                <dd class="truncate text-right text-slate-100">{{ selectedObject.regionId }}</dd>
+            <dl class="mt-5 grid grid-cols-3 gap-2 text-xs">
+              <div class="rounded-lg border border-white/10 bg-white/[0.045] p-3">
+                <dt class="text-slate-400">region</dt>
+                <dd class="mt-1 truncate font-mono text-blue-100">{{ selectedObject.regionId || '-' }}</dd>
               </div>
-              <div class="flex justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.045] px-3 py-2">
-                <dt class="text-slate-400">authority</dt>
-                <dd class="font-mono text-slate-100">{{ selectedObject.authoritySrid }}</dd>
+              <div class="rounded-lg border border-white/10 bg-white/[0.045] p-3">
+                <dt class="text-slate-400">related</dt>
+                <dd class="mt-1 font-mono text-white">{{ selectedRelatedEntries.length }}</dd>
               </div>
-              <div class="flex justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.045] px-3 py-2">
-                <dt class="text-slate-400">display</dt>
-                <dd class="font-mono text-slate-100">{{ selectedObject.displaySrid }}</dd>
+              <div class="rounded-lg border border-white/10 bg-white/[0.045] p-3">
+                <dt class="text-slate-400">attrs</dt>
+                <dd class="mt-1 font-mono text-white">{{ selectedAttributeEntries.length }}</dd>
               </div>
             </dl>
 
-            <section class="mt-5 rounded-lg border border-white/10 bg-white/[0.045] p-4">
-              <p class="text-sm font-semibold text-white">anchorPoint</p>
-              <p class="mt-2 font-mono text-xs text-blue-100">
-                x {{ formatNumber(selectedObject.anchorPoint?.x) }} / y {{ formatNumber(selectedObject.anchorPoint?.y) }}
-              </p>
-            </section>
+            <nav class="mt-4 grid grid-cols-5 gap-1 rounded-lg border border-white/10 bg-black/10 p-1" aria-label="资产详情标签页">
+              <button
+                v-for="tab in detailTabConfigs"
+                :key="tab.key"
+                class="focus-ring flex min-h-9 cursor-pointer items-center justify-center rounded-md px-1 text-xs font-semibold transition-colors duration-200"
+                :class="activeDetailTab === tab.key ? 'bg-primary text-white' : 'text-slate-400 hover:bg-white/10 hover:text-slate-100'"
+                type="button"
+                :aria-selected="activeDetailTab === tab.key"
+                @click="setActiveDetailTab(tab.key)"
+              >
+                <component :is="tab.icon" class="mr-1 hidden h-3.5 w-3.5 sm:inline-block" aria-hidden="true" />
+                {{ tab.label }}
+              </button>
+            </nav>
 
-            <section class="mt-4 rounded-lg border border-white/10 bg-white/[0.045] p-4">
-              <p class="text-sm font-semibold text-white">bbox</p>
-              <div class="mt-2 grid grid-cols-2 gap-2 font-mono text-xs text-slate-300">
-                <span>minX {{ formatNumber(selectedObject.bbox?.minX) }}</span>
-                <span>minY {{ formatNumber(selectedObject.bbox?.minY) }}</span>
-                <span>maxX {{ formatNumber(selectedObject.bbox?.maxX) }}</span>
-                <span>maxY {{ formatNumber(selectedObject.bbox?.maxY) }}</span>
-              </div>
-            </section>
-
-            <section class="mt-4 rounded-lg border border-white/10 bg-white/[0.045] p-4">
-              <p class="text-sm font-semibold text-white">relatedObjectIds</p>
-              <div v-if="selectedRelatedEntries.length" class="mt-3 space-y-2">
-                <div
-                  v-for="[key, values] in selectedRelatedEntries"
-                  :key="key"
-                  class="rounded-md border border-white/10 bg-black/10 px-3 py-2"
-                >
-                  <p class="font-mono text-xs text-blue-100">{{ key }}</p>
-                  <p class="mt-1 break-all text-xs text-slate-300">{{ values.join(' / ') }}</p>
+            <div
+              v-if="activeDetailTabState.status === 'loading' || activeDetailTabState.status === 'error' || activeDetailTabState.status === 'empty'"
+              class="mt-4 rounded-lg border px-3 py-2 text-sm"
+              :class="activeDetailTabState.status === 'error' ? 'border-rose-400/20 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-white/[0.045] text-slate-300'"
+              :role="activeDetailTabState.status === 'error' ? 'alert' : 'status'"
+            >
+              <div class="flex items-start gap-2">
+                <Loader2 v-if="activeDetailTabState.status === 'loading'" class="mt-0.5 h-4 w-4 shrink-0 animate-spin text-blue-200" />
+                <AlertTriangle v-else-if="activeDetailTabState.status === 'error'" class="mt-0.5 h-4 w-4 shrink-0" />
+                <DatabaseZap v-else class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
+                <div class="min-w-0">
+                  <p>{{ activeDetailTabState.message }}</p>
+                  <p v-if="activeDetailTabState.traceId" class="mt-1 truncate font-mono text-xs text-slate-400">
+                    TraceId {{ activeDetailTabState.traceId }}
+                  </p>
                 </div>
               </div>
-              <p v-else class="mt-2 text-sm text-slate-400">暂无关联对象</p>
-            </section>
+            </div>
 
-            <section class="mt-4 rounded-lg border border-white/10 bg-white/[0.045] p-4">
-              <p class="text-sm font-semibold text-white">attributes</p>
-              <div v-if="selectedAttributeEntries.length" class="mt-3 space-y-2">
-                <div
-                  v-for="[key, value] in selectedAttributeEntries"
-                  :key="key"
-                  class="flex justify-between gap-3 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs"
-                >
-                  <span class="font-mono text-slate-400">{{ key }}</span>
-                  <span class="min-w-0 truncate text-right text-slate-200">{{ formatAttribute(value) }}</span>
+            <div class="mt-4 flex justify-end">
+              <button class="secondary-button focus-ring min-h-8 px-3 text-xs" type="button" @click="refreshActiveDetailTab">
+                <RefreshCcw class="h-3.5 w-3.5" />
+                刷新当前标签
+              </button>
+            </div>
+
+            <section v-if="activeDetailTab === 'profile'" class="mt-4 space-y-4">
+              <div class="rounded-lg border border-white/10 bg-white/[0.045] p-4">
+                <p class="text-sm font-semibold text-white">基础档案</p>
+                <dl class="mt-3 grid gap-2 text-sm">
+                  <div class="flex justify-between gap-3 rounded-md border border-white/10 bg-black/10 px-3 py-2">
+                    <dt class="text-slate-400">status</dt>
+                    <dd class="truncate text-right text-slate-100">{{ detailContext.profile.data?.status || '-' }}</dd>
+                  </div>
+                  <div class="flex justify-between gap-3 rounded-md border border-white/10 bg-black/10 px-3 py-2">
+                    <dt class="text-slate-400">authority</dt>
+                    <dd class="font-mono text-slate-100">{{ selectedObject.authoritySrid }}</dd>
+                  </div>
+                  <div class="flex justify-between gap-3 rounded-md border border-white/10 bg-black/10 px-3 py-2">
+                    <dt class="text-slate-400">display</dt>
+                    <dd class="font-mono text-slate-100">{{ selectedObject.displaySrid }}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div class="rounded-lg border border-white/10 bg-white/[0.045] p-4">
+                <p class="text-sm font-semibold text-white">空间边界</p>
+                <p class="mt-2 font-mono text-xs text-blue-100">
+                  anchor x {{ formatNumber(selectedObject.anchorPoint?.x) }} / y {{ formatNumber(selectedObject.anchorPoint?.y) }}
+                </p>
+                <div class="mt-3 grid grid-cols-2 gap-2 font-mono text-xs text-slate-300">
+                  <span>minX {{ formatNumber(selectedObject.bbox?.minX) }}</span>
+                  <span>minY {{ formatNumber(selectedObject.bbox?.minY) }}</span>
+                  <span>maxX {{ formatNumber(selectedObject.bbox?.maxX) }}</span>
+                  <span>maxY {{ formatNumber(selectedObject.bbox?.maxY) }}</span>
                 </div>
               </div>
-              <p v-else class="mt-2 text-sm text-slate-400">暂无扩展属性</p>
+
+              <div class="rounded-lg border border-white/10 bg-white/[0.045] p-4">
+                <p class="text-sm font-semibold text-white">对象链</p>
+                <div v-if="selectedProfileRelatedEntries.length || selectedRelatedEntries.length" class="mt-3 space-y-2">
+                  <div
+                    v-for="[key, values] in selectedProfileRelatedEntries.length ? selectedProfileRelatedEntries : selectedRelatedEntries"
+                    :key="key"
+                    class="rounded-md border border-white/10 bg-black/10 px-3 py-2"
+                  >
+                    <p class="font-mono text-xs text-blue-100">{{ key }}</p>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                      <button
+                        v-for="value in values"
+                        :key="`${key}-${value}`"
+                        class="focus-ring cursor-pointer rounded-md border border-white/10 bg-white/[0.045] px-2 py-1 font-mono text-[11px] text-slate-200 transition-colors duration-200 hover:border-amber-300/40 hover:bg-amber-400/10"
+                        type="button"
+                        :disabled="!relatedKeyToObjectType(key)"
+                        @click="relatedKeyToObjectType(key) && openRelatedAsset(relatedKeyToObjectType(key)!, value)"
+                      >
+                        {{ value }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <p v-else class="mt-2 text-sm text-slate-400">暂无关联对象</p>
+              </div>
+
+              <div class="rounded-lg border border-white/10 bg-white/[0.045] p-4">
+                <p class="text-sm font-semibold text-white">扩展属性</p>
+                <div v-if="selectedProfileAttributeEntries.length || selectedAttributeEntries.length" class="mt-3 space-y-2">
+                  <div
+                    v-for="[key, value] in selectedProfileAttributeEntries.length ? selectedProfileAttributeEntries : selectedAttributeEntries"
+                    :key="key"
+                    class="flex justify-between gap-3 rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs"
+                  >
+                    <span class="font-mono text-slate-400">{{ key }}</span>
+                    <span class="min-w-0 truncate text-right text-slate-200">{{ formatAttribute(value) }}</span>
+                  </div>
+                </div>
+                <p v-else class="mt-2 text-sm text-slate-400">暂无扩展属性</p>
+              </div>
+            </section>
+
+            <section v-else-if="activeDetailTab === 'devices'" class="mt-4 space-y-3">
+              <button
+                v-for="device in detailContext.devices.data"
+                :key="device.deviceId"
+                class="focus-ring w-full cursor-pointer rounded-lg border border-white/10 bg-white/[0.045] p-3 text-left transition-colors duration-200 hover:border-blue-300/40 hover:bg-blue-400/10"
+                type="button"
+                @click="openRelatedAsset('DEVICE', device.deviceId)"
+              >
+                <span class="flex items-start justify-between gap-3">
+                  <span class="min-w-0">
+                    <span class="block truncate text-sm font-semibold text-white">{{ device.deviceName || device.deviceId }}</span>
+                    <span class="mt-1 block font-mono text-[11px] text-blue-100">{{ device.deviceId }} / {{ device.protocolType }}</span>
+                  </span>
+                  <span class="shrink-0 rounded-md border px-2 py-1 text-[11px]" :class="statusToneClass(device.onlineStatus)">
+                    {{ device.onlineStatus }}
+                  </span>
+                </span>
+                <span class="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
+                  <span>heartbeat <span class="text-slate-100">{{ formatDateTime(device.lastHeartbeat) }}</span></span>
+                  <span>buffer <span class="text-slate-100">{{ device.bufferLevel ?? '-' }}</span></span>
+                  <span>facility <span class="text-slate-100">{{ device.facilityId || '-' }}</span></span>
+                  <span>calibration <span class="text-slate-100">{{ device.calibrationExpired ? 'EXPIRED' : formatDateTime(device.calibrationDueAt) }}</span></span>
+                </span>
+              </button>
+            </section>
+
+            <section v-else-if="activeDetailTab === 'alerts'" class="mt-4 space-y-3">
+              <div
+                v-for="alert in detailContext.alerts.data"
+                :key="alert.alertId"
+                class="rounded-lg border border-white/10 bg-white/[0.045] p-3"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold text-white">{{ alert.ruleCode }}</p>
+                    <p class="mt-1 font-mono text-[11px] text-blue-100">{{ alert.alertId }}</p>
+                  </div>
+                  <span class="rounded-md border px-2 py-1 text-[11px]" :class="statusToneClass(alert.severity)">
+                    {{ alert.severity || '-' }}
+                  </span>
+                </div>
+                <dl class="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
+                  <div>device <span class="text-slate-100">{{ alert.deviceId || '-' }}</span></div>
+                  <div>decision <span class="text-slate-100">{{ alert.decision || '-' }}</span></div>
+                  <div>metric <span class="text-slate-100">{{ alert.metricCode || '-' }} {{ alert.metricValue || '' }}</span></div>
+                  <div>event <span class="text-slate-100">{{ formatDateTime(alert.eventTime) }}</span></div>
+                  <div class="col-span-2">case <span class="font-mono text-slate-100">{{ alert.caseId || '-' }}</span></div>
+                </dl>
+              </div>
+            </section>
+
+            <section v-else-if="activeDetailTab === 'incidents'" class="mt-4 space-y-3">
+              <div
+                v-for="incident in detailContext.incidents.data"
+                :key="incident.incidentId"
+                class="rounded-lg border border-white/10 bg-white/[0.045] p-3"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold text-white">{{ incident.title || incident.incidentId }}</p>
+                    <p class="mt-1 font-mono text-[11px] text-blue-100">{{ incident.incidentId }}</p>
+                  </div>
+                  <span class="rounded-md border px-2 py-1 text-[11px]" :class="statusToneClass(incident.status)">
+                    {{ incident.status || '-' }}
+                  </span>
+                </div>
+                <dl class="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
+                  <div>severity <span class="text-slate-100">{{ incident.severity || '-' }}</span></div>
+                  <div>device <span class="text-slate-100">{{ incident.deviceId || '-' }}</span></div>
+                  <div>alert <span class="font-mono text-slate-100">{{ incident.sourceAlertId || '-' }}</span></div>
+                  <div>case <span class="font-mono text-slate-100">{{ incident.sourceCaseId || '-' }}</span></div>
+                  <div class="col-span-2">created <span class="text-slate-100">{{ formatDateTime(incident.createdAt) }}</span></div>
+                </dl>
+              </div>
+            </section>
+
+            <section v-else class="mt-4 space-y-3">
+              <div
+                v-for="workorder in detailContext.workorders.data"
+                :key="workorder.workOrderId"
+                class="rounded-lg border border-white/10 bg-white/[0.045] p-3"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold text-white">{{ workorder.description || workorder.workOrderId }}</p>
+                    <p class="mt-1 font-mono text-[11px] text-blue-100">{{ workorder.workOrderId }} / {{ workorder.incidentId }}</p>
+                  </div>
+                  <span class="rounded-md border px-2 py-1 text-[11px]" :class="statusToneClass(workorder.status)">
+                    {{ workorder.status || '-' }}
+                  </span>
+                </div>
+                <dl class="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
+                  <div>priority <span class="text-slate-100">{{ workorder.priority || '-' }}</span></div>
+                  <div>type <span class="text-slate-100">{{ workorder.workOrderType || '-' }}</span></div>
+                  <div>assignee <span class="text-slate-100">{{ workorder.assignee || '-' }}</span></div>
+                  <div>sla <span class="text-slate-100">{{ formatDateTime(workorder.slaDueAt) }}</span></div>
+                  <div class="col-span-2">updated <span class="text-slate-100">{{ formatDateTime(workorder.updatedAt) }}</span></div>
+                </dl>
+              </div>
             </section>
 
             <p v-if="detailTraceId" class="mt-4 truncate font-mono text-xs text-blue-100">

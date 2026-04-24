@@ -139,8 +139,23 @@ export interface WorkOrderResponse {
   assignee: string | null;
   status: string;
   slaDueAt: string | null;
+  createdBy?: string | null;
+  dispatchedBy?: string | null;
+  acceptedBy?: string | null;
+  completedBy?: string | null;
+  closedBy?: string | null;
+  dispatchedAt?: string | null;
+  acceptedAt?: string | null;
+  completedAt?: string | null;
+  closedAt?: string | null;
+  completionSummary?: string | null;
+  closeReason?: string | null;
+  writebackType?: string | null;
+  writebackReason?: string | null;
+  writebackAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  versionNo?: number | null;
 }
 
 export interface NotificationResponse {
@@ -175,6 +190,14 @@ export interface GisBboxResponse {
 export type GisObjectType = 'NODE' | 'SEGMENT' | 'FACILITY' | 'DEVICE';
 export type MapLayerKey = GisObjectType | 'ALERT';
 export type AssetSearchType = GisObjectType | 'ALL';
+export type AssetDetailTab = 'profile' | 'devices' | 'alerts' | 'incidents' | 'workorders';
+
+export interface AssetDetailTabState<T = unknown> {
+  status: 'idle' | 'loading' | 'ready' | 'empty' | 'error';
+  data: T;
+  traceId: string;
+  message: string;
+}
 
 export interface MasterDataRecordResponse {
   objectType: GisObjectType | string;
@@ -300,4 +323,58 @@ export interface AlertRecordResponse {
   escalationLevel: number | null;
   processedAt: string | null;
   createdAt: string | null;
+}
+
+export interface DeviceLedgerResponse {
+  deviceId: string;
+  deviceName: string;
+  facilityId: string | null;
+  segmentId: string | null;
+  nodeId: string | null;
+  regionId: string | null;
+  protocolType: string;
+  onlineStatus: string;
+  onlineStatusReason: string | null;
+  lastHeartbeat: string | null;
+  lastRecvTime: string | null;
+  bufferLevel: number | null;
+  abnormalFlags: string[];
+  calibrationDueAt: string | null;
+  calibrationExpired: boolean;
+  versionNo: number | null;
+}
+
+export interface IncidentResponse {
+  incidentId: string;
+  incidentType: string;
+  segmentId: string | null;
+  nodeId: string | null;
+  deviceId: string | null;
+  title: string;
+  severity: string;
+  severitySource: string | null;
+  status: string;
+  sourceCaseId: string | null;
+  sourceAlertId: string | null;
+  sourceRuleCode: string | null;
+  sourceBatchId: string | null;
+  dqScoreSnapshot: number | null;
+  alertConfFinal: number | null;
+  confirmedBy: string | null;
+  confirmedAt: string | null;
+  resolvedAt: string | null;
+  closeReason: string | null;
+  traceId: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  versionNo: number | null;
+}
+
+export interface AssetDetailContext {
+  objectKey: string;
+  profile: AssetDetailTabState<MasterDataRecordResponse | null>;
+  devices: AssetDetailTabState<DeviceLedgerResponse[]>;
+  alerts: AssetDetailTabState<AlertRecordResponse[]>;
+  incidents: AssetDetailTabState<IncidentResponse[]>;
+  workorders: AssetDetailTabState<WorkOrderResponse[]>;
 }

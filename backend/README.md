@@ -2084,6 +2084,13 @@
    - 点击搜索结果后调用 `GET /api/gis/objects/{objectType}/{objectId}?displaySrid=EPSG:4490`，定位到地图并打开右侧详情抽屉；会自动恢复对应业务图层可见。
    - 若搜索命中的对象不在当前 bbox 已绘制图层中，前端使用独立琥珀色搜索高亮层展示，不计入 bbox total / 已绘制统计；无 geometry 或 GIS 详情 404 时只提示“可检索但不可定位”，不伪造坐标。
    - 联调建议：搜索 `NODE-001`、`SEG-001`、`压力传感器` 验证结果字段；浏览器 Network 应看到主数据分页请求和选中后的 GIS detail 请求。
+- F-08 资产详情抽屉已升级 `/mgmt/gis`：
+   - 右侧抽屉改为 `基础档案 / 关联设备 / 历史告警 / 事件 / 工单` 多标签资产上下文面板，保留地图定位与对象链切换能力。
+   - 基础档案调用 `GET /api/master/nodes|segments|facilities|devices/{id}`，并与 GIS 详情中的空间字段、bbox、anchorPoint、attributes 合并展示。
+   - 关联设备调用 `GET /api/device-ledger/devices` 或 `GET /api/device-ledger/devices/{deviceId}`；NODE/SEGMENT/FACILITY 按 nodeId/segmentId/facilityId 聚合设备，DEVICE 展示自身台账。
+   - 历史告警与事件以关联设备为主线调用 `GET /api/alerts?deviceId=...`、`GET /api/incidents?deviceId=...` 并去重；工单 tab 再按事件 `incidentId` 调用 `GET /api/workorders?incidentId=...` 聚合。
+   - 工单接口需要 EMGC 工单读权限；缺权限时只在工单 tab 显示错误与 traceId，不影响基础档案、关联设备、告警、事件 tab。
+   - 联调建议：分别点击 `NODE-001 / SEG-001 / FAC-001 / DEV-001`，验证基础档案、关联设备、告警、事件、工单 tab 的空态、错误态和数据态。
 - 在 B-11 上补设备台账、心跳上报和在线状态计算。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

@@ -2078,6 +2078,12 @@
    - 告警图层调用 `GET /api/alerts?page=1&pageSize=50`，按 `deviceId / segmentId / nodeId` 匹配当前 bbox 已加载 GIS 对象；无法匹配空间对象的告警只计数，不绘制假坐标。
    - 联调建议：打开浏览器 DevTools Network，切换图层显隐和透明度时不应出现新的 `/api/gis/objects/bbox` 请求；点击“重新同步 bbox / 告警”时才重新请求 bbox 与 alerts。
    - 告警接口失败只影响告警图层状态，基础 GIS 对象图层、对象点击和详情抽屉继续可用。
+- F-07 资产对象检索与地图定位已升级 `/mgmt/gis`：
+   - 左侧面板顶部新增资产检索，支持按编码、名称、类型搜索 `NODE / SEGMENT / FACILITY / DEVICE`，类型筛选包含 `全部 / 节点 / 管线 / 设施 / 设备`。
+   - 前端不新增后端接口，通过 `GET /api/master/nodes|segments|facilities|devices?page=1&pageSize=100` 建立主数据索引；关键词至少 2 个字符触发，防抖 250ms，每类型最多读取 10 页。
+   - 点击搜索结果后调用 `GET /api/gis/objects/{objectType}/{objectId}?displaySrid=EPSG:4490`，定位到地图并打开右侧详情抽屉；会自动恢复对应业务图层可见。
+   - 若搜索命中的对象不在当前 bbox 已绘制图层中，前端使用独立琥珀色搜索高亮层展示，不计入 bbox total / 已绘制统计；无 geometry 或 GIS 详情 404 时只提示“可检索但不可定位”，不伪造坐标。
+   - 联调建议：搜索 `NODE-001`、`SEG-001`、`压力传感器` 验证结果字段；浏览器 Network 应看到主数据分页请求和选中后的 GIS detail 请求。
 - 在 B-11 上补设备台账、心跳上报和在线状态计算。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

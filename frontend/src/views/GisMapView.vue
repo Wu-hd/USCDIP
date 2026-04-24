@@ -34,21 +34,26 @@ import {
   SlidersHorizontal,
   X
 } from 'lucide-vue-next';
-import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue';
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 
 import { ApiClientError } from '@/services/api';
 import { getAlerts } from '@/services/alerts';
 import { getGisObjectDetail, pickGisObject, queryGisBbox } from '@/services/gis';
+import { getMasterDataPage } from '@/services/masterData';
 import type {
   AlertRecordResponse,
+  AssetSearchIndexState,
+  AssetSearchResult,
+  AssetSearchType,
   GisBboxQuery,
   GisObjectPickResponse,
   GisObjectRecordResponse,
   GisObjectType,
   MapLayerConfig,
   MapLayerKey,
-  MapLayerState
+  MapLayerState,
+  MasterDataRecordResponse
 } from '@/types/api';
 
 type GisLayerKey = MapLayerKey;
@@ -68,6 +73,10 @@ type RenderedAlertLayer = {
 };
 
 const LAYER_STATE_STORAGE_KEY = 'uscdip.gis.layerState.v1';
+const ASSET_SEARCH_PAGE_SIZE = 100;
+const ASSET_SEARCH_MAX_PAGES = 10;
+const ASSET_SEARCH_MIN_CHARS = 2;
+const ASSET_SEARCH_DEBOUNCE_MS = 250;
 
 const INITIAL_QUERY: GisBboxQuery = {
   minX: 120.15,
@@ -142,6 +151,14 @@ const layerConfigs: Array<MapLayerConfig & { icon: typeof CircuitBoard }> = [
   }
 ];
 
+const assetSearchTypes: Array<{ key: AssetSearchType; label: string; shortLabel: string }> = [
+  { key: 'ALL', label: '全部', shortLabel: 'ALL' },
+  { key: 'NODE', label: '节点', shortLabel: 'NODE' },
+  { key: 'SEGMENT', label: '管线', shortLabel: 'SEGMENT' },
+  { key: 'FACILITY', label: '设施', shortLabel: 'FACILITY' },
+  { key: 'DEVICE', label: '设备', shortLabel: 'DEVICE' }
+];
+
 const defaultLayerState: Record<GisLayerKey, MapLayerState> = {
   SEGMENT: { visible: true, opacity: 80, legendCollapsed: false },
   DEVICE: { visible: true, opacity: 80, legendCollapsed: false },
@@ -155,31 +172,65 @@ const map = shallowRef<LeafletMap | null>(null);
 const layerGroups = new Map<GisLayerKey, LayerGroup>();
 const objectLayers = new Map<string, RenderedObjectLayer>();
 const alertLayers = new Map<string, RenderedAlertLayer>();
+const assetIndexPromises = new Map<GisObjectType, Promise<void>>();
+const searchHighlightLayer = shallowRef<CircleMarker | Polyline | null>(null);
 
 const objects = ref<GisObjectRecordResponse[]>([]);
 const alerts = ref<AlertRecordResponse[]>([]);
+const assetIndex = reactive<Record<GisObjectType, MasterDataRecordResponse[]>>({
+  NODE: [],
+  SEGMENT: [],
+  FACILITY: [],
+  DEVICE: []
+});
+const assetIndexState = reactive<Record<GisObjectType, AssetSearchIndexState>>({
+  NODE: createAssetIndexState(),
+  SEGMENT: createAssetIndexState(),
+  FACILITY: createAssetIndexState(),
+  DEVICE: createAssetIndexState()
+});
 const selectedObject = ref<GisObjectRecordResponse | null>(null);
 const detailTraceId = ref('');
 const bboxTraceId = ref('');
 const pickTraceId = ref('');
 const alertTraceId = ref('');
+const searchTraceId = ref('');
 const state = ref<PanelState>('idle');
 const alertState = ref<PanelState>('idle');
+const searchState = ref<PanelState>('idle');
 const message = ref('等待加载 GIS 对象');
 const pickMessage = ref('点击地图可执行对象点查');
 const alertMessage = ref('等待同步告警图层');
+const searchMessage = ref('输入至少 2 个字符，按编码、名称或类型检索资产');
 const total = ref(0);
 const alertTotal = ref(0);
 const unlocatedAlertCount = ref(0);
 const lastPick = ref<GisObjectPickResponse | null>(null);
 const isDrawerOpen = ref(false);
+const searchKeyword = ref('');
+const selectedSearchType = ref<AssetSearchType>('ALL');
+const searchResults = ref<AssetSearchResult[]>([]);
+const locatingAssetKey = ref('');
+let searchDebounceTimer: ReturnType<typeof window.setTimeout> | null = null;
 const layerState = reactive(loadLayerState());
 
+const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toUpperCase());
 const drawableCount = computed(() => objects.value.filter((object) => parseWkt(object.geometry2d)).length);
 const visibleLayerCount = computed(() =>
   layerConfigs.filter((layer) => layerState[layer.key].visible).length
 );
 const locatedAlertCount = computed(() => alertLayers.size);
+const indexedAssetCount = computed(() =>
+  (Object.keys(assetIndex) as GisObjectType[]).reduce((sum, type) => sum + assetIndex[type].length, 0)
+);
+const activeSearchTypes = computed(() =>
+  selectedSearchType.value === 'ALL'
+    ? (['NODE', 'SEGMENT', 'FACILITY', 'DEVICE'] as GisObjectType[])
+    : [selectedSearchType.value]
+);
+const searchReachedLimit = computed(() =>
+  activeSearchTypes.value.some((type) => assetIndexState[type].reachedLimit)
+);
 const selectedRelatedEntries = computed(() =>
   selectedObject.value ? Object.entries(selectedObject.value.relatedObjectIds ?? {}) : []
 );
@@ -187,8 +238,202 @@ const selectedAttributeEntries = computed(() =>
   selectedObject.value ? Object.entries(selectedObject.value.attributes ?? {}) : []
 );
 
+function createAssetIndexState(): AssetSearchIndexState {
+  return {
+    status: 'idle',
+    loadedPages: 0,
+    total: 0,
+    reachedLimit: false,
+    traceId: '',
+    message: ''
+  };
+}
+
 function objectKey(object: GisObjectRecordResponse) {
   return `${object.objectType}:${object.objectId}`;
+}
+
+function assetResultKey(result: AssetSearchResult) {
+  return `${result.objectType}:${result.objectId}`;
+}
+
+function getAssetTypeLabel(type: string) {
+  return assetSearchTypes.find((item) => item.key === type)?.label ?? type;
+}
+
+function isKnownGisObjectType(value: string): value is GisObjectType {
+  return ['NODE', 'SEGMENT', 'FACILITY', 'DEVICE'].includes(value);
+}
+
+function setSearchType(type: AssetSearchType) {
+  selectedSearchType.value = type;
+}
+
+function clearSearch() {
+  searchKeyword.value = '';
+  searchResults.value = [];
+  searchTraceId.value = '';
+  searchState.value = 'idle';
+  searchMessage.value = '输入至少 2 个字符，按编码、名称或类型检索资产';
+}
+
+function refreshSearchIndex() {
+  activeSearchTypes.value.forEach((type) => {
+    assetIndex[type] = [];
+    Object.assign(assetIndexState[type], createAssetIndexState());
+  });
+  void runAssetSearch();
+}
+
+function matchAsset(record: MasterDataRecordResponse, keyword: string): AssetSearchResult['matchedBy'] | null {
+  if (record.objectId?.toUpperCase().includes(keyword)) {
+    return 'objectId';
+  }
+  if (record.objectName?.toUpperCase().includes(keyword)) {
+    return 'objectName';
+  }
+  if (record.objectType?.toUpperCase().includes(keyword)) {
+    return 'objectType';
+  }
+  return null;
+}
+
+function toAssetSearchResult(
+  record: MasterDataRecordResponse,
+  matchedBy: AssetSearchResult['matchedBy']
+): AssetSearchResult | null {
+  if (!isKnownGisObjectType(record.objectType)) {
+    return null;
+  }
+  return {
+    objectType: record.objectType,
+    objectId: record.objectId,
+    objectName: record.objectName,
+    status: record.status,
+    regionId: record.regionId,
+    relatedObjectIds: record.relatedObjectIds ?? {},
+    attributes: record.attributes ?? {},
+    matchedBy
+  };
+}
+
+async function ensureAssetIndex(types: GisObjectType[]) {
+  await Promise.all(types.map((type) => loadAssetIndex(type)));
+}
+
+async function loadAssetIndex(type: GisObjectType) {
+  if (assetIndexState[type].status === 'ready') {
+    return;
+  }
+  const inflight = assetIndexPromises.get(type);
+  if (inflight) {
+    return inflight;
+  }
+
+  const promise = doLoadAssetIndex(type).finally(() => {
+    assetIndexPromises.delete(type);
+  });
+  assetIndexPromises.set(type, promise);
+  return promise;
+}
+
+async function doLoadAssetIndex(type: GisObjectType) {
+  assetIndexState[type].status = 'loading';
+  assetIndexState[type].message = `正在加载 ${getAssetTypeLabel(type)} 主数据索引`;
+  const records: MasterDataRecordResponse[] = [];
+
+  try {
+    for (let pageNo = 1; pageNo <= ASSET_SEARCH_MAX_PAGES; pageNo += 1) {
+      const response = await getMasterDataPage(type, pageNo, ASSET_SEARCH_PAGE_SIZE);
+      const page = response.data;
+      records.push(...(page?.items ?? []));
+      assetIndexState[type].loadedPages = pageNo;
+      assetIndexState[type].total = page?.total ?? records.length;
+      assetIndexState[type].traceId = response.traceId;
+      searchTraceId.value = response.traceId;
+      if (!page?.hasNext) {
+        break;
+      }
+      if (pageNo === ASSET_SEARCH_MAX_PAGES && page.hasNext) {
+        assetIndexState[type].reachedLimit = true;
+      }
+    }
+
+    assetIndex[type] = records;
+    assetIndexState[type].status = 'ready';
+    assetIndexState[type].message = `${getAssetTypeLabel(type)}索引已加载`;
+  } catch (error) {
+    assetIndexState[type].status = 'error';
+    if (error instanceof ApiClientError) {
+      assetIndexState[type].traceId = error.traceId ?? '';
+      assetIndexState[type].message = error.message;
+      searchTraceId.value = error.traceId ?? '';
+      throw error;
+    }
+    assetIndexState[type].message = `${getAssetTypeLabel(type)}索引加载失败`;
+    throw error;
+  }
+}
+
+async function runAssetSearch() {
+  const keyword = normalizedSearchKeyword.value;
+  const typeSnapshot = selectedSearchType.value;
+
+  if (keyword.length < ASSET_SEARCH_MIN_CHARS) {
+    searchResults.value = [];
+    searchState.value = 'idle';
+    searchMessage.value = '输入至少 2 个字符，按编码、名称或类型检索资产';
+    return;
+  }
+
+  searchState.value = 'loading';
+  searchMessage.value = '正在同步主数据索引并匹配资产对象';
+
+  try {
+    const types = typeSnapshot === 'ALL'
+      ? (['NODE', 'SEGMENT', 'FACILITY', 'DEVICE'] as GisObjectType[])
+      : [typeSnapshot];
+    await ensureAssetIndex(types);
+
+    if (keyword !== normalizedSearchKeyword.value || typeSnapshot !== selectedSearchType.value) {
+      return;
+    }
+
+    const results = types
+      .flatMap((type) =>
+        assetIndex[type]
+          .map((record) => {
+            const matchedBy = matchAsset(record, keyword);
+            return matchedBy ? toAssetSearchResult(record, matchedBy) : null;
+          })
+          .filter((item): item is AssetSearchResult => Boolean(item))
+      )
+      .sort((left, right) => {
+        const leftExact = left.objectId.toUpperCase() === keyword ? 0 : 1;
+        const rightExact = right.objectId.toUpperCase() === keyword ? 0 : 1;
+        return leftExact - rightExact || left.objectType.localeCompare(right.objectType) || left.objectId.localeCompare(right.objectId);
+      })
+      .slice(0, 40);
+
+    searchResults.value = results;
+    searchState.value = results.length ? 'ready' : 'empty';
+    searchMessage.value = results.length
+      ? `匹配到 ${results.length} 个资产对象`
+      : '未匹配到资产，可尝试 NODE-001、SEG-001 或压力传感器';
+  } catch (error) {
+    searchResults.value = [];
+    searchState.value = 'error';
+    searchMessage.value = error instanceof ApiClientError ? error.message : '资产索引读取失败';
+  }
+}
+
+function scheduleAssetSearch() {
+  if (searchDebounceTimer) {
+    window.clearTimeout(searchDebounceTimer);
+  }
+  searchDebounceTimer = window.setTimeout(() => {
+    void runAssetSearch();
+  }, ASSET_SEARCH_DEBOUNCE_MS);
 }
 
 function cloneDefaultLayerState(): Record<GisLayerKey, MapLayerState> {
@@ -415,6 +660,13 @@ function clearAlertLayers() {
   unlocatedAlertCount.value = 0;
 }
 
+function clearSearchHighlight() {
+  if (searchHighlightLayer.value && map.value) {
+    map.value.removeLayer(searchHighlightLayer.value);
+  }
+  searchHighlightLayer.value = null;
+}
+
 function renderObjectLayers(fit = false) {
   if (!map.value) {
     return;
@@ -462,6 +714,47 @@ function renderObjectLayers(fit = false) {
   if (fit && bounds.length > 0) {
     map.value.fitBounds(bounds as LatLngBoundsExpression, { padding: [36, 36], maxZoom: 17 });
   }
+}
+
+function renderSearchHighlight(object: GisObjectRecordResponse) {
+  if (!map.value) {
+    return false;
+  }
+
+  clearSearchHighlight();
+  if (objectLayers.has(objectKey(object))) {
+    return true;
+  }
+
+  const geometry = parseWkt(object.geometry2d);
+  if (!geometry) {
+    return false;
+  }
+
+  const layer =
+    geometry.kind === 'POINT'
+      ? L.circleMarker(geometry.point, {
+        radius: 11,
+        color: '#F59E0B',
+        fillColor: '#F59E0B',
+        fillOpacity: 0.2,
+        opacity: 0.98,
+        weight: 3
+      })
+      : L.polyline(geometry.points, {
+        color: '#F59E0B',
+        dashArray: '6 6',
+        opacity: 0.98,
+        weight: 6
+      });
+
+  layer.bindTooltip(`搜索定位 / ${object.objectType} / ${object.objectName || object.objectId}`, {
+    direction: 'top',
+    opacity: 0.92
+  });
+  layer.addTo(map.value);
+  searchHighlightLayer.value = markRaw(layer);
+  return true;
 }
 
 function getObjectPointStyle(object: GisObjectRecordResponse, isSelected: boolean) {
@@ -536,10 +829,15 @@ async function loadBboxObjects() {
   }
 }
 
-async function selectObject(object: GisObjectRecordResponse) {
+async function selectObject(object: GisObjectRecordResponse, loadDetail = true) {
+  clearSearchHighlight();
   selectedObject.value = object;
   isDrawerOpen.value = true;
   updateObjectLayerStyles();
+
+  if (!loadDetail) {
+    return;
+  }
 
   try {
     const response = await getGisObjectDetail(object.objectType, object.objectId, INITIAL_QUERY.displaySrid);
@@ -553,6 +851,51 @@ async function selectObject(object: GisObjectRecordResponse) {
       return;
     }
     message.value = '对象详情读取失败';
+  }
+}
+
+async function locateSearchResult(result: AssetSearchResult) {
+  const key = assetResultKey(result);
+  locatingAssetKey.value = key;
+  searchMessage.value = `正在定位 ${result.objectType} / ${result.objectId}`;
+  searchTraceId.value = '';
+
+  try {
+    if (!layerState[result.objectType].visible) {
+      setLayerVisible(result.objectType, true);
+    }
+
+    const response = await getGisObjectDetail(result.objectType, result.objectId, INITIAL_QUERY.displaySrid);
+    const object = response.data;
+    searchTraceId.value = response.traceId;
+    detailTraceId.value = response.traceId;
+
+    if (!object) {
+      searchState.value = 'empty';
+      searchMessage.value = '资产存在，但 GIS 详情未返回可定位对象';
+      return;
+    }
+
+    await selectObject(object, false);
+    const canRender = renderSearchHighlight(object);
+    updateObjectLayerStyles();
+    focusSelectedOnMap();
+    searchState.value = 'ready';
+    searchMessage.value = canRender
+      ? `已定位 ${object.objectType} / ${object.objectName || object.objectId}`
+      : `${object.objectType} / ${object.objectId} 可检索但不可定位`;
+  } catch (error) {
+    searchState.value = 'error';
+    if (error instanceof ApiClientError) {
+      searchTraceId.value = error.traceId ?? '';
+      searchMessage.value = error.status === 404
+        ? `${result.objectType} / ${result.objectId} 可检索但未找到 GIS 空间对象`
+        : error.message;
+      return;
+    }
+    searchMessage.value = '资产定位失败';
+  } finally {
+    locatingAssetKey.value = '';
   }
 }
 
@@ -768,6 +1111,8 @@ function focusSelectedOnMap() {
   }
 }
 
+watch([searchKeyword, selectedSearchType], scheduleAssetSearch);
+
 onMounted(async () => {
   await nextTick();
   initializeMap();
@@ -775,6 +1120,11 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  if (searchDebounceTimer) {
+    window.clearTimeout(searchDebounceTimer);
+  }
+  assetIndexPromises.clear();
+  clearSearchHighlight();
   if (map.value) {
     map.value.off('click', handleMapClick);
     map.value.remove();
@@ -834,6 +1184,112 @@ onBeforeUnmount(() => {
 
       <section class="grid min-h-[calc(100vh-9rem)] gap-4 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
         <aside class="glass-panel order-2 flex flex-col gap-4 p-4 xl:order-1">
+          <section class="rounded-lg border border-blue-400/20 bg-blue-400/10 p-3">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-white">资产检索</p>
+                <p class="mt-1 text-xs text-slate-400">编码、名称、类型定位</p>
+              </div>
+              <Search class="h-5 w-5 text-blue-200" aria-hidden="true" />
+            </div>
+
+            <label class="mt-3 block text-xs font-semibold text-slate-300" for="asset-search-input">
+              检索关键词
+            </label>
+            <div class="mt-2 flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 focus-within:border-blue-300/60">
+              <Search class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+              <input
+                id="asset-search-input"
+                v-model="searchKeyword"
+                class="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                type="search"
+                autocomplete="off"
+                placeholder="NODE-001 / SEG-001 / 压力传感器"
+              />
+              <button
+                v-if="searchKeyword"
+                class="icon-button focus-ring h-7 w-7 border-transparent bg-transparent"
+                type="button"
+                aria-label="清空资产检索"
+                @click="clearSearch"
+              >
+                <X class="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div class="mt-3 grid grid-cols-5 gap-1 rounded-lg border border-white/10 bg-black/10 p-1" role="group" aria-label="资产类型筛选">
+              <button
+                v-for="type in assetSearchTypes"
+                :key="type.key"
+                class="focus-ring min-h-8 cursor-pointer rounded-md px-1 text-xs font-semibold transition-colors duration-200"
+                :class="selectedSearchType === type.key ? 'bg-primary text-white' : 'text-slate-400 hover:bg-white/10 hover:text-slate-100'"
+                type="button"
+                :aria-pressed="selectedSearchType === type.key"
+                @click="setSearchType(type.key)"
+              >
+                {{ type.label }}
+              </button>
+            </div>
+
+            <div
+              class="mt-3 rounded-lg border px-3 py-2 text-xs leading-5"
+              :class="searchState === 'error' ? 'border-rose-400/20 bg-rose-400/10 text-rose-100' : 'border-white/10 bg-black/10 text-slate-300'"
+              :role="searchState === 'error' ? 'alert' : 'status'"
+              aria-live="polite"
+            >
+              <div class="flex items-start gap-2">
+                <Loader2 v-if="searchState === 'loading'" class="mt-0.5 h-4 w-4 shrink-0 animate-spin text-blue-200" />
+                <Crosshair v-else class="mt-0.5 h-4 w-4 shrink-0 text-amber-200" aria-hidden="true" />
+                <div class="min-w-0">
+                  <p>{{ searchMessage }}</p>
+                  <p v-if="searchTraceId" class="mt-1 truncate font-mono text-slate-400">TraceId {{ searchTraceId }}</p>
+                  <p v-if="searchReachedLimit" class="mt-1 text-amber-100">索引达到前端分页上限，结果可能截断。</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+              <button
+                v-for="result in searchResults"
+                :key="assetResultKey(result)"
+                class="focus-ring w-full cursor-pointer rounded-lg border border-white/10 bg-white/[0.045] p-3 text-left transition-colors duration-200 hover:border-blue-300/40 hover:bg-blue-400/10 disabled:cursor-wait disabled:opacity-70"
+                type="button"
+                :disabled="locatingAssetKey === assetResultKey(result)"
+                @click="locateSearchResult(result)"
+              >
+                <span class="flex items-start justify-between gap-3">
+                  <span class="min-w-0">
+                    <span class="block truncate text-sm font-semibold text-white">
+                      {{ result.objectName || result.objectId }}
+                    </span>
+                    <span class="mt-1 block font-mono text-[11px] text-blue-100">
+                      {{ result.objectType }} / {{ result.objectId }}
+                    </span>
+                  </span>
+                  <span class="shrink-0 rounded-md border border-white/10 px-2 py-1 text-[11px] text-slate-300">
+                    {{ result.matchedBy }}
+                  </span>
+                </span>
+                <span class="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <span class="rounded-md border border-white/10 bg-black/10 px-2 py-1 text-slate-400">
+                    region <span class="text-slate-100">{{ result.regionId || '-' }}</span>
+                  </span>
+                  <span class="rounded-md border border-white/10 bg-black/10 px-2 py-1 text-slate-400">
+                    status <span class="text-slate-100">{{ result.status || '-' }}</span>
+                  </span>
+                </span>
+              </button>
+            </div>
+
+            <div class="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400">
+              <span>索引 {{ indexedAssetCount }} / 结果 {{ searchResults.length }}</span>
+              <button class="secondary-button focus-ring min-h-8 px-2 text-xs" type="button" @click="refreshSearchIndex">
+                <RefreshCcw class="h-3.5 w-3.5" />
+                刷新
+              </button>
+            </div>
+          </section>
+
           <div class="flex items-center justify-between gap-3">
             <div>
               <p class="text-sm font-semibold text-white">图层控制</p>

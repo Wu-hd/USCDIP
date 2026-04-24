@@ -174,6 +174,37 @@ export interface GisBboxResponse {
 
 export type GisObjectType = 'NODE' | 'SEGMENT' | 'FACILITY' | 'DEVICE';
 export type MapLayerKey = GisObjectType | 'ALERT';
+export type AssetSearchType = GisObjectType | 'ALL';
+
+export interface MasterDataRecordResponse {
+  objectType: GisObjectType | string;
+  objectId: string;
+  objectName: string;
+  status: string;
+  regionId: string;
+  relatedObjectIds: Record<string, string[]>;
+  attributes: Record<string, unknown>;
+}
+
+export interface AssetSearchResult {
+  objectType: GisObjectType;
+  objectId: string;
+  objectName: string;
+  status: string;
+  regionId: string;
+  relatedObjectIds: Record<string, string[]>;
+  attributes: Record<string, unknown>;
+  matchedBy: 'objectId' | 'objectName' | 'objectType';
+}
+
+export interface AssetSearchIndexState {
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  loadedPages: number;
+  total: number;
+  reachedLimit: boolean;
+  traceId: string;
+  message: string;
+}
 
 export interface GisObjectRecordResponse {
   objectType: GisObjectType | string;

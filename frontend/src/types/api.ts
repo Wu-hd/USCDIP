@@ -173,6 +173,7 @@ export interface GisBboxResponse {
 }
 
 export type GisObjectType = 'NODE' | 'SEGMENT' | 'FACILITY' | 'DEVICE';
+export type MapLayerKey = GisObjectType | 'ALERT';
 
 export interface GisObjectRecordResponse {
   objectType: GisObjectType | string;
@@ -213,4 +214,59 @@ export interface GisBboxQuery {
   objectType?: string;
   page: number;
   pageSize: number;
+}
+
+export interface MapLayerLegendItem {
+  label: string;
+  color: string;
+  shape: 'line' | 'circle' | 'diamond' | 'ring';
+  description: string;
+}
+
+export interface MapLayerState {
+  visible: boolean;
+  opacity: number;
+  legendCollapsed: boolean;
+}
+
+export interface MapLayerConfig {
+  key: MapLayerKey;
+  label: string;
+  shortLabel: string;
+  description: string;
+  color: string;
+  legendItems: MapLayerLegendItem[];
+}
+
+export interface LayerPersistencePayload {
+  version: 1;
+  layers: Partial<Record<MapLayerKey, MapLayerState>>;
+}
+
+export interface AlertRecordResponse {
+  alertId: string;
+  sourceRecordId: string;
+  sourceBatchId: string;
+  deviceId: string | null;
+  segmentId: string | null;
+  nodeId: string | null;
+  ruleCode: string;
+  severity: string;
+  decision: string;
+  alertConfRaw: number | null;
+  alertConfFinal: number | null;
+  dqScoreSnapshot: number | null;
+  dqLevelSnapshot: string | null;
+  dqAlarmConfFactor: number | null;
+  metricCode: string | null;
+  metricValue: string | null;
+  eventTime: string | null;
+  traceId: string | null;
+  caseId: string | null;
+  dedupeKey: string | null;
+  processStatus: string | null;
+  suppressed: boolean | null;
+  escalationLevel: number | null;
+  processedAt: string | null;
+  createdAt: string | null;
 }

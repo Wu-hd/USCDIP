@@ -2071,6 +2071,13 @@
    - 页面调用 `GET /api/gis/objects/bbox` 绘制 `NODE / SEGMENT / FACILITY / DEVICE`，点击对象后调用 `GET /api/gis/objects/{objectType}/{objectId}?displaySrid=EPSG:4490` 打开右侧详情抽屉。
    - 地图空白点击会调用 `POST /api/gis/objects/pick`，请求体包含 `x/y/authoritySrid/displaySrid/objectTypes/toleranceMeters`；未命中显示空结果提示，不伪造业务数据。
    - 默认不接公网瓦片，使用本地深色网格底图；F-06 再补图层透明度、图例与状态持久化，F-11 再补 WebSocket 地图刷新事件。
+- F-06 图层控制面板已升级 `/mgmt/gis`：
+   - 图层固定为 `SEGMENT / DEVICE / NODE / FACILITY / ALERT`，支持显隐、透明度、图例折叠、全部显示、全部隐藏、恢复默认。
+   - 图层偏好保存在浏览器 `localStorage`，key 为 `uscdip.gis.layerState.v1`；刷新页面后恢复显隐、透明度和图例折叠状态。
+   - 切换图层不重建 Leaflet map，不重新请求 bbox；前端为每个业务层维护独立 `LayerGroup`，显隐只 add/remove group，透明度只更新 layer style。
+   - 告警图层调用 `GET /api/alerts?page=1&pageSize=50`，按 `deviceId / segmentId / nodeId` 匹配当前 bbox 已加载 GIS 对象；无法匹配空间对象的告警只计数，不绘制假坐标。
+   - 联调建议：打开浏览器 DevTools Network，切换图层显隐和透明度时不应出现新的 `/api/gis/objects/bbox` 请求；点击“重新同步 bbox / 告警”时才重新请求 bbox 与 alerts。
+   - 告警接口失败只影响告警图层状态，基础 GIS 对象图层、对象点击和详情抽屉继续可用。
 - 在 B-11 上补设备台账、心跳上报和在线状态计算。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

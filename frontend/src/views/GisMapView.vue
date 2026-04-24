@@ -5,6 +5,7 @@ import L, {
   type CircleMarker,
   type LatLngBoundsExpression,
   type LatLngExpression,
+  type LayerGroup,
   type LeafletMouseEvent,
   type Map as LeafletMap,
   type Polyline
@@ -13,9 +14,13 @@ import {
   AlertTriangle,
   ArrowLeft,
   Boxes,
+  ChevronDown,
+  ChevronUp,
   CircuitBoard,
   Crosshair,
   DatabaseZap,
+  Eye,
+  EyeOff,
   Layers3,
   Loader2,
   MapPinned,
@@ -23,28 +28,46 @@ import {
   PanelRightClose,
   RadioTower,
   RefreshCcw,
+  RotateCcw,
   Route,
-  Satellite,
   Search,
+  SlidersHorizontal,
   X
 } from 'lucide-vue-next';
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue';
 import { RouterLink } from 'vue-router';
 
 import { ApiClientError } from '@/services/api';
+import { getAlerts } from '@/services/alerts';
 import { getGisObjectDetail, pickGisObject, queryGisBbox } from '@/services/gis';
 import type {
+  AlertRecordResponse,
   GisBboxQuery,
   GisObjectPickResponse,
   GisObjectRecordResponse,
-  GisObjectType
+  GisObjectType,
+  MapLayerConfig,
+  MapLayerKey,
+  MapLayerState
 } from '@/types/api';
 
-type GisLayerKey = GisObjectType;
+type GisLayerKey = MapLayerKey;
 type ParsedGeometry =
   | { kind: 'POINT'; point: LatLngExpression }
   | { kind: 'LINESTRING'; points: LatLngExpression[] };
 type PanelState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
+type RenderedObjectLayer = {
+  layerKey: GisObjectType;
+  layer: CircleMarker | Polyline;
+  object: GisObjectRecordResponse;
+};
+type RenderedAlertLayer = {
+  layer: CircleMarker;
+  alert: AlertRecordResponse;
+  object: GisObjectRecordResponse;
+};
+
+const LAYER_STATE_STORAGE_KEY = 'uscdip.gis.layerState.v1';
 
 const INITIAL_QUERY: GisBboxQuery = {
   minX: 120.15,
@@ -57,46 +80,106 @@ const INITIAL_QUERY: GisBboxQuery = {
   pageSize: 50
 };
 
-const layerConfigs: Array<{
-  key: GisLayerKey;
-  label: string;
-  shortLabel: string;
-  color: string;
-  icon: typeof CircuitBoard;
-}> = [
-  { key: 'NODE', label: '节点', shortLabel: 'NODE', color: '#38BDF8', icon: CircuitBoard },
-  { key: 'SEGMENT', label: '管段', shortLabel: 'SEGMENT', color: '#F59E0B', icon: Route },
-  { key: 'FACILITY', label: '设施', shortLabel: 'FACILITY', color: '#22C55E', icon: Boxes },
-  { key: 'DEVICE', label: '设备', shortLabel: 'DEVICE', color: '#A78BFA', icon: RadioTower }
+const layerConfigs: Array<MapLayerConfig & { icon: typeof CircuitBoard }> = [
+  {
+    key: 'SEGMENT',
+    label: '管线',
+    shortLabel: 'SEGMENT',
+    description: '地下管段与拓扑连线',
+    color: '#F59E0B',
+    icon: Route,
+    legendItems: [
+      { label: '管线', color: '#F59E0B', shape: 'line', description: 'SEGMENT LINESTRING' },
+      { label: '选中', color: '#FBBF24', shape: 'line', description: '当前对象高亮' }
+    ]
+  },
+  {
+    key: 'DEVICE',
+    label: '设备',
+    shortLabel: 'DEVICE',
+    description: '监测终端、网关与现场设备',
+    color: '#A78BFA',
+    icon: RadioTower,
+    legendItems: [
+      { label: '设备点', color: '#A78BFA', shape: 'circle', description: 'DEVICE POINT' }
+    ]
+  },
+  {
+    key: 'NODE',
+    label: '节点',
+    shortLabel: 'NODE',
+    description: '检查井、阀门井与空间节点',
+    color: '#38BDF8',
+    icon: CircuitBoard,
+    legendItems: [
+      { label: '节点点位', color: '#38BDF8', shape: 'circle', description: 'NODE POINT' }
+    ]
+  },
+  {
+    key: 'FACILITY',
+    label: '设施',
+    shortLabel: 'FACILITY',
+    description: '泵站、闸门等设施对象',
+    color: '#22C55E',
+    icon: Boxes,
+    legendItems: [
+      { label: '设施点位', color: '#22C55E', shape: 'circle', description: 'FACILITY POINT' }
+    ]
+  },
+  {
+    key: 'ALERT',
+    label: '告警',
+    shortLabel: 'ALERT',
+    description: '当前 bbox 可定位告警叠加层',
+    color: '#FB7185',
+    icon: AlertTriangle,
+    legendItems: [
+      { label: 'LOW', color: '#38BDF8', shape: 'ring', description: '低级告警' },
+      { label: 'MEDIUM', color: '#F59E0B', shape: 'ring', description: '中级告警' },
+      { label: 'HIGH', color: '#F97316', shape: 'ring', description: '高级告警' },
+      { label: 'CRITICAL', color: '#F43F5E', shape: 'ring', description: '严重告警' }
+    ]
+  }
 ];
+
+const defaultLayerState: Record<GisLayerKey, MapLayerState> = {
+  SEGMENT: { visible: true, opacity: 80, legendCollapsed: false },
+  DEVICE: { visible: true, opacity: 80, legendCollapsed: false },
+  NODE: { visible: true, opacity: 80, legendCollapsed: false },
+  FACILITY: { visible: true, opacity: 80, legendCollapsed: false },
+  ALERT: { visible: true, opacity: 80, legendCollapsed: false }
+};
 
 const mapElement = ref<HTMLDivElement | null>(null);
 const map = shallowRef<LeafletMap | null>(null);
-const vectorLayers = new Map<string, CircleMarker | Polyline>();
+const layerGroups = new Map<GisLayerKey, LayerGroup>();
+const objectLayers = new Map<string, RenderedObjectLayer>();
+const alertLayers = new Map<string, RenderedAlertLayer>();
 
 const objects = ref<GisObjectRecordResponse[]>([]);
+const alerts = ref<AlertRecordResponse[]>([]);
 const selectedObject = ref<GisObjectRecordResponse | null>(null);
 const detailTraceId = ref('');
 const bboxTraceId = ref('');
 const pickTraceId = ref('');
+const alertTraceId = ref('');
 const state = ref<PanelState>('idle');
+const alertState = ref<PanelState>('idle');
 const message = ref('等待加载 GIS 对象');
 const pickMessage = ref('点击地图可执行对象点查');
+const alertMessage = ref('等待同步告警图层');
 const total = ref(0);
+const alertTotal = ref(0);
+const unlocatedAlertCount = ref(0);
 const lastPick = ref<GisObjectPickResponse | null>(null);
 const isDrawerOpen = ref(false);
+const layerState = reactive(loadLayerState());
 
-const layerVisibility = reactive<Record<GisLayerKey, boolean>>({
-  NODE: true,
-  SEGMENT: true,
-  FACILITY: true,
-  DEVICE: true
-});
-
-const visibleObjects = computed(() =>
-  objects.value.filter((object) => isLayerVisible(object.objectType))
-);
 const drawableCount = computed(() => objects.value.filter((object) => parseWkt(object.geometry2d)).length);
+const visibleLayerCount = computed(() =>
+  layerConfigs.filter((layer) => layerState[layer.key].visible).length
+);
+const locatedAlertCount = computed(() => alertLayers.size);
 const selectedRelatedEntries = computed(() =>
   selectedObject.value ? Object.entries(selectedObject.value.relatedObjectIds ?? {}) : []
 );
@@ -108,12 +191,120 @@ function objectKey(object: GisObjectRecordResponse) {
   return `${object.objectType}:${object.objectId}`;
 }
 
-function isLayerVisible(objectType: string) {
-  return layerVisibility[objectType as GisLayerKey] ?? false;
+function cloneDefaultLayerState(): Record<GisLayerKey, MapLayerState> {
+  return {
+    SEGMENT: { ...defaultLayerState.SEGMENT },
+    DEVICE: { ...defaultLayerState.DEVICE },
+    NODE: { ...defaultLayerState.NODE },
+    FACILITY: { ...defaultLayerState.FACILITY },
+    ALERT: { ...defaultLayerState.ALERT }
+  };
+}
+
+function loadLayerState(): Record<GisLayerKey, MapLayerState> {
+  const defaults = cloneDefaultLayerState();
+  if (typeof window === 'undefined') {
+    return defaults;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(LAYER_STATE_STORAGE_KEY);
+    if (!raw) {
+      return defaults;
+    }
+    const payload = JSON.parse(raw) as {
+      version?: number;
+      layers?: Partial<Record<GisLayerKey, Partial<MapLayerState>>>;
+    };
+    if (payload.version !== 1 || !payload.layers) {
+      return defaults;
+    }
+    layerConfigs.forEach((config) => {
+      const stored = payload.layers?.[config.key];
+      if (!stored) {
+        return;
+      }
+      defaults[config.key] = {
+        visible: typeof stored.visible === 'boolean' ? stored.visible : defaults[config.key].visible,
+        opacity: normalizeOpacity(stored.opacity),
+        legendCollapsed:
+          typeof stored.legendCollapsed === 'boolean'
+            ? stored.legendCollapsed
+            : defaults[config.key].legendCollapsed
+      };
+    });
+  } catch {
+    return defaults;
+  }
+
+  return defaults;
+}
+
+function persistLayerState() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.setItem(
+    LAYER_STATE_STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      layers: layerState
+    })
+  );
+}
+
+function normalizeOpacity(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 80;
+  }
+  return Math.min(100, Math.max(20, Math.round(numeric)));
 }
 
 function getLayerConfig(objectType: string) {
   return layerConfigs.find((item) => item.key === objectType) ?? layerConfigs[0];
+}
+
+function isGisObjectLayer(layerKey: GisLayerKey): layerKey is GisObjectType {
+  return layerKey !== 'ALERT';
+}
+
+function layerObjectCount(layerKey: GisLayerKey) {
+  if (layerKey === 'ALERT') {
+    return locatedAlertCount.value;
+  }
+  return objects.value.filter((object) => object.objectType === layerKey).length;
+}
+
+function opacityFactor(layerKey: GisLayerKey) {
+  return layerState[layerKey].opacity / 100;
+}
+
+function severityColor(severity: string | null | undefined) {
+  const normalized = severity?.toUpperCase() ?? '';
+  if (normalized === 'CRITICAL') {
+    return '#F43F5E';
+  }
+  if (normalized === 'HIGH') {
+    return '#F97316';
+  }
+  if (normalized === 'MEDIUM') {
+    return '#F59E0B';
+  }
+  return '#38BDF8';
+}
+
+function legendShapeClass(shape: string) {
+  if (shape === 'line') {
+    return 'h-0.5 w-8 rounded-full';
+  }
+  if (shape === 'diamond') {
+    return 'h-3 w-3 rotate-45 rounded-[2px]';
+  }
+  if (shape === 'ring') {
+    return 'h-3.5 w-3.5 rounded-full border-2 bg-transparent';
+  }
+  return 'h-3.5 w-3.5 rounded-full';
 }
 
 function formatNumber(value: number | null | undefined) {
@@ -176,52 +367,83 @@ function initializeMap() {
 
   L.control.zoom({ position: 'bottomright' }).addTo(map.value);
   L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map.value);
+  initializeLayerGroups();
   map.value.on('click', handleMapClick);
 }
 
-function clearVectorLayers() {
-  vectorLayers.forEach((layer) => {
-    layer.remove();
+function initializeLayerGroups() {
+  if (!map.value) {
+    return;
+  }
+  layerConfigs.forEach((config) => {
+    if (!layerGroups.has(config.key)) {
+      layerGroups.set(config.key, markRaw(L.layerGroup()));
+    }
+    syncLayerVisibility(config.key);
   });
-  vectorLayers.clear();
 }
 
-function renderObjects(fit = false) {
+function syncLayerVisibility(layerKey: GisLayerKey) {
+  if (!map.value) {
+    return;
+  }
+  const group = layerGroups.get(layerKey);
+  if (!group) {
+    return;
+  }
+  const isOnMap = map.value.hasLayer(group);
+  if (layerState[layerKey].visible && !isOnMap) {
+    group.addTo(map.value);
+  }
+  if (!layerState[layerKey].visible && isOnMap) {
+    map.value.removeLayer(group);
+  }
+}
+
+function clearObjectLayers() {
+  objectLayers.forEach(({ layerKey, layer }) => {
+    layerGroups.get(layerKey)?.removeLayer(layer);
+  });
+  objectLayers.clear();
+}
+
+function clearAlertLayers() {
+  alertLayers.forEach(({ layer }) => {
+    layerGroups.get('ALERT')?.removeLayer(layer);
+  });
+  alertLayers.clear();
+  unlocatedAlertCount.value = 0;
+}
+
+function renderObjectLayers(fit = false) {
   if (!map.value) {
     return;
   }
 
-  clearVectorLayers();
+  clearObjectLayers();
   const bounds: LatLngExpression[] = [];
 
-  visibleObjects.value.forEach((object) => {
+  objects.value.forEach((object) => {
     const geometry = parseWkt(object.geometry2d);
     if (!geometry) {
       return;
     }
 
     const config = getLayerConfig(object.objectType);
+    const layerKey = config.key;
+    if (!isGisObjectLayer(layerKey)) {
+      return;
+    }
     const isSelected = selectedObject.value
       ? objectKey(object) === objectKey(selectedObject.value)
       : false;
-    const color = isSelected ? '#F59E0B' : config.color;
     let layer: CircleMarker | Polyline;
 
     if (geometry.kind === 'POINT') {
-      layer = L.circleMarker(geometry.point, {
-        radius: isSelected ? 8 : 6,
-        color,
-        fillColor: color,
-        fillOpacity: isSelected ? 0.95 : 0.72,
-        weight: isSelected ? 3 : 2
-      });
+      layer = L.circleMarker(geometry.point, getObjectPointStyle(object, isSelected));
       bounds.push(geometry.point);
     } else {
-      layer = L.polyline(geometry.points, {
-        color,
-        weight: isSelected ? 5 : 3,
-        opacity: isSelected ? 0.95 : 0.78
-      });
+      layer = L.polyline(geometry.points, getObjectLineStyle(object, isSelected));
       bounds.push(...geometry.points);
     }
 
@@ -233,13 +455,56 @@ function renderObjects(fit = false) {
       direction: 'top',
       opacity: 0.9
     });
-    layer.addTo(map.value as LeafletMap);
-    vectorLayers.set(objectKey(object), layer);
+    layerGroups.get(layerKey)?.addLayer(layer);
+    objectLayers.set(objectKey(object), { layerKey, layer, object });
   });
 
   if (fit && bounds.length > 0) {
     map.value.fitBounds(bounds as LatLngBoundsExpression, { padding: [36, 36], maxZoom: 17 });
   }
+}
+
+function getObjectPointStyle(object: GisObjectRecordResponse, isSelected: boolean) {
+  const config = getLayerConfig(object.objectType);
+  const layerKey = config.key;
+  const factor = isGisObjectLayer(layerKey) ? opacityFactor(layerKey) : 0.8;
+  const color = isSelected ? '#F59E0B' : config.color;
+  return {
+    radius: isSelected ? 8 : 6,
+    color,
+    fillColor: color,
+    fillOpacity: isSelected ? 0.95 : Math.max(0.12, 0.72 * factor),
+    opacity: isSelected ? 1 : Math.max(0.18, factor),
+    weight: isSelected ? 3 : 2
+  };
+}
+
+function getObjectLineStyle(object: GisObjectRecordResponse, isSelected: boolean) {
+  const config = getLayerConfig(object.objectType);
+  const layerKey = config.key;
+  const factor = isGisObjectLayer(layerKey) ? opacityFactor(layerKey) : 0.8;
+  return {
+    color: isSelected ? '#F59E0B' : config.color,
+    weight: isSelected ? 5 : 3,
+    opacity: isSelected ? 0.95 : Math.max(0.18, 0.78 * factor)
+  };
+}
+
+function updateObjectLayerStyles(layerKey?: GisLayerKey) {
+  objectLayers.forEach((rendered) => {
+    if (layerKey && rendered.layerKey !== layerKey) {
+      return;
+    }
+    const isSelected = selectedObject.value
+      ? objectKey(rendered.object) === objectKey(selectedObject.value)
+      : false;
+    const geometry = parseWkt(rendered.object.geometry2d);
+    if (geometry?.kind === 'LINESTRING') {
+      rendered.layer.setStyle(getObjectLineStyle(rendered.object, isSelected));
+      return;
+    }
+    rendered.layer.setStyle(getObjectPointStyle(rendered.object, isSelected));
+  });
 }
 
 async function loadBboxObjects() {
@@ -254,11 +519,14 @@ async function loadBboxObjects() {
     state.value = objects.value.length ? 'ready' : 'empty';
     message.value = objects.value.length ? 'GIS 对象已加载' : '当前 bbox 未返回 GIS 对象';
     await nextTick();
-    renderObjects(true);
+    renderObjectLayers(true);
+    await loadAlerts();
   } catch (error) {
     objects.value = [];
     total.value = 0;
     state.value = 'error';
+    clearObjectLayers();
+    clearAlertLayers();
     if (error instanceof ApiClientError) {
       bboxTraceId.value = error.traceId ?? '';
       message.value = error.message;
@@ -271,13 +539,13 @@ async function loadBboxObjects() {
 async function selectObject(object: GisObjectRecordResponse) {
   selectedObject.value = object;
   isDrawerOpen.value = true;
-  renderObjects(false);
+  updateObjectLayerStyles();
 
   try {
     const response = await getGisObjectDetail(object.objectType, object.objectId, INITIAL_QUERY.displaySrid);
     selectedObject.value = response.data ?? object;
     detailTraceId.value = response.traceId;
-    renderObjects(false);
+    updateObjectLayerStyles();
   } catch (error) {
     if (error instanceof ApiClientError) {
       detailTraceId.value = error.traceId ?? '';
@@ -297,7 +565,9 @@ async function handleMapClick(event: LeafletMouseEvent) {
       y: event.latlng.lat,
       authoritySrid: INITIAL_QUERY.authoritySrid,
       displaySrid: INITIAL_QUERY.displaySrid,
-      objectTypes: layerConfigs.filter((item) => layerVisibility[item.key]).map((item) => item.key),
+      objectTypes: layerConfigs
+        .filter((item) => isGisObjectLayer(item.key) && layerState[item.key].visible)
+        .map((item) => item.key),
       toleranceMeters: 80
     });
     if (response.data?.object) {
@@ -320,8 +590,160 @@ async function handleMapClick(event: LeafletMouseEvent) {
 }
 
 function toggleLayer(layerKey: GisLayerKey) {
-  layerVisibility[layerKey] = !layerVisibility[layerKey];
-  renderObjects(false);
+  setLayerVisible(layerKey, !layerState[layerKey].visible);
+}
+
+function setLayerVisible(layerKey: GisLayerKey, visible: boolean) {
+  layerState[layerKey].visible = visible;
+  syncLayerVisibility(layerKey);
+  persistLayerState();
+}
+
+function setLayerOpacity(layerKey: GisLayerKey, value: number) {
+  layerState[layerKey].opacity = normalizeOpacity(value);
+  if (layerKey === 'ALERT') {
+    updateAlertLayerStyles();
+  } else {
+    updateObjectLayerStyles(layerKey);
+  }
+  persistLayerState();
+}
+
+function setAllLayers(visible: boolean) {
+  layerConfigs.forEach((layer) => {
+    layerState[layer.key].visible = visible;
+    syncLayerVisibility(layer.key);
+  });
+  persistLayerState();
+}
+
+function resetLayerState() {
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(LAYER_STATE_STORAGE_KEY);
+  }
+  const defaults = cloneDefaultLayerState();
+  layerConfigs.forEach((layer) => {
+    layerState[layer.key] = { ...defaults[layer.key] };
+    syncLayerVisibility(layer.key);
+  });
+  updateObjectLayerStyles();
+  updateAlertLayerStyles();
+}
+
+function toggleLegend(layerKey: GisLayerKey) {
+  layerState[layerKey].legendCollapsed = !layerState[layerKey].legendCollapsed;
+  persistLayerState();
+}
+
+function onOpacityInput(layerKey: GisLayerKey, event: Event) {
+  const input = event.target as HTMLInputElement;
+  setLayerOpacity(layerKey, Number(input.value));
+}
+
+async function loadAlerts() {
+  alertState.value = 'loading';
+  alertMessage.value = '正在同步告警图层';
+  try {
+    const response = await getAlerts(1, 50);
+    const page = response.data;
+    alerts.value = page?.items ?? [];
+    alertTotal.value = page?.total ?? 0;
+    alertTraceId.value = response.traceId;
+    alertState.value = alerts.value.length ? 'ready' : 'empty';
+    alertMessage.value = alerts.value.length ? '告警图层已同步' : '当前无告警记录';
+    renderAlertLayers();
+  } catch (error) {
+    alerts.value = [];
+    alertTotal.value = 0;
+    clearAlertLayers();
+    alertState.value = 'error';
+    if (error instanceof ApiClientError) {
+      alertTraceId.value = error.traceId ?? '';
+      alertMessage.value = error.message;
+      return;
+    }
+    alertMessage.value = '告警图层读取失败';
+  }
+}
+
+function renderAlertLayers() {
+  clearAlertLayers();
+  alerts.value.forEach((alert) => {
+    const object = findAlertObject(alert);
+    if (!object) {
+      unlocatedAlertCount.value += 1;
+      return;
+    }
+    const point = getAlertPoint(object);
+    if (!point) {
+      unlocatedAlertCount.value += 1;
+      return;
+    }
+    const marker = L.circleMarker(point, getAlertStyle(alert));
+    marker.on('click', (event) => {
+      event.originalEvent.stopPropagation();
+      pickMessage.value = `告警定位 ${alert.alertId} / ${alert.severity}`;
+      selectObject(object);
+    });
+    marker.bindTooltip(`${alert.severity || 'ALERT'} / ${alert.ruleCode} / ${alert.alertId}`, {
+      direction: 'top',
+      opacity: 0.92
+    });
+    layerGroups.get('ALERT')?.addLayer(marker);
+    alertLayers.set(alert.alertId, { layer: marker, alert, object });
+  });
+}
+
+function updateAlertLayerStyles() {
+  alertLayers.forEach(({ layer, alert }) => {
+    layer.setStyle(getAlertStyle(alert));
+  });
+}
+
+function getAlertStyle(alert: AlertRecordResponse) {
+  const color = severityColor(alert.severity);
+  const factor = opacityFactor('ALERT');
+  return {
+    radius: alert.severity?.toUpperCase() === 'CRITICAL' ? 10 : 8,
+    color,
+    fillColor: color,
+    fillOpacity: Math.max(0.16, 0.42 * factor),
+    opacity: Math.max(0.24, factor),
+    weight: alert.severity?.toUpperCase() === 'CRITICAL' ? 3 : 2,
+    dashArray: alert.suppressed ? '4 4' : undefined
+  };
+}
+
+function findAlertObject(alert: AlertRecordResponse) {
+  const candidates = [
+    alert.deviceId ? { type: 'DEVICE', id: alert.deviceId } : null,
+    alert.segmentId ? { type: 'SEGMENT', id: alert.segmentId } : null,
+    alert.nodeId ? { type: 'NODE', id: alert.nodeId } : null
+  ].filter((item): item is { type: GisObjectType; id: string } => Boolean(item));
+
+  for (const candidate of candidates) {
+    const matched = objects.value.find(
+      (object) => object.objectType === candidate.type && object.objectId === candidate.id
+    );
+    if (matched) {
+      return matched;
+    }
+  }
+  return null;
+}
+
+function getAlertPoint(object: GisObjectRecordResponse): LatLngExpression | null {
+  const geometry = parseWkt(object.geometry2d);
+  if (geometry?.kind === 'POINT') {
+    return geometry.point;
+  }
+  if (geometry?.kind === 'LINESTRING') {
+    return geometry.points[Math.floor(geometry.points.length / 2)] ?? null;
+  }
+  if (object.anchorPoint) {
+    return [object.anchorPoint.y, object.anchorPoint.x];
+  }
+  return null;
 }
 
 function closeDrawer() {
@@ -358,7 +780,9 @@ onBeforeUnmount(() => {
     map.value.remove();
     map.value = null;
   }
-  clearVectorLayers();
+  clearObjectLayers();
+  clearAlertLayers();
+  layerGroups.clear();
 });
 </script>
 
@@ -394,13 +818,17 @@ onBeforeUnmount(() => {
             <p class="mt-1 font-display text-xl font-semibold text-blue-100">{{ drawableCount }}</p>
           </div>
           <div class="glass-panel-muted p-3">
-            <p class="text-xs text-slate-400">可见对象</p>
-            <p class="mt-1 font-display text-xl font-semibold text-emerald-200">{{ visibleObjects.length }}</p>
+            <p class="text-xs text-slate-400">可见图层</p>
+            <p class="mt-1 font-display text-xl font-semibold text-emerald-200">
+              {{ visibleLayerCount }} / {{ layerConfigs.length }}
+            </p>
           </div>
-          <button class="secondary-button focus-ring" type="button" @click="loadBboxObjects">
-            <RefreshCcw class="h-4 w-4" />
-            刷新
-          </button>
+          <div class="glass-panel-muted p-3">
+            <p class="text-xs text-slate-400">定位告警</p>
+            <p class="mt-1 font-display text-xl font-semibold text-rose-100">
+              {{ locatedAlertCount }}
+            </p>
+          </div>
         </div>
       </header>
 
@@ -408,46 +836,125 @@ onBeforeUnmount(() => {
         <aside class="glass-panel order-2 flex flex-col gap-4 p-4 xl:order-1">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <p class="text-sm font-semibold text-white">图层插槽</p>
-              <p class="mt-1 text-xs text-slate-400">F-06 将接入透明度、图例和持久化</p>
+              <p class="text-sm font-semibold text-white">图层控制</p>
+              <p class="mt-1 text-xs text-slate-400">显隐、透明度、图例与本地持久化</p>
             </div>
-            <Layers3 class="h-5 w-5 text-blue-200" aria-hidden="true" />
+            <SlidersHorizontal class="h-5 w-5 text-blue-200" aria-hidden="true" />
           </div>
 
+          <div class="grid grid-cols-3 gap-2">
+            <button class="secondary-button focus-ring px-2 text-xs" type="button" @click="setAllLayers(true)">
+              <Eye class="h-4 w-4" />
+              全显
+            </button>
+            <button class="secondary-button focus-ring px-2 text-xs" type="button" @click="setAllLayers(false)">
+              <EyeOff class="h-4 w-4" />
+              全隐
+            </button>
+            <button class="secondary-button focus-ring px-2 text-xs" type="button" @click="resetLayerState">
+              <RotateCcw class="h-4 w-4" />
+              默认
+            </button>
+          </div>
+          <button class="secondary-button focus-ring w-full text-xs" type="button" @click="loadBboxObjects">
+            <RefreshCcw class="h-4 w-4" />
+            重新同步 bbox / 告警
+          </button>
+
           <div class="space-y-3">
-            <button
+            <section
               v-for="layer in layerConfigs"
               :key="layer.key"
-              class="flex min-h-[56px] w-full cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors duration-200 focus-ring"
-              :class="layerVisibility[layer.key] ? 'border-blue-400/25 bg-blue-400/10 text-blue-100' : 'border-white/10 bg-white/[0.045] text-slate-400'"
-              type="button"
-              :aria-pressed="layerVisibility[layer.key]"
-              @click="toggleLayer(layer.key)"
+              class="rounded-lg border p-3 transition-colors duration-200"
+              :class="layerState[layer.key].visible ? 'border-blue-400/25 bg-blue-400/10' : 'border-white/10 bg-white/[0.045]'"
             >
-              <span class="flex min-w-0 items-center gap-3">
-                <span
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10"
-                  :style="{ color: layer.color }"
-                  aria-hidden="true"
+              <div class="flex items-start justify-between gap-3">
+                <label class="flex min-w-0 cursor-pointer items-start gap-3">
+                  <input
+                    class="mt-1 h-4 w-4 cursor-pointer accent-primary"
+                    type="checkbox"
+                    :checked="layerState[layer.key].visible"
+                    :aria-label="`${layer.label}图层显隐`"
+                    @change="toggleLayer(layer.key)"
+                  />
+                  <span class="min-w-0">
+                    <span class="flex items-center gap-2">
+                      <span
+                        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10"
+                        :style="{ color: layer.color }"
+                        aria-hidden="true"
+                      >
+                        <component :is="layer.icon" class="h-4 w-4" />
+                      </span>
+                      <span>
+                        <span class="block text-sm font-semibold text-white">{{ layer.label }}</span>
+                        <span class="block font-mono text-[11px] text-slate-400">
+                          {{ layer.shortLabel }} · {{ layerObjectCount(layer.key) }}
+                        </span>
+                      </span>
+                    </span>
+                    <span class="mt-2 block text-xs leading-5 text-slate-400">{{ layer.description }}</span>
+                  </span>
+                </label>
+                <button
+                  class="icon-button focus-ring h-8 w-8"
+                  type="button"
+                  :aria-expanded="!layerState[layer.key].legendCollapsed"
+                  :aria-label="`${layer.label}图例折叠`"
+                  @click="toggleLegend(layer.key)"
                 >
-                  <component :is="layer.icon" class="h-4 w-4" />
+                  <ChevronUp v-if="!layerState[layer.key].legendCollapsed" class="h-4 w-4" />
+                  <ChevronDown v-else class="h-4 w-4" />
+                </button>
+              </div>
+
+              <label class="mt-3 block text-xs text-slate-300">
+                <span class="flex items-center justify-between gap-3">
+                  <span>透明度</span>
+                  <span class="font-mono text-blue-100">{{ layerState[layer.key].opacity }}%</span>
                 </span>
-                <span class="min-w-0">
-                  <span class="block text-sm font-semibold text-white">{{ layer.label }}</span>
-                  <span class="block font-mono text-xs">{{ layer.shortLabel }}</span>
-                </span>
-              </span>
-              <span
-                class="h-2.5 w-2.5 shrink-0 rounded-full"
-                :style="{ backgroundColor: layerVisibility[layer.key] ? layer.color : '#475569' }"
-              />
-            </button>
+                <input
+                  class="mt-2 h-2 w-full cursor-pointer accent-primary"
+                  type="range"
+                  min="20"
+                  max="100"
+                  step="5"
+                  :value="layerState[layer.key].opacity"
+                  :aria-label="`${layer.label}透明度`"
+                  @input="onOpacityInput(layer.key, $event)"
+                />
+              </label>
+
+              <div
+                v-if="!layerState[layer.key].legendCollapsed"
+                class="mt-3 space-y-2 rounded-lg border border-white/10 bg-black/10 p-3"
+              >
+                <div
+                  v-for="item in layer.legendItems"
+                  :key="`${layer.key}-${item.label}`"
+                  class="flex items-center justify-between gap-3 text-xs"
+                >
+                  <span class="flex min-w-0 items-center gap-2">
+                    <span
+                      class="shrink-0"
+                      :class="legendShapeClass(item.shape)"
+                      :style="item.shape === 'ring' ? { borderColor: item.color } : { backgroundColor: item.color }"
+                      aria-hidden="true"
+                    />
+                    <span class="min-w-0">
+                      <span class="block font-semibold text-slate-100">{{ item.label }}</span>
+                      <span class="block truncate text-slate-400">{{ item.description }}</span>
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </section>
           </div>
 
           <div class="rounded-lg border border-white/10 bg-white/[0.045] p-3 text-xs leading-5 text-slate-300">
             <div class="flex gap-2">
-              <Satellite class="mt-0.5 h-4 w-4 shrink-0 text-amber-200" aria-hidden="true" />
-              <p>当前不接公网瓦片，地图使用本地深色网格底图和后端 GIS 矢量对象。</p>
+              <Layers3 class="mt-0.5 h-4 w-4 shrink-0 text-amber-200" aria-hidden="true" />
+              <p>图层状态保存到 localStorage；切换显隐不会重建地图或重新请求 bbox。</p>
             </div>
           </div>
 
@@ -462,6 +969,36 @@ onBeforeUnmount(() => {
             </p>
             <p v-if="pickTraceId" class="mt-2 truncate font-mono text-xs text-slate-400">
               TraceId {{ pickTraceId }}
+            </p>
+          </section>
+
+          <section
+            class="rounded-lg border p-3"
+            :class="alertState === 'error' ? 'border-rose-400/20 bg-rose-400/10' : 'border-white/10 bg-white/[0.045]'"
+          >
+            <div class="flex items-center gap-2 text-sm font-semibold text-white">
+              <AlertTriangle class="h-4 w-4 text-rose-200" aria-hidden="true" />
+              告警图层
+            </div>
+            <p class="mt-2 text-sm leading-5 text-slate-300" :role="alertState === 'error' ? 'alert' : 'status'">
+              {{ alertMessage }}
+            </p>
+            <dl class="mt-3 grid grid-cols-3 gap-2 text-xs">
+              <div class="rounded-md border border-white/10 bg-black/10 p-2">
+                <dt class="text-slate-400">总数</dt>
+                <dd class="font-mono text-white">{{ alertTotal }}</dd>
+              </div>
+              <div class="rounded-md border border-white/10 bg-black/10 p-2">
+                <dt class="text-slate-400">定位</dt>
+                <dd class="font-mono text-rose-100">{{ locatedAlertCount }}</dd>
+              </div>
+              <div class="rounded-md border border-white/10 bg-black/10 p-2">
+                <dt class="text-slate-400">未定位</dt>
+                <dd class="font-mono text-amber-100">{{ unlocatedAlertCount }}</dd>
+              </div>
+            </dl>
+            <p v-if="alertTraceId" class="mt-2 truncate font-mono text-xs text-slate-400">
+              TraceId {{ alertTraceId }}
             </p>
           </section>
         </aside>

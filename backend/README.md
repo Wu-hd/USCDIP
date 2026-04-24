@@ -2108,3 +2108,8 @@
 - 继续推进 F-11 实时告警列表 + WebSocket 客户端。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。
+
+### F-12 事件详情与工单详情页 (`frontend/src/views/*DetailView.vue`)
+- **入口**: `/mgmt/incidents/:id` & `/emgc/workorders/:id`
+- **功能**: 展示事件流转和设备检修派单的全周期记录，包含交互动作(确认/接单)。
+- **关键技术**: 采用预设的 `SaaS Analytics` UI、包含时间线流和状态角标，调用 `IncidentResponse` 与 `WorkOrderResponse` 数据模型。

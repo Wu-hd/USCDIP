@@ -22,3 +22,14 @@ export function getIncidents(page = 1, pageSize = 20, query: IncidentQuery = {})
 
   return apiRequest<PageResponse<IncidentResponse>>(`/api/incidents?${params.toString()}`);
 }
+
+export function getIncidentDetail(incidentId: string) {
+  return apiRequest<IncidentResponse>(`/api/incidents/${incidentId}`);
+}
+
+export function confirmIncident(incidentId: string) {
+  return apiRequest<IncidentResponse>(`/api/incidents/${incidentId}/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({})
+  });
+}

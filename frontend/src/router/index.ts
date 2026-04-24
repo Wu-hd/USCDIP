@@ -87,6 +87,18 @@ const router = createRouter({
       }
     },
     {
+      path: '/mgmt/incidents/:id',
+      name: 'mgmt-incident-detail',
+      component: () => import('@/views/IncidentDetailView.vue'),
+      meta: {
+        requiresAuth: true,
+        platformCode: 'MGMT',
+        entryPermission: 'ENTRY:MGMT',
+        menuPermission: 'MENU:ASSET:READ',
+        permissionLabel: '事件详情'
+      }
+    },
+    {
       path: '/emgc',
       name: 'emgc-placeholder',
       component: () => import('@/views/PlatformPlaceholderView.vue'),
@@ -96,6 +108,18 @@ const router = createRouter({
         entryPermission: 'ENTRY:EMGC',
         menuPermission: 'MENU:WORKORDER:READ',
         permissionLabel: '应急指挥平台'
+      }
+    },
+    {
+      path: '/emgc/workorders/:id',
+      name: 'emgc-workorder-detail',
+      component: () => import('@/views/WorkOrderDetailView.vue'),
+      meta: {
+        requiresAuth: true,
+        platformCode: 'EMGC',
+        entryPermission: 'ENTRY:EMGC',
+        menuPermission: 'MENU:WORKORDER:READ',
+        permissionLabel: '工单详情'
       }
     },
     {

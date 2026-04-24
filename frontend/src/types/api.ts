@@ -412,3 +412,41 @@ export interface AssetDetailContext {
   incidents: AssetDetailTabState<IncidentResponse[]>;
   workorders: AssetDetailTabState<WorkOrderResponse[]>;
 }
+
+export interface WorkOrderCreateRequest {
+  incidentId: string;
+  workOrderType: string;
+  priority: string;
+  description: string;
+  assigneeUserId?: string | null;
+}
+
+export interface WorkOrderDispatchRequest {
+  assigneeUserId: string;
+}
+
+export interface WorkOrderCompleteRequest {
+  completionSummary: string;
+}
+
+export interface WorkOrderCloseRequest {
+  closeReason: string;
+  writebackType?: string;
+  writebackReason?: string;
+}
+
+export interface WorkOrderWritebackRequest {
+  writebackType: string;
+  writebackReason: string;
+}
+
+export interface TimelineEventData {
+  eventId: string;
+  eventType: 'ALERT' | 'INCIDENT' | 'WORKORDER_CREATE' | 'WORKORDER_DISPATCH' | 'WORKORDER_ACCEPT' | 'WORKORDER_COMPLETE' | 'WORKORDER_CLOSE' | 'WORKORDER_WRITEBACK';
+  title: string;
+  description: string;
+  timestamp: string;
+  actor?: string;
+  status?: string;
+  metadata?: Record<string, unknown>;
+}

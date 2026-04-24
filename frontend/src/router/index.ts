@@ -39,6 +39,18 @@ const router = createRouter({
       }
     },
     {
+      path: '/mgmt/gis',
+      name: 'mgmt-gis-map',
+      component: () => import('@/views/GisMapView.vue'),
+      meta: {
+        requiresAuth: true,
+        platformCode: 'MGMT',
+        entryPermission: 'ENTRY:MGMT',
+        menuPermission: 'MENU:ASSET:READ',
+        permissionLabel: '2D 一张图'
+      }
+    },
+    {
       path: '/emgc',
       name: 'emgc-placeholder',
       component: () => import('@/views/PlatformPlaceholderView.vue'),

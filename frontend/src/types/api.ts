@@ -159,3 +159,58 @@ export interface NotificationResponse {
   completedAt: string | null;
   lastError: string | null;
 }
+
+export interface GisPointResponse {
+  x: number;
+  y: number;
+}
+
+export interface GisBboxResponse {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+export type GisObjectType = 'NODE' | 'SEGMENT' | 'FACILITY' | 'DEVICE';
+
+export interface GisObjectRecordResponse {
+  objectType: GisObjectType | string;
+  objectId: string;
+  objectName: string;
+  regionId: string;
+  authoritySrid: string;
+  displaySrid: string;
+  geometry2d: string;
+  anchorPoint: GisPointResponse;
+  bbox: GisBboxResponse;
+  relatedObjectIds: Record<string, string[]>;
+  attributes: Record<string, unknown>;
+}
+
+export interface GisObjectPickRequest {
+  x: number;
+  y: number;
+  authoritySrid: string;
+  displaySrid: string;
+  objectTypes: string[];
+  toleranceMeters: number;
+}
+
+export interface GisObjectPickResponse {
+  object: GisObjectRecordResponse;
+  distanceMeters: number;
+  toleranceMeters: number;
+}
+
+export interface GisBboxQuery {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  authoritySrid: string;
+  displaySrid: string;
+  objectType?: string;
+  page: number;
+  pageSize: number;
+}

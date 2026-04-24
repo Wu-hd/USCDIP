@@ -8,6 +8,7 @@ import {
   Database,
   DoorOpen,
   LockKeyhole,
+  MapPinned,
   Pencil,
   Route
 } from 'lucide-vue-next';
@@ -211,6 +212,15 @@ onMounted(() => {
                 </button>
               </div>
             </section>
+
+            <RouterLink
+              v-if="platformCode === 'MGMT'"
+              class="primary-button focus-ring mt-6 w-full sm:w-auto"
+              to="/mgmt/gis"
+            >
+              <MapPinned class="h-4 w-4" />
+              进入 2D 一张图
+            </RouterLink>
 
             <div class="mt-6 rounded-lg border border-amber-400/20 bg-amber-400/10 p-4 text-sm leading-6 text-amber-50">
               <div class="flex gap-3">

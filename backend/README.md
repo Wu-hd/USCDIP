@@ -2063,6 +2063,14 @@
    - 联调角色预期：平台管理员可进入 MGMT/EMGC/DIAG；区域调度员可进入 MGMT/EMGC；巡检人员只进入 EMGC；算法工程师只进入 DIAG；领导只读进入 EMGC 且写按钮锁定。
    - 权限快照验证：`curl -s http://localhost:8080/api/authz/users/<userId>/snapshot -H "Authorization: Bearer <access_token>"`，确认 `snapshot.permissionCodes` 与前端展示一致。
    - 后端最终校验仍以 `AuthzGuardAspect` 为准；可用 `POST /api/authz/check` 验证 ENTRY、MENU、dataScope、topicScope 联合鉴权。
+- F-05 2D 一张图主页面已接入综合管理平台：
+   - 前端新增依赖 `leaflet` 与类型包 `@types/leaflet`；安装依赖后启动：`cd ../frontend && npm install && npm run dev -- --host 0.0.0.0`。
+   - 页面地址：`http://localhost:5173/mgmt/gis`，从 `/mgmt` 占位页也可点击“进入 2D 一张图”。
+   - 权限要求：`ENTRY:MGMT + MENU:ASSET:READ`；未登录会回到 Portal，缺权限会进入 `/forbidden`。
+   - 默认 bbox：`minX=120.15&minY=30.27&maxX=120.18&maxY=30.30&authoritySrid=EPSG:4490&displaySrid=EPSG:4490&page=1&pageSize=50`。
+   - 页面调用 `GET /api/gis/objects/bbox` 绘制 `NODE / SEGMENT / FACILITY / DEVICE`，点击对象后调用 `GET /api/gis/objects/{objectType}/{objectId}?displaySrid=EPSG:4490` 打开右侧详情抽屉。
+   - 地图空白点击会调用 `POST /api/gis/objects/pick`，请求体包含 `x/y/authoritySrid/displaySrid/objectTypes/toleranceMeters`；未命中显示空结果提示，不伪造业务数据。
+   - 默认不接公网瓦片，使用本地深色网格底图；F-06 再补图层透明度、图例与状态持久化，F-11 再补 WebSocket 地图刷新事件。
 - 在 B-11 上补设备台账、心跳上报和在线状态计算。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

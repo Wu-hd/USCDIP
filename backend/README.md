@@ -24,6 +24,7 @@
 - B-26 特征视图与算法脱敏接口（默认脱敏特征视图、限时明细授权与访问审计）
 - B-27 统一审计日志服务（跨域审计主表、查询接口与应急旁路专项报表）
 - B-28 Trace 与链路埋点中间件（HTTP、Outbox、通知、WebSocket traceId 透传）
+- F-11 实时告警列表 + WebSocket 客户端（STOMP 客户端，断线重连，心跳包及基于 traceId/eventId 去重，并在前端实现 SaaS 化 Dashboard 风格交互 UI）
 
 当前项目已添加数据库能力。
 

@@ -75,6 +75,18 @@ const router = createRouter({
       }
     },
     {
+      path: '/mgmt/alerts',
+      name: 'mgmt-alerts',
+      component: () => import('@/views/RealtimeAlertsView.vue'),
+      meta: {
+        requiresAuth: true,
+        platformCode: 'MGMT',
+        entryPermission: 'ENTRY:MGMT',
+        menuPermission: 'MENU:ASSET:READ',
+        permissionLabel: '实时告警'
+      }
+    },
+    {
       path: '/emgc',
       name: 'emgc-placeholder',
       component: () => import('@/views/PlatformPlaceholderView.vue'),

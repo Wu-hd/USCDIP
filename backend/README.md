@@ -2031,5 +2031,30 @@
    - H2 Console / PostgreSQL 中执行 `SELECT * FROM gateway_risk_audit ORDER BY created_at DESC;`
 
 ## 下一步建议
+- F-01 前端 Portal 联调已新增 `frontend/`：
+   - 安装依赖：`cd ../frontend && npm install`
+   - 启动前端：`npm run dev -- --host 0.0.0.0`
+   - 默认访问：`http://localhost:5173/portal`
+   - 默认后端：`VITE_API_BASE_URL=http://localhost:8080`；如需切换后端地址，可在前端启动前设置该环境变量。
+   - Portal 依赖接口：`GET /api/platforms`、`GET /api/menu-boundaries`、`GET /api/auth/login-url`、`GET /api/auth/me`、`POST /api/auth/logout`、`GET /api/workorders`、`GET /api/notifications`。
+   - 无 token 时，Portal 仍展示三平台入口，待办汇总显示“需登录并具备权限后查看”；有有效 access token 时，会读取用户快照、工单和通知分页摘要。
+   - F-01 只实现 Portal 壳、三平台入口与占位页；`/mgmt`、`/emgc`、`/diag` 不承载业务编辑，支撑层不作为第四入口。
+- F-02 OIDC 回调页已新增 `frontend/src/views/AuthCallbackView.vue`：
+   - 回调地址固定为：`http://localhost:5173/auth/callback`
+   - Keycloak / OIDC Client Redirect URI 建议配置：`http://localhost:5173/auth/callback`
+   - 前端发起登录时调用 `GET /api/auth/login-url?redirectUri=http://localhost:5173/auth/callback`，并将后端返回的 `state / stateExpiresAt / redirectUri` 保存到 `sessionStorage`。
+   - 回调页读取 `code/state/error/error_description`；取消登录或 Provider 返回 `error` 时不调用后端 callback。
+   - code 交换调用：`POST /api/auth/callback`，请求体为 `{"code":"<oidc_code>","state":"<oidc_state>","redirectUri":"http://localhost:5173/auth/callback"}`。
+   - 成功后前端将 `accessToken / refreshToken / tokenType / expiresAt` 保存到 `sessionStorage`，短暂成功态后跳回 `/portal`；F-03 再实现自动刷新与并发刷新锁。
+   - 常见失败：`OIDC_DISABLED` 表示后端未启用 OIDC；`OIDC_STATE_INVALID` 表示 state 不存在、过期、已消费或 redirectUri 不匹配；页面会显示 traceId 并提供重新登录/返回 Portal。
+- F-03 Token 刷新与登出前端逻辑已接入统一请求层：
+   - 前端 token pair 继续保存在 `sessionStorage`，包括 `accessToken / refreshToken / accessTokenExpiresAt / refreshTokenExpiresAt / tokenType`。
+   - 业务请求默认会在 access token 距离过期小于 2 分钟时静默调用 `POST /api/auth/refresh`，请求体为 `{"refreshToken":"<refresh_token>"}`。
+   - 多个并发请求同时触发刷新时，前端复用同一个 refresh promise；刷新成功后原请求最多重试一次，避免 refresh token rotation 自相冲突。
+   - `GET /api/auth/login-url`、`POST /api/auth/callback`、`POST /api/auth/refresh`、`POST /api/auth/logout` 跳过递归刷新。
+   - `TOKEN_REFRESH_EXPIRED / TOKEN_REFRESH_REVOKED / TOKEN_REFRESH_REPLAY_DETECTED / TOKEN_REFRESH_INVALID` 会触发本地强制登出，清理 token pair，并在 Portal 登录态面板显示原因与 traceId。
+   - `POST /api/auth/logout` 无论后端返回成功、401 还是 OIDC disabled，前端都会清理本地 token pair 并回到未登录态。
+   - 联调建议：先通过 OIDC callback 获取真实 token pair，再访问 `/portal`；可用旧 refresh token 或已撤销 token 验证强制登出路径。
+- 在 B-11 上补设备台账、心跳上报和在线状态计算。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

@@ -51,6 +51,18 @@ const router = createRouter({
       }
     },
     {
+      path: '/mgmt/devices',
+      name: 'mgmt-device-ledger',
+      component: () => import('@/views/DeviceLedgerView.vue'),
+      meta: {
+        requiresAuth: true,
+        platformCode: 'MGMT',
+        entryPermission: 'ENTRY:MGMT',
+        menuPermission: 'MENU:ASSET:READ',
+        permissionLabel: '设备台账'
+      }
+    },
+    {
       path: '/emgc',
       name: 'emgc-placeholder',
       component: () => import('@/views/PlatformPlaceholderView.vue'),

@@ -10,6 +10,7 @@ import {
   LockKeyhole,
   MapPinned,
   Pencil,
+  RadioTower,
   Route
 } from 'lucide-vue-next';
 import { storeToRefs } from 'pinia';
@@ -213,14 +214,22 @@ onMounted(() => {
               </div>
             </section>
 
-            <RouterLink
-              v-if="platformCode === 'MGMT'"
-              class="primary-button focus-ring mt-6 w-full sm:w-auto"
-              to="/mgmt/gis"
-            >
-              <MapPinned class="h-4 w-4" />
-              进入 2D 一张图
-            </RouterLink>
+            <div v-if="platformCode === 'MGMT'" class="mt-6 flex flex-col gap-3 sm:flex-row">
+              <RouterLink
+                class="primary-button focus-ring w-full sm:w-auto"
+                to="/mgmt/gis"
+              >
+                <MapPinned class="h-4 w-4" />
+                进入 2D 一张图
+              </RouterLink>
+              <RouterLink
+                class="secondary-button focus-ring w-full sm:w-auto"
+                to="/mgmt/devices"
+              >
+                <RadioTower class="h-4 w-4" />
+                设备台账
+              </RouterLink>
+            </div>
 
             <div class="mt-6 rounded-lg border border-amber-400/20 bg-amber-400/10 p-4 text-sm leading-6 text-amber-50">
               <div class="flex gap-3">

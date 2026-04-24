@@ -2091,6 +2091,12 @@
    - 历史告警与事件以关联设备为主线调用 `GET /api/alerts?deviceId=...`、`GET /api/incidents?deviceId=...` 并去重；工单 tab 再按事件 `incidentId` 调用 `GET /api/workorders?incidentId=...` 聚合。
    - 工单接口需要 EMGC 工单读权限；缺权限时只在工单 tab 显示错误与 traceId，不影响基础档案、关联设备、告警、事件 tab。
    - 联调建议：分别点击 `NODE-001 / SEG-001 / FAC-001 / DEV-001`，验证基础档案、关联设备、告警、事件、工单 tab 的空态、错误态和数据态。
-- 在 B-11 上补设备台账、心跳上报和在线状态计算。
+- F-09 设备台账列表页已新增 `/mgmt/devices`：
+   - 页面入口位于 `/mgmt` 综合管理平台，占用权限 `ENTRY:MGMT + MENU:ASSET:READ`，与 `/mgmt/gis` 使用同一资产读权限边界。
+   - 列表调用 `GET /api/device-ledger/devices?page=1&pageSize=20`，支持 `status / regionId / segmentId / nodeId / facilityId / protocolType / calibrationExpired / page / pageSize` 筛选。
+   - 点击设备行调用 `GET /api/device-ledger/devices/{deviceId}` 打开右侧详情面板，展示心跳链路、缓冲水位、异常标记、对象链、标定到期和 versionNo。
+   - 在线状态直接展示后端返回的 `onlineStatus / onlineStatusReason`，不在前端按布尔值重算；页面指标为当前查询页聚合。
+   - 联调建议：访问 `http://localhost:5173/mgmt/devices`，验证 `DEV-001` 在线正常、`DEV-002` 高缓冲预警且标定过期、`DEV-003` 心跳超时离线；筛选 `status=WARNING` 和 `calibrationExpired=true` 时 Network 请求参数应同步变化。
+- 继续推进 F-10 时序趋势图页。
 - 接入 Flyway，落地版本化迁移脚本。
 - 评估将单实例内存限流升级为 Redis 共享限流。

@@ -25,6 +25,7 @@
 - B-27 统一审计日志服务（跨域审计主表、查询接口与应急旁路专项报表）
 - B-28 Trace 与链路埋点中间件（HTTP、Outbox、通知、WebSocket traceId 透传）
 - F-11 实时告警列表 + WebSocket 客户端（STOMP 客户端，断线重连，心跳包及基于 traceId/eventId 去重，并在前端实现 SaaS 化 Dashboard 风格交互 UI）
+- F-13 派单与回写弹窗（工单详情页接入派单、转派、SLA 设置和误报/漏报独立回写，并对齐 B-22 后端契约）
 
 当前项目已添加数据库能力。
 
@@ -162,6 +163,7 @@
 - B-26 特征视图与算法脱敏接口：算法工程师默认只能查询 `MASKED` 特征，`DETAIL` 明细需限时授权并全量审计
 - B-27 统一审计日志服务：登录、旁路、权限变更、派单、模型回退和高风险访问统一进入 `audit_log`
 - B-28 Trace 与链路埋点中间件：HTTP、Outbox、通知、WebSocket 推送统一透传 `traceId`
+- F-13 前端联调：`/emgc/workorders/:id` 已接入派单、转派、回写弹窗；派单请求体必须包含非空 `assignee`，回写独立调用 `/writeback`，不复用关闭工单语义
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -1299,6 +1301,15 @@
 - `POST /api/workorders/{workOrderId}/close`：关闭。
 - `POST /api/workorders/{workOrderId}/writeback`：误报、漏报或其他回写。
 - 查询需要 `MENU:WORKORDER:READ`；创建、派单、转派、关闭、回写需要 `MENU:WORKORDER:DISPATCH`；接单和完成允许当前 assignee 或具备派单权限的用户操作。
+
+### 3.1) F-13 前端联调请求体
+- 派单与转派请求体一致，`assignee` 必须非空，`slaDueAt` 使用 ISO 本地时间：
+   - `{"assigneeUserId":"U-INSPECT-001","assignee":"zhangsan","slaDueAt":"2026-05-07T18:30","reason":"现场复核压力异常"}`
+- 回写独立建模，不等同关闭工单：
+   - `{"writebackType":"FALSE_POSITIVE","writebackReason":"现场复核为误报"}`
+   - `{"writebackType":"MISSED_REPORT","writebackReason":"现场发现异常但规则链路未触发"}`
+- 关闭工单只提交关闭原因：
+   - `{"closeReason":"处置完成并复核通过"}`
 
 ### 4) Outbox 事件
 - 工单状态变更会写入 `outbox_event`，`aggregate_type=WORK_ORDER`。

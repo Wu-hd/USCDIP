@@ -419,10 +419,15 @@ export interface WorkOrderCreateRequest {
   priority: string;
   description: string;
   assigneeUserId?: string | null;
+  assignee?: string | null;
+  slaDueAt?: string | null;
 }
 
 export interface WorkOrderDispatchRequest {
-  assigneeUserId: string;
+  assigneeUserId?: string | null;
+  assignee: string;
+  slaDueAt?: string | null;
+  reason?: string | null;
 }
 
 export interface WorkOrderCompleteRequest {
@@ -431,8 +436,6 @@ export interface WorkOrderCompleteRequest {
 
 export interface WorkOrderCloseRequest {
   closeReason: string;
-  writebackType?: string;
-  writebackReason?: string;
 }
 
 export interface WorkOrderWritebackRequest {

@@ -1,5 +1,5 @@
 import { apiRequest } from '@/services/api';
-import type { PageResponse, WorkOrderResponse } from '@/types/api';
+import type { PageResponse, WorkOrderDispatchRequest, WorkOrderResponse } from '@/types/api';
 
 export interface WorkOrderQuery {
   status?: string;
@@ -41,10 +41,10 @@ export function completeWorkOrder(workOrderId: string, completionSummary: string
   });
 }
 
-export function closeWorkOrder(workOrderId: string, closeReason: string, writebackType?: string, writebackReason?: string) {
+export function closeWorkOrder(workOrderId: string, closeReason: string) {
   return apiRequest<WorkOrderResponse>(`/api/workorders/${workOrderId}/close`, {
     method: 'POST',
-    body: JSON.stringify({ closeReason, writebackType, writebackReason })
+    body: JSON.stringify({ closeReason })
   });
 }
 
@@ -55,16 +55,16 @@ export function writebackWorkOrder(workOrderId: string, writebackType: string, w
   });
 }
 
-export function dispatchWorkOrder(workOrderId: string, assigneeUserId: string) {
+export function dispatchWorkOrder(workOrderId: string, request: WorkOrderDispatchRequest) {
   return apiRequest<WorkOrderResponse>(`/api/workorders/${workOrderId}/dispatch`, {
     method: 'POST',
-    body: JSON.stringify({ assigneeUserId })
+    body: JSON.stringify(request)
   });
 }
 
-export function transferWorkOrder(workOrderId: string, assigneeUserId: string) {
+export function transferWorkOrder(workOrderId: string, request: WorkOrderDispatchRequest) {
   return apiRequest<WorkOrderResponse>(`/api/workorders/${workOrderId}/transfer`, {
     method: 'POST',
-    body: JSON.stringify({ assigneeUserId })
+    body: JSON.stringify(request)
   });
 }

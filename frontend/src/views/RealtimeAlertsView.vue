@@ -100,7 +100,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue';
 import { useAlertStore } from '@/stores/alerts';
-import { AlertCircle, Info, TriangleAlert, ShieldAlert } from 'lucide-vue-next';
+import { Info, TriangleAlert, ShieldAlert } from 'lucide-vue-next';
 import { AlertWebSocketClient } from '@/services/websocket';
 
 const alertStore = useAlertStore();

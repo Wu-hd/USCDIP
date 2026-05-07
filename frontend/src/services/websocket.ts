@@ -1,5 +1,5 @@
 import { Client } from '@stomp/stompjs';
-import { useAuthStore } from '@/stores/auth';
+import { getAccessToken } from '@/services/api';
 
 export class AlertWebSocketClient {
   private client: Client | null = null;
@@ -12,8 +12,7 @@ export class AlertWebSocketClient {
   ) {}
 
   public connect() {
-    const authStore = useAuthStore();
-    const token = authStore.accessToken;
+    const token = getAccessToken();
     
     // In actual env, token may be sent via headers or connection url parameters
     // depending on the backend config. Here we use headers.

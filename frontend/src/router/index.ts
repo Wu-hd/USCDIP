@@ -51,6 +51,18 @@ const router = createRouter({
       }
     },
     {
+      path: '/mgmt/gis/3d',
+      name: 'mgmt-gis-3d-placeholder',
+      component: () => import('@/views/Gis3DPlaceholderView.vue'),
+      meta: {
+        requiresAuth: true,
+        platformCode: 'MGMT',
+        entryPermission: 'ENTRY:MGMT',
+        menuPermission: 'MENU:ASSET:READ',
+        permissionLabel: '3D 占位视图'
+      }
+    },
+    {
       path: '/mgmt/devices',
       name: 'mgmt-device-ledger',
       component: () => import('@/views/DeviceLedgerView.vue'),

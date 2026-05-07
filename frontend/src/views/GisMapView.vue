@@ -35,7 +35,7 @@ import {
   X
 } from 'lucide-vue-next';
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 
 import { ApiClientError } from '@/services/api';
 import { getAlerts } from '@/services/alerts';
@@ -97,6 +97,8 @@ const INITIAL_QUERY: GisBboxQuery = {
   page: 1,
   pageSize: 50
 };
+
+const route = useRoute();
 
 const layerConfigs: Array<MapLayerConfig & { icon: typeof CircuitBoard }> = [
   {
@@ -239,6 +241,7 @@ const detailContext = reactive<AssetDetailContext>({
 });
 let searchDebounceTimer: ReturnType<typeof window.setTimeout> | null = null;
 const layerState = reactive(loadLayerState());
+const activeGisQuery = ref<GisBboxQuery>({ ...INITIAL_QUERY });
 
 const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toUpperCase());
 const drawableCount = computed(() => objects.value.filter((object) => parseWkt(object.geometry2d)).length);
@@ -270,6 +273,21 @@ const selectedProfileAttributeEntries = computed(() =>
 const selectedProfileRelatedEntries = computed(() =>
   detailContext.profile.data ? Object.entries(detailContext.profile.data.relatedObjectIds ?? {}) : []
 );
+const gis3dQuery = computed(() => {
+  const query: Record<string, string> = {
+    minX: String(activeGisQuery.value.minX),
+    minY: String(activeGisQuery.value.minY),
+    maxX: String(activeGisQuery.value.maxX),
+    maxY: String(activeGisQuery.value.maxY),
+    authoritySrid: activeGisQuery.value.authoritySrid,
+    displaySrid: activeGisQuery.value.displaySrid
+  };
+  if (selectedObject.value) {
+    query.objectType = String(selectedObject.value.objectType);
+    query.objectId = selectedObject.value.objectId;
+  }
+  return query;
+});
 
 function createAssetIndexState(): AssetSearchIndexState {
   return {
@@ -1199,11 +1217,12 @@ function updateObjectLayerStyles(layerKey?: GisLayerKey) {
   });
 }
 
-async function loadBboxObjects() {
+async function loadBboxObjects(query: GisBboxQuery = readRouteBboxQuery()) {
   state.value = 'loading';
   message.value = '正在读取 bbox 范围内 GIS 对象';
+  activeGisQuery.value = query;
   try {
-    const response = await queryGisBbox(INITIAL_QUERY);
+    const response = await queryGisBbox(query);
     const page = response.data;
     objects.value = page?.items ?? [];
     total.value = page?.total ?? 0;
@@ -1242,7 +1261,7 @@ async function selectObject(object: GisObjectRecordResponse, loadDetail = true) 
   }
 
   try {
-    const response = await getGisObjectDetail(object.objectType, object.objectId, INITIAL_QUERY.displaySrid);
+    const response = await getGisObjectDetail(object.objectType, object.objectId, activeGisQuery.value.displaySrid);
     selectedObject.value = response.data ?? object;
     detailTraceId.value = response.traceId;
     if (response.data) {
@@ -1271,7 +1290,7 @@ async function locateSearchResult(result: AssetSearchResult) {
       setLayerVisible(result.objectType, true);
     }
 
-    const response = await getGisObjectDetail(result.objectType, result.objectId, INITIAL_QUERY.displaySrid);
+    const response = await getGisObjectDetail(result.objectType, result.objectId, activeGisQuery.value.displaySrid);
     const object = response.data;
     searchTraceId.value = response.traceId;
     detailTraceId.value = response.traceId;
@@ -1312,8 +1331,8 @@ async function handleMapClick(event: LeafletMouseEvent) {
     const response = await pickGisObject({
       x: event.latlng.lng,
       y: event.latlng.lat,
-      authoritySrid: INITIAL_QUERY.authoritySrid,
-      displaySrid: INITIAL_QUERY.displaySrid,
+      authoritySrid: activeGisQuery.value.authoritySrid,
+      displaySrid: activeGisQuery.value.displaySrid,
       objectTypes: layerConfigs
         .filter((item) => isGisObjectLayer(item.key) && layerState[item.key].visible)
         .map((item) => item.key),
@@ -1336,6 +1355,63 @@ async function handleMapClick(event: LeafletMouseEvent) {
     }
     pickMessage.value = '对象点查失败';
   }
+}
+
+async function applyRouteContext() {
+  const objectType = readStringQuery('objectType', '');
+  const objectId = readStringQuery('objectId', '');
+  if (!objectType || !objectId) {
+    return;
+  }
+
+  try {
+    const response = await getGisObjectDetail(objectType, objectId, activeGisQuery.value.displaySrid);
+    if (!response.data) {
+      return;
+    }
+    detailTraceId.value = response.traceId;
+    if (isGisObjectLayer(response.data.objectType as GisLayerKey)) {
+      layerState[response.data.objectType as GisObjectType].visible = true;
+    }
+    await selectObject(response.data, false);
+    const canRender = renderSearchHighlight(response.data);
+    focusSelectedOnMap();
+    searchState.value = canRender ? 'ready' : searchState.value;
+    searchMessage.value = canRender
+      ? `已恢复 3D 回退上下文 ${response.data.objectType} / ${response.data.objectId}`
+      : `${response.data.objectType} / ${response.data.objectId} 已恢复上下文但不可定位`;
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      detailTraceId.value = error.traceId ?? '';
+      message.value = error.status === 404 ? '3D 回退对象未找到 GIS 空间详情' : error.message;
+      return;
+    }
+    message.value = '3D 回退上下文恢复失败';
+  }
+}
+
+function readRouteBboxQuery(): GisBboxQuery {
+  return {
+    minX: readNumberQuery('minX', INITIAL_QUERY.minX),
+    minY: readNumberQuery('minY', INITIAL_QUERY.minY),
+    maxX: readNumberQuery('maxX', INITIAL_QUERY.maxX),
+    maxY: readNumberQuery('maxY', INITIAL_QUERY.maxY),
+    authoritySrid: readStringQuery('authoritySrid', INITIAL_QUERY.authoritySrid),
+    displaySrid: readStringQuery('displaySrid', INITIAL_QUERY.displaySrid),
+    page: INITIAL_QUERY.page,
+    pageSize: INITIAL_QUERY.pageSize
+  };
+}
+
+function readStringQuery(key: string, fallback: string) {
+  const value = route.query[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function readNumberQuery(key: string, fallback: number) {
+  const value = route.query[key];
+  const parsed = typeof value === 'string' ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function toggleLayer(layerKey: GisLayerKey) {
@@ -1523,6 +1599,7 @@ onMounted(async () => {
   await nextTick();
   initializeMap();
   await loadBboxObjects();
+  await applyRouteContext();
 });
 
 onBeforeUnmount(() => {
@@ -1562,6 +1639,10 @@ onBeforeUnmount(() => {
               综合管理平台 / GIS 主入口 / EPSG:4490
             </p>
           </div>
+          <RouterLink class="secondary-button focus-ring hidden sm:inline-flex" :to="{ path: '/mgmt/gis/3d', query: gis3dQuery }">
+            <Layers3 class="h-4 w-4" />
+            3D 占位
+          </RouterLink>
         </div>
 
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[32rem]">
@@ -1718,7 +1799,7 @@ onBeforeUnmount(() => {
               默认
             </button>
           </div>
-          <button class="secondary-button focus-ring w-full text-xs" type="button" @click="loadBboxObjects">
+          <button class="secondary-button focus-ring w-full text-xs" type="button" @click="() => loadBboxObjects()">
             <RefreshCcw class="h-4 w-4" />
             重新同步 bbox / 告警
           </button>
@@ -2186,10 +2267,14 @@ onBeforeUnmount(() => {
         </div>
         <div class="rounded-lg border border-white/10 bg-white/[0.045] p-4">
           <div class="flex items-center gap-2 text-sm font-semibold text-white">
-            <X class="h-4 w-4 text-slate-300" aria-hidden="true" />
-            3D 降级口径
+            <Layers3 class="h-4 w-4 text-blue-200" aria-hidden="true" />
+            3D 占位与降级
           </div>
-          <p class="mt-2 text-sm text-slate-400">一期 2D 为主入口，3D 不影响本页主业务。</p>
+          <p class="mt-2 text-sm text-slate-400">一期 2D 为主入口，3D 仅做增强插槽；不可用时保留上下文回到本页。</p>
+          <RouterLink class="secondary-button focus-ring mt-3 w-full" :to="{ path: '/mgmt/gis/3d', query: gis3dQuery }">
+            <Layers3 class="h-4 w-4" />
+            进入 3D 占位
+          </RouterLink>
         </div>
       </section>
     </div>

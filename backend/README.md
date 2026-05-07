@@ -27,6 +27,7 @@
 - F-11 实时告警列表 + WebSocket 客户端（STOMP 客户端，断线重连，心跳包及基于 traceId/eventId 去重，并在前端实现 SaaS 化 Dashboard 风格交互 UI）
 - F-13 派单与回写弹窗（工单详情页接入派单、转派、SLA 设置和误报/漏报独立回写，并对齐 B-22 后端契约）
 - F-14 数据质量标识 UI（趋势页统一展示 dq_score、dq_flags、补偿回传、五维评分与告警置信度降权提示）
+- F-15 3D 占位与降级页（复用 B-10 GIS 数据生成 Three.js 线框占位，WebGL 或 GIS 不可用时保留上下文回退 2D）
 
 当前项目已添加数据库能力。
 
@@ -166,6 +167,7 @@
 - B-28 Trace 与链路埋点中间件：HTTP、Outbox、通知、WebSocket 推送统一透传 `traceId`
 - F-13 前端联调：`/emgc/workorders/:id` 已接入派单、转派、回写弹窗；派单请求体必须包含非空 `assignee`，回写独立调用 `/writeback`，不复用关闭工单语义
 - F-14 前端联调：`/mgmt/trends` 已接入统一数据质量标识组件，展示 `dqScore / dqLevel / dqFlags / isBackfill / dqAlarmConfFactor` 和五维评分
+- F-15 前端联调：`/mgmt/gis/3d` 已接入 3D 占位与降级页；复用 `GET /api/gis/objects/bbox` 与 `GET /api/gis/objects/{objectType}/{objectId}`，失败时带 query 回退 `/mgmt/gis`
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -2092,6 +2094,11 @@
    - 页面调用 `GET /api/gis/objects/bbox` 绘制 `NODE / SEGMENT / FACILITY / DEVICE`，点击对象后调用 `GET /api/gis/objects/{objectType}/{objectId}?displaySrid=EPSG:4490` 打开右侧详情抽屉。
    - 地图空白点击会调用 `POST /api/gis/objects/pick`，请求体包含 `x/y/authoritySrid/displaySrid/objectTypes/toleranceMeters`；未命中显示空结果提示，不伪造业务数据。
    - 默认不接公网瓦片，使用本地深色网格底图；F-06 再补图层透明度、图例与状态持久化，F-11 再补 WebSocket 地图刷新事件。
+- F-15 3D 占位与降级页已新增 `/mgmt/gis/3d`：
+   - 前端新增依赖 `three` 与类型包 `@types/three`，不新增后端 3D API。
+   - 3D 页面复用 `GET /api/gis/objects/bbox` 绘制轻量管网线框；若 query 携带 `objectType / objectId`，额外调用 `GET /api/gis/objects/{objectType}/{objectId}` 高亮上下文对象。
+   - 入口 query 支持 `objectType / objectId / displaySrid / minX / minY / maxX / maxY`；从 3D 降级回 `/mgmt/gis` 时完整保留 query。
+   - WebGL 不可用、Three 初始化异常、canvas 不可用、GIS API 失败或 bbox 空数据都会进入 fallback 状态，展示原因与 traceId，并默认 3 秒后回到 2D 主入口。
 - F-06 图层控制面板已升级 `/mgmt/gis`：
    - 图层固定为 `SEGMENT / DEVICE / NODE / FACILITY / ALERT`，支持显隐、透明度、图例折叠、全部显示、全部隐藏、恢复默认。
    - 图层偏好保存在浏览器 `localStorage`，key 为 `uscdip.gis.layerState.v1`；刷新页面后恢复显隐、透明度和图例折叠状态。

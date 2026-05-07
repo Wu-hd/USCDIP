@@ -8,6 +8,7 @@ import {
   Construction,
   Database,
   DoorOpen,
+  Layers3,
   LockKeyhole,
   MapPinned,
   Pencil,
@@ -241,6 +242,13 @@ onMounted(() => {
               >
                 <MapPinned class="h-4 w-4" />
                 进入 2D 一张图
+              </RouterLink>
+              <RouterLink
+                class="secondary-button focus-ring w-full sm:w-auto"
+                to="/mgmt/gis/3d"
+              >
+                <Layers3 class="h-4 w-4" />
+                3D 占位
               </RouterLink>
               <RouterLink
                 class="secondary-button focus-ring w-full sm:w-auto"

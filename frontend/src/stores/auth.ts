@@ -5,7 +5,8 @@ import {
   addAuthSessionListener,
   clearTokenPair,
   getAccessToken,
-  getAccessTokenRemainingMs
+  getAccessTokenRemainingMs,
+  saveTokenPair
 } from '@/services/api';
 import { savePendingOidcState } from '@/services/auth';
 import {
@@ -14,7 +15,7 @@ import {
   hasAllPermissions as userHasAllPermissions,
   hasPermission as userHasPermission
 } from '@/services/permissions';
-import { getCurrentUser, getLoginDescriptor, logout } from '@/services/portal';
+import { emergencyLogin as callEmergencyLogin, getCurrentUser, getLoginDescriptor, logout } from '@/services/portal';
 import type { AuthMePayload, AuthRefreshState } from '@/types/api';
 
 type AuthStatus = 'checking' | 'authenticated' | 'anonymous' | 'oidc-disabled' | 'error';
@@ -163,6 +164,34 @@ export const useAuthStore = defineStore('auth', {
 
       savePendingOidcState(descriptor, redirectUri);
       window.location.assign(descriptor.authorizationUrl);
+    },
+    async emergencyLogin(username: string, password: string) {
+      this.bindSessionEvents();
+      this.status = 'checking';
+      this.message = '正在验证紧急旁路账号';
+      try {
+        const response = await callEmergencyLogin(username, password);
+        if (!response.data) {
+          this.status = 'error';
+          this.message = '登录失败：未返回令牌';
+          return false;
+        }
+        saveTokenPair(response.data);
+        this.traceId = response.traceId;
+        await this.loadCurrentUser();
+        return this.isAuthenticated;
+      } catch (error) {
+        this.user = null;
+        if (error instanceof ApiClientError) {
+          this.traceId = error.traceId ?? '';
+          this.status = 'error';
+          this.message = error.message || '紧急登录失败';
+          return false;
+        }
+        this.status = 'error';
+        this.message = '紧急登录请求失败';
+        return false;
+      }
     },
     async logoutCurrentSession() {
       this.bindSessionEvents();

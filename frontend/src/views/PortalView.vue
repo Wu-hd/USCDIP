@@ -10,6 +10,7 @@ import {
   Command,
   DatabaseZap,
   ExternalLink,
+  KeyRound,
   Loader2,
   LockKeyhole,
   LogIn,
@@ -56,6 +57,12 @@ interface TodoPanel<T> {
   message: string;
   traceId: string;
 }
+
+const showEmergencyLogin = ref(false);
+const emergencyUsername = ref('');
+const emergencyPassword = ref('');
+const emergencyLoading = ref(false);
+const emergencyError = ref('');
 
 const router = useRouter();
 const route = useRoute();
@@ -322,6 +329,33 @@ function openPlatform(platform: PlatformBoundary) {
   router.push(platform.routePrefix);
 }
 
+async function handleEmergencyLogin() {
+  if (!emergencyUsername.value.trim() || !emergencyPassword.value) {
+    emergencyError.value = '请输入用户名和密码';
+    return;
+  }
+  emergencyLoading.value = true;
+  emergencyError.value = '';
+  try {
+    const success = await authStore.emergencyLogin(
+      emergencyUsername.value.trim(),
+      emergencyPassword.value
+    );
+    if (success) {
+      showEmergencyLogin.value = false;
+      emergencyUsername.value = '';
+      emergencyPassword.value = '';
+      await refreshAll();
+    } else {
+      emergencyError.value = authStore.message || '登录失败';
+    }
+  } catch {
+    emergencyError.value = '登录请求异常';
+  } finally {
+    emergencyLoading.value = false;
+  }
+}
+
 onMounted(() => {
   authStore.bindSessionEvents();
   refreshAll();
@@ -359,15 +393,24 @@ onMounted(() => {
             <span class="font-medium">{{ authStatusLabel }}</span>
             <span class="max-w-[11rem] truncate text-slate-300">{{ displayName }}</span>
           </div>
-          <button
-            v-if="!isAuthenticated"
-            class="primary-button focus-ring"
-            type="button"
-            @click="authStore.startLogin()"
-          >
-            <LogIn class="h-4 w-4" />
-            统一登录
-          </button>
+          <template v-if="!isAuthenticated">
+            <button
+              class="primary-button focus-ring"
+              type="button"
+              @click="authStore.startLogin()"
+            >
+              <LogIn class="h-4 w-4" />
+              统一登录
+            </button>
+            <button
+              class="secondary-button focus-ring"
+              type="button"
+              @click="showEmergencyLogin = !showEmergencyLogin"
+            >
+              <KeyRound class="h-4 w-4" />
+              紧急登录
+            </button>
+          </template>
           <button
             v-else
             class="secondary-button focus-ring"
@@ -391,6 +434,76 @@ onMounted(() => {
       >
         {{ portalNotice }}
       </div>
+
+      <!-- Emergency Login Panel -->
+      <Transition name="slide-fade">
+        <section
+          v-if="showEmergencyLogin && !isAuthenticated"
+          class="glass-panel overflow-hidden"
+        >
+          <div class="border-b border-white/10 bg-gradient-to-r from-amber-500/10 to-orange-400/5 px-5 py-4">
+            <div class="flex items-center gap-3">
+              <div class="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-400/30 bg-amber-400/15">
+                <KeyRound class="h-5 w-5 text-amber-200" />
+              </div>
+              <div>
+                <p class="font-display text-base font-semibold text-white">紧急旁路登录</p>
+                <p class="text-sm text-slate-400">OIDC 关闭时使用应急账号登录系统</p>
+              </div>
+            </div>
+          </div>
+          <form class="px-5 py-5" @submit.prevent="handleEmergencyLogin">
+            <div class="grid gap-4 sm:grid-cols-[1fr_1fr_auto]">
+              <div class="space-y-1.5">
+                <label for="emergency-username" class="block text-sm font-medium text-slate-300">用户名</label>
+                <input
+                  id="emergency-username"
+                  v-model="emergencyUsername"
+                  type="text"
+                  autocomplete="username"
+                  placeholder="输入应急账号用户名"
+                  class="w-full rounded-lg border border-white/15 bg-white/[0.065] px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-blue-400/50 focus:bg-white/[0.08] focus:ring-1 focus:ring-blue-400/30"
+                  :disabled="emergencyLoading"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label for="emergency-password" class="block text-sm font-medium text-slate-300">密码</label>
+                <input
+                  id="emergency-password"
+                  v-model="emergencyPassword"
+                  type="password"
+                  autocomplete="current-password"
+                  placeholder="输入密码"
+                  class="w-full rounded-lg border border-white/15 bg-white/[0.065] px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-blue-400/50 focus:bg-white/[0.08] focus:ring-1 focus:ring-blue-400/30"
+                  :disabled="emergencyLoading"
+                />
+              </div>
+              <div class="flex items-end">
+                <button
+                  type="submit"
+                  class="primary-button focus-ring w-full sm:w-auto"
+                  :disabled="emergencyLoading"
+                >
+                  <Loader2 v-if="emergencyLoading" class="h-4 w-4 animate-spin" />
+                  <KeyRound v-else class="h-4 w-4" />
+                  {{ emergencyLoading ? '登录中' : '登录' }}
+                </button>
+              </div>
+            </div>
+            <div
+              v-if="emergencyError"
+              class="mt-4 flex items-start gap-2 rounded-lg border border-rose-400/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-100"
+              role="alert"
+            >
+              <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{{ emergencyError }}</span>
+            </div>
+            <p class="mt-3 text-xs text-slate-500">
+              管理员：admin / admin123! &nbsp;·&nbsp; 应急指挥：bg_active_hz / BreakGlass123!
+            </p>
+          </form>
+        </section>
+      </Transition>
 
       <section class="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.7fr)]">
         <div class="glass-panel overflow-hidden p-5 sm:p-6">
@@ -712,3 +825,16 @@ onMounted(() => {
     </div>
   </main>
 </template>
+
+<style scoped>
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.25s ease;
+}
+
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+</style>

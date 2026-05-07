@@ -6,6 +6,7 @@ import type {
   NotificationResponse,
   PageResponse,
   PlatformBoundary,
+  TokenPairResponse,
   WorkOrderResponse
 } from '@/types/api';
 
@@ -31,6 +32,15 @@ export function getCurrentUser() {
 export function logout() {
   return apiRequest<Record<string, unknown>>('/api/auth/logout', {
     method: 'POST',
+    skipAuthRefresh: true,
+    retryOnUnauthorized: false
+  });
+}
+
+export function emergencyLogin(username: string, password: string) {
+  return apiRequest<TokenPairResponse>('/api/auth/emergency/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
     skipAuthRefresh: true,
     retryOnUnauthorized: false
   });

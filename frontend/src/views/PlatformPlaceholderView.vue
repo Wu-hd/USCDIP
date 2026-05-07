@@ -16,7 +16,7 @@ import {
 } from 'lucide-vue-next';
 import { storeToRefs } from 'pinia';
 import { computed, onMounted, ref } from 'vue';
-import { RouterLink, useRoute } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 
 import { ApiClientError } from '@/services/api';
 import { getPlatform } from '@/services/platform';
@@ -30,6 +30,7 @@ import { useAuthStore } from '@/stores/auth';
 import type { ButtonPermissionConfig, ManagedPlatformCode, PlatformBoundary } from '@/types/api';
 
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
 const { user, roleSummary, permissionSummary } = storeToRefs(authStore);
 const platform = ref<PlatformBoundary | null>(null);
@@ -87,6 +88,23 @@ function actionToneClass(action: ButtonPermissionConfig) {
     return 'border-orange-400/25 bg-orange-400/10 text-orange-100 hover:border-orange-300/40 hover:bg-orange-400/15';
   }
   return 'border-blue-400/25 bg-blue-400/10 text-blue-100 hover:border-blue-300/40 hover:bg-blue-400/15';
+}
+
+const ACTION_ROUTE_MAP: Record<string, string> = {
+  'asset-read': '/mgmt/devices',
+  'asset-write': '/mgmt/gis',
+  'workorder-read': '/emgc',
+  'workorder-dispatch': '/emgc',
+  'model-read': '/diag',
+  'model-write': '/diag'
+};
+
+function handleAction(action: ButtonPermissionConfig) {
+  if (!checkAction(action).allowed) return;
+  const target = ACTION_ROUTE_MAP[action.key];
+  if (target) {
+    router.push(target);
+  }
 }
 
 onMounted(() => {
@@ -179,6 +197,7 @@ onMounted(() => {
                   type="button"
                   :disabled="!checkAction(action).allowed"
                   :aria-disabled="!checkAction(action).allowed"
+                  @click="handleAction(action)"
                 >
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">

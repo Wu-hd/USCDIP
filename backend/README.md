@@ -28,6 +28,7 @@
 - F-13 派单与回写弹窗（工单详情页接入派单、转派、SLA 设置和误报/漏报独立回写，并对齐 B-22 后端契约）
 - F-14 数据质量标识 UI（趋势页统一展示 dq_score、dq_flags、补偿回传、五维评分与告警置信度降权提示）
 - F-15 3D 占位与降级页（复用 B-10 GIS 数据生成 Three.js 线框占位，WebGL 或 GIS 不可用时保留上下文回退 2D）
+- F-16 模型治理页一期占位（智能诊断中枢接入模型注册表、版本态势、灰度状态、复核预留和真实回退操作）
 
 当前项目已添加数据库能力。
 
@@ -168,6 +169,7 @@
 - F-13 前端联调：`/emgc/workorders/:id` 已接入派单、转派、回写弹窗；派单请求体必须包含非空 `assignee`，回写独立调用 `/writeback`，不复用关闭工单语义
 - F-14 前端联调：`/mgmt/trends` 已接入统一数据质量标识组件，展示 `dqScore / dqLevel / dqFlags / isBackfill / dqAlarmConfFactor` 和五维评分
 - F-15 前端联调：`/mgmt/gis/3d` 已接入 3D 占位与降级页；复用 `GET /api/gis/objects/bbox` 与 `GET /api/gis/objects/{objectType}/{objectId}`，失败时带 query 回退 `/mgmt/gis`
+- F-16 前端联调：`/diag/models` 已接入模型治理一期页；复用 `GET /api/models`、`GET /api/models/{modelCode}` 与 `POST /api/models/{modelCode}/rollback`，注册、创建版本、灰度调整、激活、推理和 B-26 复核明细仍作为后续入口预留
 - 平台查询接口：按平台编码读取边界定义
 - A-02 对象链实体：node、segment、facility、device、incident、work_order、model_result
 - A-02 对象链接口：按 segment_id 和 node_id 查询完整对象链
@@ -1464,6 +1466,9 @@
 - 版本状态：`DRAFT / GRAY / ACTIVE / ROLLED_BACK / DISABLED`。
 - 灰度选择按 `requestId` 做确定性哈希；`grayPercent=100` 时稳定命中灰度版本。
 - 激活或回退会把当前 `ACTIVE / GRAY` 版本标记为 `ROLLED_BACK`，目标版本置为 `ACTIVE`。
+- F-16 前端一期治理页路径为 `/diag/models`，读取权限为 `ENTRY:DIAG + MENU:MODEL:READ`，回退按钮额外要求 `MENU:MODEL:WRITE`。
+- 回退请求体示例：`{"targetVersionNo":"V1","reason":"灰度异常，回退至上一稳定版本"}`；前端会在成功后刷新模型注册表与详情。
+- F-16 暂不开放注册、创建版本、灰度百分比调整、激活、推理和 B-26 明细复核写操作，页面仅保留后续治理入口说明。
 
 ### 4) 规则兜底与审计
 - 无可用版本、模拟失败或模拟耗时超过版本 `timeoutMs` 时，立即走 `RuleFallbackService`，返回 `resultSource=RULE_FALLBACK`。

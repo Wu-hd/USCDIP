@@ -147,6 +147,18 @@ const router = createRouter({
       }
     },
     {
+      path: '/diag/models',
+      name: 'diag-model-governance',
+      component: () => import('@/views/ModelGovernanceView.vue'),
+      meta: {
+        requiresAuth: true,
+        platformCode: 'DIAG',
+        entryPermission: 'ENTRY:DIAG',
+        menuPermission: 'MENU:MODEL:READ',
+        permissionLabel: '模型治理'
+      }
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/portal'
     }

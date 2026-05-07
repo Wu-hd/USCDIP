@@ -366,6 +366,44 @@ export interface DataQualityScoreResponse {
   dqScoredAt: string | null;
 }
 
+export interface ModelVersionResponse {
+  versionId: string;
+  modelCode: string;
+  versionNo: string;
+  status: string;
+  grayPercent: number | null;
+  artifactUri: string | null;
+  featureSchemaVersion: string | null;
+  timeoutMs: number | null;
+  ruleFallbackEnabled: boolean;
+  publishedAt: string | null;
+  rolledBackAt: string | null;
+  createdBy: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface ModelResponse {
+  modelCode: string;
+  modelName: string;
+  modelType: string;
+  status: string;
+  defaultTimeoutMs: number | null;
+  ruleFallbackEnabled: boolean;
+  description: string | null;
+  activeVersionNo: string | null;
+  grayVersionNo: string | null;
+  createdBy: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  versions: ModelVersionResponse[];
+}
+
+export interface ModelRollbackRequest {
+  targetVersionNo: string;
+  reason: string;
+}
+
 export interface TrendMetricPoint {
   sourceRecordId: string;
   eventTime: string;

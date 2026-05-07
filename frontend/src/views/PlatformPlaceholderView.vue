@@ -96,8 +96,8 @@ const ACTION_ROUTE_MAP: Record<string, string> = {
   'asset-write': '/mgmt/gis',
   'workorder-read': '/emgc',
   'workorder-dispatch': '/emgc',
-  'model-read': '/diag',
-  'model-write': '/diag'
+  'model-read': '/diag/models',
+  'model-write': '/diag/models'
 };
 
 function handleAction(action: ButtonPermissionConfig) {

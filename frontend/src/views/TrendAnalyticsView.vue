@@ -19,6 +19,7 @@ import {
 import { computed, onMounted, reactive, ref } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 
+import DataQualityIndicator from '@/components/DataQualityIndicator.vue';
 import { ApiClientError } from '@/services/api';
 import { getDataQualityScores, type DataQualityScoreQuery } from '@/services/dataQuality';
 import type { DataQualityScoreResponse, TrendMetricPoint } from '@/types/api';
@@ -398,24 +399,14 @@ function dqTone(score: number | null) {
   return 'rose';
 }
 
-function dqBadgeClass(level: string | null | undefined, score: number | null | undefined) {
-  const normalized = level?.toUpperCase() ?? '';
-  if (normalized === 'A' || (typeof score === 'number' && score >= 85)) {
-    return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100';
-  }
-  if (normalized === 'B' || normalized === 'C' || (typeof score === 'number' && score >= 70)) {
-    return 'border-amber-400/20 bg-amber-400/10 text-amber-100';
-  }
-  if (normalized === 'D' || (typeof score === 'number' && score < 70)) {
-    return 'border-rose-400/20 bg-rose-400/10 text-rose-100';
-  }
-  return 'border-white/10 bg-white/[0.045] text-slate-200';
-}
-
-function sourceBadgeClass(isBackfill: boolean) {
-  return isBackfill
-    ? 'border-amber-400/25 bg-amber-400/10 text-amber-100'
-    : 'border-blue-400/20 bg-blue-400/10 text-blue-100';
+function qualityDimensions(record: DataQualityScoreResponse | null | undefined) {
+  return [
+    { key: 'completeness', label: '完整性', value: record?.dqCompleteness },
+    { key: 'validity', label: '有效性', value: record?.dqValidity },
+    { key: 'timeliness', label: '时效性', value: record?.dqTimeliness },
+    { key: 'consistency', label: '一致性', value: record?.dqConsistency },
+    { key: 'stability', label: '稳定性', value: record?.dqStability }
+  ];
 }
 
 function diamondPoints(x: number, y: number, size: number) {
@@ -726,9 +717,14 @@ function diamondPoints(x: number, y: number, size: number) {
                   <p class="truncate font-mono text-sm font-semibold text-white">{{ activePoint.sourceRecordId }}</p>
                   <p class="mt-1 text-xs text-slate-400">{{ formatDateTime(activePoint.eventTime) }}</p>
                 </div>
-                <span class="shrink-0 rounded-md border px-2 py-1 text-xs" :class="sourceBadgeClass(activePoint.isBackfill)">
-                  {{ activePoint.isBackfill ? '补偿' : '在线' }}
-                </span>
+                <DataQualityIndicator
+                  class="shrink-0"
+                  mode="compact"
+                  :score="activePoint.dqScore"
+                  :level="activePoint.dqLevel"
+                  :flags="activePoint.dqFlags"
+                  :is-backfill="activePoint.isBackfill"
+                />
               </div>
               <dl class="mt-4 grid grid-cols-2 gap-3 text-xs">
                 <div>
@@ -736,26 +732,21 @@ function diamondPoints(x: number, y: number, size: number) {
                   <dd class="mt-1 font-mono text-lg font-semibold text-white">{{ formatNumber(activePoint.metricValue) }}</dd>
                 </div>
                 <div>
-                  <dt class="text-slate-400">dqScore</dt>
-                  <dd class="mt-1 font-mono text-lg font-semibold text-white">{{ activePoint.dqScore ?? '-' }}</dd>
+                  <dt class="text-slate-400">source</dt>
+                  <dd class="mt-1 font-mono text-lg font-semibold text-white">{{ activePoint.isBackfill ? 'BACKFILL' : 'ONLINE' }}</dd>
                 </div>
               </dl>
             </section>
 
-            <section class="rounded-lg border border-white/10 bg-white/[0.045] p-4">
-              <div class="flex items-center justify-between gap-3">
-                <p class="text-sm font-semibold text-white">质量标识</p>
-                <span class="rounded-md border px-2 py-1 text-xs" :class="dqBadgeClass(activePoint.dqLevel, activePoint.dqScore)">
-                  {{ activePoint.dqLevel || '-' }}
-                </span>
-              </div>
-              <div v-if="activePoint.dqFlags.length" class="mt-3 flex flex-wrap gap-2">
-                <span v-for="flag in activePoint.dqFlags" :key="flag" class="rounded-md border border-amber-400/20 bg-amber-400/10 px-2 py-1 font-mono text-[11px] text-amber-100">
-                  {{ flag }}
-                </span>
-              </div>
-              <p v-else class="mt-3 text-sm text-slate-400">暂无 DQ flags</p>
-            </section>
+            <DataQualityIndicator
+              mode="detail"
+              :score="activePoint.dqScore"
+              :level="activePoint.dqLevel"
+              :flags="activePoint.dqFlags"
+              :is-backfill="activePoint.isBackfill"
+              :alarm-factor="activePoint.raw.dqAlarmConfFactor"
+              :dimensions="qualityDimensions(activePoint.raw)"
+            />
 
             <section class="rounded-lg border border-white/10 bg-white/[0.045] p-4">
               <p class="text-sm font-semibold text-white">时间口径</p>
@@ -820,17 +811,22 @@ function diamondPoints(x: number, y: number, size: number) {
                 <td class="px-4 py-3 align-top font-mono text-xs text-slate-100">{{ formatDateTime(record.eventTime) }}</td>
                 <td class="px-4 py-3 align-top font-mono text-sm font-semibold text-white">{{ record.metricValue }}</td>
                 <td class="px-4 py-3 align-top">
-                  <span class="rounded-md border px-2 py-1 text-xs" :class="sourceBadgeClass(record.isBackfill)">
+                  <span
+                    class="rounded-md border px-2 py-1 text-xs"
+                    :class="record.isBackfill ? 'border-amber-400/25 bg-amber-400/10 text-amber-100' : 'border-blue-400/20 bg-blue-400/10 text-blue-100'"
+                  >
                     {{ record.isBackfill ? 'BACKFILL' : 'ONLINE' }}
                   </span>
                 </td>
-                <td class="px-4 py-3 align-top">
-                  <span class="rounded-md border px-2 py-1 text-xs" :class="dqBadgeClass(record.dqLevel, record.dqScore)">
-                    {{ record.dqLevel || '-' }} / {{ record.dqScore ?? '-' }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 align-top">
-                  <p class="line-clamp-2 font-mono text-[11px] text-slate-300">{{ record.dqFlags || '-' }}</p>
+                <td class="px-4 py-3 align-top" colspan="2">
+                  <DataQualityIndicator
+                    mode="table"
+                    :score="record.dqScore"
+                    :level="record.dqLevel"
+                    :flags="record.dqFlags"
+                    :is-backfill="record.isBackfill"
+                    :alarm-factor="record.dqAlarmConfFactor"
+                  />
                 </td>
                 <td class="px-4 py-3 align-top text-xs text-slate-400">
                   <p class="truncate">recv {{ formatDateTime(record.recvTime) }}</p>

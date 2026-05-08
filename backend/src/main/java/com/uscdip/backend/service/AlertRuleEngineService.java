@@ -111,6 +111,9 @@ public class AlertRuleEngineService {
         if (sourceBatchId == null || sourceBatchId.isBlank()) {
             return List.of();
         }
+        if (alertRuleRepository.findByEnabledTrueOrderByRuleCodeAsc().isEmpty()) {
+            return List.of();
+        }
         List<TsMetricEntity> metrics = tsMetricRepository.findBySourceBatchIdOrderByEventTimeAsc(sourceBatchId);
         if (metrics.isEmpty()) {
             return List.of();

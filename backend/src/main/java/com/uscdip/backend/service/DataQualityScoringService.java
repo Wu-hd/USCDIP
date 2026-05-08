@@ -57,8 +57,10 @@ public class DataQualityScoringService {
         if (metrics.isEmpty()) {
             return;
         }
-        metrics.forEach(this::scoreMetric);
-        tsMetricRepository.saveAll(metrics);
+        for (TsMetricEntity metric : metrics) {
+            scoreMetric(metric);
+            tsMetricRepository.saveAndFlush(metric);
+        }
     }
 
     @Transactional(readOnly = true)

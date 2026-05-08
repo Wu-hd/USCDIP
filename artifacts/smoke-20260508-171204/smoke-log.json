@@ -1,0 +1,2712 @@
+{
+  "startedAt": "2026-05-08T09:16:04.121Z",
+  "steps": [
+    {
+      "time": "2026-05-08T09:16:15.035Z",
+      "name": "portal_loaded",
+      "url": "http://localhost:5173/portal"
+    },
+    {
+      "time": "2026-05-08T09:16:17.211Z",
+      "name": "01-portal-login.png"
+    },
+    {
+      "time": "2026-05-08T09:16:17.216Z",
+      "name": "logged_in",
+      "userId": "U-ADMIN-001",
+      "tokenPresent": true
+    },
+    {
+      "time": "2026-05-08T09:16:17.473Z",
+      "name": "ingested_metrics",
+      "batchId": "INGB-67c5495e-249b-4310-941f-1ae36017303d",
+      "recordIds": [],
+      "trace": "TRACE-SMOKE-INGEST-1778231777216"
+    },
+    {
+      "time": "2026-05-08T09:16:22.296Z",
+      "name": "02-dq-trends.png"
+    },
+    {
+      "time": "2026-05-08T09:16:27.768Z",
+      "name": "03-alerts-websocket-page.png"
+    },
+    {
+      "time": "2026-05-08T09:16:32.808Z",
+      "name": "direct_websocket_probe",
+      "events": 2,
+      "first": {
+        "at": "2026-05-08T09:16:27.860Z",
+        "type": "open",
+        "payload": "direct backend websocket opened"
+      },
+      "last": {
+        "at": "2026-05-08T09:16:27.942Z",
+        "type": "message",
+        "payload": "CONNECTED\nversion:1.2\nheart-beat:30000,30000\nuser-name:U-ADMIN-001\n\n\u0000"
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:35.822Z",
+      "name": "04-incident-detail.png"
+    },
+    {
+      "time": "2026-05-08T09:16:39.653Z",
+      "name": "05-workorder-detail.png"
+    },
+    {
+      "time": "2026-05-08T09:16:42.184Z",
+      "name": "06-notifications-portal.png"
+    }
+  ],
+  "console": [
+    {
+      "time": "2026-05-08T09:16:07.680Z",
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 788,
+        "columnNumber": 8
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:08.017Z",
+      "type": "debug",
+      "text": "[vite] connected.",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 911,
+        "columnNumber": 14
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:14.115Z",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+      "location": {
+        "url": "http://localhost:5173/api/auth/me",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:14.165Z",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "location": {
+        "url": "http://localhost:5173/api/workorders?page=1&pageSize=5",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:14.169Z",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "location": {
+        "url": "http://localhost:5173/api/notifications?page=1&pageSize=5",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 788,
+        "columnNumber": 8
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:18.342Z",
+      "type": "debug",
+      "text": "[vite] connected.",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 911,
+        "columnNumber": 14
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:22.322Z",
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 788,
+        "columnNumber": 8
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:22.623Z",
+      "type": "debug",
+      "text": "[vite] connected.",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 911,
+        "columnNumber": 14
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:32.880Z",
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 788,
+        "columnNumber": 8
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:33.153Z",
+      "type": "debug",
+      "text": "[vite] connected.",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 911,
+        "columnNumber": 14
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 788,
+        "columnNumber": 8
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:36.147Z",
+      "type": "debug",
+      "text": "[vite] connected.",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 911,
+        "columnNumber": 14
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:37.534Z",
+      "type": "warning",
+      "text": "[Vue warn]: Invalid prop: type check failed for prop \"icon\". Expected Object, got Function  \n  at <Anonymous tone=\"indigo\" title=\"工单创建\" time=\"-\"  ... > \n  at <WorkOrderDetailView onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< undefined > > \n  at <RouterView> \n  at <App>",
+      "location": {
+        "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1",
+        "lineNumber": 2214,
+        "columnNumber": 12
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:37.590Z",
+      "type": "warning",
+      "text": "[Vue warn]: Invalid prop: type check failed for prop \"icon\". Expected Object, got Function  \n  at <Anonymous tone=\"indigo\" title=\"工单创建\" time=\"2026/4/22 09:00:00\"  ... > \n  at <WorkOrderDetailView onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > \n  at <RouterView> \n  at <App>",
+      "location": {
+        "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1",
+        "lineNumber": 2214,
+        "columnNumber": 12
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:39.997Z",
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 788,
+        "columnNumber": 8
+      }
+    },
+    {
+      "time": "2026-05-08T09:16:40.129Z",
+      "type": "debug",
+      "text": "[vite] connected.",
+      "location": {
+        "url": "http://localhost:5173/@vite/client",
+        "lineNumber": 911,
+        "columnNumber": 14
+      }
+    }
+  ],
+  "pageErrors": [],
+  "network": [
+    {
+      "time": "2026-05-08T09:16:06.726Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/portal",
+      "resourceType": "document"
+    },
+    {
+      "time": "2026-05-08T09:16:07.153Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/portal"
+    },
+    {
+      "time": "2026-05-08T09:16:07.156Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@vite/client",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:07.156Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/main.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:07.357Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/@vite/client"
+    },
+    {
+      "time": "2026-05-08T09:16:07.358Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:07.358Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs"
+    },
+    {
+      "time": "2026-05-08T09:16:08.125Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/main.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:08.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/App.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/router/index.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/styles.css",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.128Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/App.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:08.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.128Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:08.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.740Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/router/index.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:08.741Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.741Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/api.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.741Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/permissions.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.741Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/stores/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.759Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper"
+    },
+    {
+      "time": "2026-05-08T09:16:08.761Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:08.761Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:08.761Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:08.761Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:09.545Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/styles.css"
+    },
+    {
+      "time": "2026-05-08T09:16:09.565Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:09.565Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:09.792Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/permissions.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:09.793Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/api.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:09.880Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/stores/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:09.880Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:09.880Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/portal.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:10.286Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:10.287Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/portal.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:10.287Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/views/PortalView.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:13.820Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/views/PortalView.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:13.821Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:13.821Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/views/PortalView.vue?vue&type=style&index=0&scoped=1292d68d&lang.css",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:13.821Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/views/PortalView.vue?vue&type=style&index=0&scoped=1292d68d&lang.css"
+    },
+    {
+      "time": "2026-05-08T09:16:13.954Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:14.101Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/auth/me",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:14.101Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/platforms",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:14.101Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/menu-boundaries",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:14.115Z",
+      "type": "response",
+      "status": 503,
+      "url": "http://localhost:5173/api/auth/me"
+    },
+    {
+      "time": "2026-05-08T09:16:14.116Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/platforms"
+    },
+    {
+      "time": "2026-05-08T09:16:14.116Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/menu-boundaries"
+    },
+    {
+      "time": "2026-05-08T09:16:14.139Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/workorders?page=1&pageSize=5",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:14.139Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/notifications?page=1&pageSize=5",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:14.165Z",
+      "type": "response",
+      "status": 401,
+      "url": "http://localhost:5173/api/workorders?page=1&pageSize=5"
+    },
+    {
+      "time": "2026-05-08T09:16:14.169Z",
+      "type": "response",
+      "status": 401,
+      "url": "http://localhost:5173/api/notifications?page=1&pageSize=5"
+    },
+    {
+      "time": "2026-05-08T09:16:16.081Z",
+      "type": "request",
+      "method": "POST",
+      "url": "http://localhost:5173/api/auth/emergency/login",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:16.702Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/auth/emergency/login"
+    },
+    {
+      "time": "2026-05-08T09:16:16.730Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/auth/me",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:16.733Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/auth/me"
+    },
+    {
+      "time": "2026-05-08T09:16:16.759Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/auth/me",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:16.760Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/platforms",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:16.760Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/menu-boundaries",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:17.207Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/menu-boundaries"
+    },
+    {
+      "time": "2026-05-08T09:16:17.207Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/platforms"
+    },
+    {
+      "time": "2026-05-08T09:16:17.207Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/auth/me"
+    },
+    {
+      "time": "2026-05-08T09:16:17.207Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/workorders?page=1&pageSize=5",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:17.207Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/notifications?page=1&pageSize=5",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:17.385Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/workorders?page=1&pageSize=5"
+    },
+    {
+      "time": "2026-05-08T09:16:17.476Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/notifications?page=1&pageSize=5"
+    },
+    {
+      "time": "2026-05-08T09:16:17.907Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/mgmt/trends?deviceId=DEV-001&metricCode=PRESSURE",
+      "resourceType": "document"
+    },
+    {
+      "time": "2026-05-08T09:16:17.943Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/mgmt/trends?deviceId=DEV-001&metricCode=PRESSURE"
+    },
+    {
+      "time": "2026-05-08T09:16:17.952Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@vite/client",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.952Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/main.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.952Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/@vite/client"
+    },
+    {
+      "time": "2026-05-08T09:16:17.952Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/main.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:17.952Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/App.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/router/index.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/styles.css",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs"
+    },
+    {
+      "time": "2026-05-08T09:16:17.953Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/App.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:17.954Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/router/index.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:17.954Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.954Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.954Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:17.954Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/api.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.954Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/permissions.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.954Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/stores/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.954Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/styles.css"
+    },
+    {
+      "time": "2026-05-08T09:16:17.954Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper"
+    },
+    {
+      "time": "2026-05-08T09:16:17.954Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/api.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:17.954Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/permissions.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:17.955Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/stores/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:17.955Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.955Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/portal.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:17.955Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:17.955Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/portal.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:17.956Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/auth/me",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:17.956Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/auth/me"
+    },
+    {
+      "time": "2026-05-08T09:16:17.956Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/views/TrendAnalyticsView.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:19.125Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/views/TrendAnalyticsView.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:19.147Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:19.147Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:19.147Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/components/DataQualityIndicator.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:19.148Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/dataQuality.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:19.666Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/dataQuality.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:19.666Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/components/DataQualityIndicator.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:19.773Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/dq/scores?page=1&pageSize=100&deviceId=DEV-001&metricCode=PRESSURE&startTime=2026-05-01T17%3A16%3A19&endTime=2026-05-08T17%3A16%3A19",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:19.773Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/dq/scores?page=1&pageSize=100&deviceId=DEV-001&metricCode=PRESSURE&startTime=2026-05-01T17%3A16%3A19&endTime=2026-05-08T17%3A16%3A19"
+    },
+    {
+      "time": "2026-05-08T09:16:22.298Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/mgmt/alerts",
+      "resourceType": "document"
+    },
+    {
+      "time": "2026-05-08T09:16:22.306Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/mgmt/alerts"
+    },
+    {
+      "time": "2026-05-08T09:16:22.313Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@vite/client",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.315Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/main.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.315Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/@vite/client"
+    },
+    {
+      "time": "2026-05-08T09:16:22.315Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/main.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:22.315Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.318Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.318Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:22.318Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.318Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:22.318Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/App.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.318Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/router/index.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.318Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/styles.css",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.318Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.318Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:22.319Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.319Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:22.319Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.319Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:22.322Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs"
+    },
+    {
+      "time": "2026-05-08T09:16:22.322Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/App.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:22.322Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/router/index.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:22.322Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.322Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/styles.css"
+    },
+    {
+      "time": "2026-05-08T09:16:22.324Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.324Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:22.324Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/api.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.324Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/permissions.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.324Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/stores/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.326Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper"
+    },
+    {
+      "time": "2026-05-08T09:16:22.326Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/api.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:22.326Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/permissions.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:22.326Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/stores/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:22.326Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.326Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/portal.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:22.327Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:22.327Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/portal.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:22.330Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/auth/me",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:22.351Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/auth/me"
+    },
+    {
+      "time": "2026-05-08T09:16:22.354Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/views/RealtimeAlertsView.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:23.509Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/views/RealtimeAlertsView.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:23.509Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/stores/alerts.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:23.509Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:23.540Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:23.541Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/websocket.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:23.541Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/views/RealtimeAlertsView.vue?vue&type=style&index=0&scoped=0136e0e1&lang.css",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:23.542Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/views/RealtimeAlertsView.vue?vue&type=style&index=0&scoped=0136e0e1&lang.css"
+    },
+    {
+      "time": "2026-05-08T09:16:23.542Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/websocket.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:23.542Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/stores/alerts.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:23.542Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/@stomp_stompjs.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:23.581Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/@stomp_stompjs.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:32.845Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/mgmt/incidents/INC-ALERT-SEED-001",
+      "resourceType": "document"
+    },
+    {
+      "time": "2026-05-08T09:16:32.875Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/mgmt/incidents/INC-ALERT-SEED-001"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@vite/client",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/main.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/@vite/client"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/main.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/App.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/router/index.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/styles.css",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:32.879Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.880Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:32.880Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs"
+    },
+    {
+      "time": "2026-05-08T09:16:32.880Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/App.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:32.880Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.891Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/router/index.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:32.891Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/styles.css"
+    },
+    {
+      "time": "2026-05-08T09:16:32.910Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.910Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:32.910Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/api.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.911Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/permissions.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.911Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/stores/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.911Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper"
+    },
+    {
+      "time": "2026-05-08T09:16:32.911Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/api.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:32.911Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/permissions.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:32.911Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/stores/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:32.911Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.911Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/portal.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:32.928Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:32.929Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/portal.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:32.929Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/auth/me",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:32.987Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/auth/me"
+    },
+    {
+      "time": "2026-05-08T09:16:32.987Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/views/IncidentDetailView.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:33.651Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/views/IncidentDetailView.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:33.652Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:33.652Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:33.659Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/incidents.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:33.691Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/incidents.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:33.692Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/incidents/INC-ALERT-SEED-001",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:33.719Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/incidents/INC-ALERT-SEED-001"
+    },
+    {
+      "time": "2026-05-08T09:16:35.854Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/emgc/workorders/WO-B22-CREATED-001",
+      "resourceType": "document"
+    },
+    {
+      "time": "2026-05-08T09:16:35.869Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/emgc/workorders/WO-B22-CREATED-001"
+    },
+    {
+      "time": "2026-05-08T09:16:35.896Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@vite/client",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.896Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/main.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.927Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/@vite/client"
+    },
+    {
+      "time": "2026-05-08T09:16:35.935Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/main.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:35.935Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.935Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.935Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:35.935Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.935Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:35.935Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/App.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.935Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/router/index.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.935Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/styles.css",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/App.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/router/index.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/api.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/permissions.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/stores/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.936Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/styles.css"
+    },
+    {
+      "time": "2026-05-08T09:16:35.937Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper"
+    },
+    {
+      "time": "2026-05-08T09:16:35.937Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/api.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:35.937Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/permissions.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:35.937Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/stores/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:35.937Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.937Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/portal.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:35.937Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:35.937Z",
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5173/src/services/portal.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:35.937Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/auth/me",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:35.938Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/auth/me"
+    },
+    {
+      "time": "2026-05-08T09:16:35.938Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/views/WorkOrderDetailView.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:37.075Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/views/WorkOrderDetailView.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:37.110Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:37.110Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:37.110Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/components/WorkOrderActionModal.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:37.110Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/workorders.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:37.532Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/workorders.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:37.533Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/components/WorkOrderActionModal.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:37.533Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/components/WorkOrderActionModal.vue?vue&type=style&index=0&scoped=a815b08a&lang.css",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:37.533Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/components/WorkOrderActionModal.vue?vue&type=style&index=0&scoped=a815b08a&lang.css"
+    },
+    {
+      "time": "2026-05-08T09:16:37.534Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/workorders/WO-B22-CREATED-001",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:37.590Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/workorders/WO-B22-CREATED-001"
+    },
+    {
+      "time": "2026-05-08T09:16:39.772Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/portal",
+      "resourceType": "document"
+    },
+    {
+      "time": "2026-05-08T09:16:39.777Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/portal"
+    },
+    {
+      "time": "2026-05-08T09:16:39.777Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@vite/client",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.777Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/main.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.777Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/main.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:39.777Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.777Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/pinia.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/App.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/router/index.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/styles.css",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-YFT6OQ5R.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-S5ZFOAR2.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/chunk-HKJ2B2AA.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:39.778Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/@vite/client"
+    },
+    {
+      "time": "2026-05-08T09:16:39.779Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.779Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/App.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:39.779Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:39.779Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/vite/dist/client/env.mjs"
+    },
+    {
+      "time": "2026-05-08T09:16:39.957Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/router/index.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:40.000Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:40.000Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:40.000Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/api.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:40.000Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/permissions.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:40.000Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/stores/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:40.000Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/styles.css"
+    },
+    {
+      "time": "2026-05-08T09:16:40.000Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/@id/__x00__plugin-vue:export-helper"
+    },
+    {
+      "time": "2026-05-08T09:16:40.000Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/api.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:40.000Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/permissions.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:40.000Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/stores/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:40.001Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/auth.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:40.001Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/services/portal.ts",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:40.001Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/auth.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:40.001Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/services/portal.ts"
+    },
+    {
+      "time": "2026-05-08T09:16:40.001Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/views/PortalView.vue",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:40.128Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/views/PortalView.vue"
+    },
+    {
+      "time": "2026-05-08T09:16:40.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:40.128Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/node_modules/.vite/deps/lucide-vue-next.js?v=87d260e1"
+    },
+    {
+      "time": "2026-05-08T09:16:40.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/src/views/PortalView.vue?vue&type=style&index=0&scoped=1292d68d&lang.css",
+      "resourceType": "script"
+    },
+    {
+      "time": "2026-05-08T09:16:40.128Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/src/views/PortalView.vue?vue&type=style&index=0&scoped=1292d68d&lang.css"
+    },
+    {
+      "time": "2026-05-08T09:16:40.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/auth/me",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:40.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/platforms",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:40.128Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/menu-boundaries",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:40.128Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/menu-boundaries"
+    },
+    {
+      "time": "2026-05-08T09:16:40.128Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/platforms"
+    },
+    {
+      "time": "2026-05-08T09:16:40.128Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/auth/me"
+    },
+    {
+      "time": "2026-05-08T09:16:40.129Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/workorders?page=1&pageSize=5",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:40.129Z",
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5173/api/notifications?page=1&pageSize=5",
+      "resourceType": "fetch"
+    },
+    {
+      "time": "2026-05-08T09:16:40.180Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/notifications?page=1&pageSize=5"
+    },
+    {
+      "time": "2026-05-08T09:16:40.180Z",
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5173/api/workorders?page=1&pageSize=5"
+    }
+  ],
+  "api": [
+    {
+      "method": "POST",
+      "url": "/api/ingest/metrics",
+      "status": 201,
+      "ms": 257,
+      "traceId": "TRACE-SMOKE-1778231777216",
+      "success": true,
+      "error": null,
+      "dataSummary": {
+        "sourceBatchId": "INGB-67c5495e-249b-4310-941f-1ae36017303d",
+        "recordCount": 2,
+        "firstRecord": {
+          "deviceId": "DEV-001",
+          "protocolType": "MQTT",
+          "metricCode": "PRESSURE",
+          "value": 0.94,
+          "eventTime": "2026-05-08T17:16:17",
+          "recvTime": "2026-05-08T17:16:17",
+          "deviceTime": "2026-05-08T17:16:17",
+          "traceId": "TRACE-SMOKE-INGEST-1778231777216",
+          "isBackfill": false,
+          "attributes": {
+            "topic": "region/hz/dev-001/pressure",
+            "smoke": true
+          }
+        },
+        "status": "RECEIVED"
+      },
+      "body": "{\"success\":true,\"data\":{\"batchId\":\"INGB-67c5495e-249b-4310-941f-1ae36017303d\",\"protocolType\":\"MQTT\",\"sourceType\":\"EDGE_GATEWAY\",\"sourceKey\":\"EDGE-SMOKE-CHROME\",\"traceId\":\"TRACE-SMOKE-INGEST-1778231777216\",\"isBackfill\":false,\"status\":\"RECEIVED\",\"totalRecordCount\":2,\"visibleRecordCount\":2,\"receivedAt\":\"2026-05-08T17:16:17.3210647\",\"records\":[{\"deviceId\":\"DEV-001\",\"protocolType\":\"MQTT\",\"metricCode\":\"PRESSURE\",\"value\":0.94,\"eventTime\":\"2026-05-08T17:16:17\",\"recvTime\":\"2026-05-08T17:16:17\",\"deviceTime\":\"2026-05-08T17:16:17\",\"traceId\":\"TRACE-SMOKE-INGEST-1778231777216\",\"isBackfill\":false,\"attributes\":{\"topic\":\"region/hz/dev-001/pressure\",\"smoke\":true}},{\"deviceId\":\"DEV-001\",\"protocolType\":\"MQTT\",\"metricCode\":\"TEMPERATURE\",\"value\":20.3,\"eventTime\":\"2026-05-08T17:16:17\",\"recvTime\":\"2026-05-08T17:16:17\",\"deviceTime\":\"2026-05-08T17:16:17\",\"traceId\":\"TRACE-SMOKE-INGEST-1778231777216\",\"isBackfill\":false,\"attributes\":{\"topic\":\"region/hz/dev-001/temp\",\"smoke\":true}}],\"tsdbWrite\":{\"writeStatus\":\"SUCCESS\",\"writeLogId\":\"TSWL-b0e1e176-c851-4c42-a05e-b4daed20a699\",\"requestedCount\":2,\"successCount\":2,\"failedCount\":0,\"durationMs\":107},\"dqScore\":{\"avgDqScore\":97.5,\"lowestDqScore\":95.0,\"highestDqScore\":100.0,\"levelBreakdown\":{\"A\":2,\"B\":0,\"C\":0,\"D\":0}}},\"error\":null,\"traceId\":\"TRACE-SMOKE-1778231777216\",\"timestamp\":\"2026-05-08T09:16:17.450115700Z\"}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/dq/scores?page=1&pageSize=20&sourceBatchId=INGB-67c5495e-249b-4310-941f-1ae36017303d",
+      "status": 200,
+      "ms": 64,
+      "traceId": "TRACE-SMOKE-1778231777473",
+      "success": true,
+      "error": null,
+      "dataSummary": {
+        "total": 2,
+        "page": 1,
+        "pageSize": 20,
+        "first": {
+          "sourceRecordId": "INGR-452cf9de-000d-422b-81a1-38da0ac0e41e",
+          "sourceBatchId": "INGB-67c5495e-249b-4310-941f-1ae36017303d",
+          "deviceId": "DEV-001",
+          "metricCode": "TEMPERATURE",
+          "metricValue": "20.3",
+          "eventTime": "2026-05-08T17:16:17",
+          "recvTime": "2026-05-08T17:16:17",
+          "deviceTime": "2026-05-08T17:16:17",
+          "isBackfill": false,
+          "dqScore": 95,
+          "dqLevel": "A",
+          "dqFlags": "STABILITY_WINDOW_MISSING",
+          "dqCompleteness": 1,
+          "dqValidity": 1,
+          "dqTimeliness": 1,
+          "dqConsistency": 1,
+          "dqStability": 0.5,
+          "dqAlarmConfFactor": 0.98,
+          "dqScoredAt": "2026-05-08T17:16:17.382022"
+        }
+      },
+      "body": "{\"success\":true,\"data\":{\"items\":[{\"sourceRecordId\":\"INGR-452cf9de-000d-422b-81a1-38da0ac0e41e\",\"sourceBatchId\":\"INGB-67c5495e-249b-4310-941f-1ae36017303d\",\"deviceId\":\"DEV-001\",\"metricCode\":\"TEMPERATURE\",\"metricValue\":\"20.3\",\"eventTime\":\"2026-05-08T17:16:17\",\"recvTime\":\"2026-05-08T17:16:17\",\"deviceTime\":\"2026-05-08T17:16:17\",\"isBackfill\":false,\"dqScore\":95.0,\"dqLevel\":\"A\",\"dqFlags\":\"STABILITY_WINDOW_MISSING\",\"dqCompleteness\":1.0,\"dqValidity\":1.0,\"dqTimeliness\":1.0,\"dqConsistency\":1.0,\"dqStability\":0.5,\"dqAlarmConfFactor\":0.98,\"dqScoredAt\":\"2026-05-08T17:16:17.382022\"},{\"sourceRecordId\":\"INGR-6592a73d-2785-4cfe-b59f-cbb3d8e2ff76\",\"sourceBatchId\":\"INGB-67c5495e-249b-4310-941f-1ae36017303d\",\"deviceId\":\"DEV-001\",\"metricCode\":\"PRESSURE\",\"metricValue\":\"0.94\",\"eventTime\":\"2026-05-08T17:16:17\",\"recvTime\":\"2026-05-08T17:16:17\",\"deviceTime\":\"2026-05-08T17:16:17\",\"isBackfill\":false,\"dqScore\":100.0,\"dqLevel\":\"A\",\"dqFlags\":null,\"dqCompleteness\":1.0,\"dqValidity\":1.0,\"dqTimeliness\":1.0,\"dqConsistency\":1.0,\"dqStability\":1.0,\"dqAlarmConfFactor\":1.0,\"dqScoredAt\":\"2026-05-08T17:16:17.375069\"}],\"total\":2,\"page\":1,\"pageSize\":20,\"totalPages\":1,\"hasNext\":false},\"error\":null,\"traceId\":\"TRACE-SMOKE-1778231777473\",\"timestamp\":\"2026-05-08T09:16:17.520967100Z\"}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/alerts?page=1&pageSize=10&deviceId=DEV-001",
+      "status": 200,
+      "ms": 79,
+      "traceId": "TRACE-SMOKE-1778231777537",
+      "success": true,
+      "error": null,
+      "dataSummary": {
+        "total": 5,
+        "page": 1,
+        "pageSize": 10,
+        "first": {
+          "alertId": "ALERT-2b78e81a-be5b-4459-9225-61a5b0db8988",
+          "sourceRecordId": "INGR-6592a73d-2785-4cfe-b59f-cbb3d8e2ff76",
+          "sourceBatchId": "INGB-67c5495e-249b-4310-941f-1ae36017303d",
+          "deviceId": "DEV-001",
+          "segmentId": "SEG-001",
+          "nodeId": "NODE-001",
+          "ruleCode": "ALR-TH-PRESSURE-HIGH",
+          "severity": "HIGH",
+          "decision": "TRIGGERED",
+          "alertConfRaw": 0.92,
+          "alertConfFinal": 0.92,
+          "dqScoreSnapshot": 100,
+          "dqLevelSnapshot": "A",
+          "dqAlarmConfFactor": 1,
+          "metricCode": "PRESSURE",
+          "metricValue": "0.94",
+          "eventTime": "2026-05-08T17:16:17",
+          "traceId": "TRACE-SMOKE-INGEST-1778231777216",
+          "caseId": "ALCASE-b166df36-d8d3-468b-adf9-259ab8012905",
+          "dedupeKey": "DEVICE:DEV-001|RULE:ALR-TH-PRESSURE-HIGH|WINDOW:2026-05-08T17:16:17",
+          "processStatus": "OPENED",
+          "suppressed": false,
+          "escalationLevel": 0,
+          "processedAt": "2026-05-08T17:16:17.430751",
+          "createdAt": "2026-05-08T17:16:17.400522"
+        }
+      },
+      "body": "{\"success\":true,\"data\":{\"items\":[{\"alertId\":\"ALERT-2b78e81a-be5b-4459-9225-61a5b0db8988\",\"sourceRecordId\":\"INGR-6592a73d-2785-4cfe-b59f-cbb3d8e2ff76\",\"sourceBatchId\":\"INGB-67c5495e-249b-4310-941f-1ae36017303d\",\"deviceId\":\"DEV-001\",\"segmentId\":\"SEG-001\",\"nodeId\":\"NODE-001\",\"ruleCode\":\"ALR-TH-PRESSURE-HIGH\",\"severity\":\"HIGH\",\"decision\":\"TRIGGERED\",\"alertConfRaw\":0.92,\"alertConfFinal\":0.92,\"dqScoreSnapshot\":100.0,\"dqLevelSnapshot\":\"A\",\"dqAlarmConfFactor\":1.0,\"metricCode\":\"PRESSURE\",\"metricValue\":\"0.94\",\"eventTime\":\"2026-05-08T17:16:17\",\"traceId\":\"TRACE-SMOKE-INGEST-1778231777216\",\"caseId\":\"ALCASE-b166df36-d8d3-468b-adf9-259ab8012905\",\"dedupeKey\":\"DEVICE:DEV-001|RULE:ALR-TH-PRESSURE-HIGH|WINDOW:2026-05-08T17:16:17\",\"processStatus\":\"OPENED\",\"suppressed\":false,\"escalationLevel\":0,\"processedAt\":\"2026-05-08T17:16:17.430751\",\"createdAt\":\"2026-05-08T17:16:17.400522\"},{\"alertId\":\"ALERT-1fcfde09-7f8c-4b80-ba50-22fc2ad4cf2b\",\"sourceRecordId\":\"INGR-6592a73d-2785-4cfe-b59f-cbb3d8e2ff76\",\"sourceBatchId\":\"INGB-67c5495e-249b-4310-941f-1ae36017303d\",\"deviceId\":\"DEV-001\",\"segmentId\":\"SEG-001\",\"nodeId\":\"NODE-001\",\"ruleCode\":\"ALR-CB-PRESSURE-OR-DQ\",\"severity\":\"HIGH\",\"decision\":\"TRIGGERED\",\"alertConfRaw\":0.92,\"alertConfFinal\":0.92,\"dqScoreSnapshot\":100.0,\"dqLevelSnapshot\":\"A\",\"dqAlarmConfFactor\":1.0,\"metricCode\":\"PRESSURE\",\"metricValue\":\"0.94\",\"eventTime\":\"2026-05-08T17:16:17\",\"traceId\":\"TRACE-SMOKE-INGEST-1778231777216\",\"caseId\":\"ALCASE-93630a73-3cc6-4289-a865-c1e63fa8ca2b\",\"dedupeKey\":\"DEVICE:DEV-001|RULE:ALR-CB-PRESSURE-OR-DQ|WINDOW:2026-05-08T17:16:17\",\"processStatus\":\"OPENED\",\"suppressed\":false,\"escalationLevel\":0,\"processedAt\":\"2026-05-08T17:16:17.41106\",\"createdAt\":\"2026-05-08T17:16:17.400522\"},{\"alertId\":\"ALERT-SEED-003\",\"sourceRecordId\":\"INGR-SEED-010\",\"sourceBatchId\":\"INGB-SEED-INVALID-001\",\"deviceId\":\"DEV-001\",\"segmentId\":\"SEG-001\",\"nodeId\":\"NODE-001\",\"ruleCode\":\"ALR-TH-DQ-ANOMALY\",\"severity\":\"MEDIUM\",\"decision\":\"DQ_BLOCKED\",\"alertConfRaw\":0.7,\"alertConfFinal\":0.51,\"dqScoreSnap"
+    },
+    {
+      "method": "GET",
+      "url": "/api/incidents?page=1&pageSize=10&deviceId=DEV-001",
+      "status": 200,
+      "ms": 123,
+      "traceId": "TRACE-SMOKE-1778231777616",
+      "success": true,
+      "error": null,
+      "dataSummary": {
+        "total": 6,
+        "page": 1,
+        "pageSize": 10,
+        "first": {
+          "incidentId": "INC-ALERT-9c15c332-7d7e-4213-8695-ba1b18870604",
+          "incidentType": "ALERT_EVENT",
+          "segmentId": "SEG-001",
+          "nodeId": "NODE-001",
+          "deviceId": "DEV-001",
+          "title": "Alert incident DEV-001 ALR-TH-PRESSURE-HIGH ACTIVE",
+          "severity": "HIGH",
+          "severitySource": "HIGH",
+          "status": "OPEN",
+          "sourceCaseId": "ALCASE-b166df36-d8d3-468b-adf9-259ab8012905",
+          "sourceAlertId": "ALERT-2b78e81a-be5b-4459-9225-61a5b0db8988",
+          "sourceRuleCode": "ALR-TH-PRESSURE-HIGH",
+          "sourceBatchId": "INGB-67c5495e-249b-4310-941f-1ae36017303d",
+          "dqScoreSnapshot": 100,
+          "alertConfFinal": 0.92,
+          "confirmedBy": null,
+          "confirmedAt": null,
+          "resolvedAt": null,
+          "closeReason": null,
+          "traceId": "TRACE-SMOKE-INGEST-1778231777216",
+          "createdAt": "2026-05-08T17:16:17.43275",
+          "updatedAt": "2026-05-08T17:16:17.43275",
+          "versionNo": 1
+        }
+      },
+      "body": "{\"success\":true,\"data\":{\"items\":[{\"incidentId\":\"INC-ALERT-9c15c332-7d7e-4213-8695-ba1b18870604\",\"incidentType\":\"ALERT_EVENT\",\"segmentId\":\"SEG-001\",\"nodeId\":\"NODE-001\",\"deviceId\":\"DEV-001\",\"title\":\"Alert incident DEV-001 ALR-TH-PRESSURE-HIGH ACTIVE\",\"severity\":\"HIGH\",\"severitySource\":\"HIGH\",\"status\":\"OPEN\",\"sourceCaseId\":\"ALCASE-b166df36-d8d3-468b-adf9-259ab8012905\",\"sourceAlertId\":\"ALERT-2b78e81a-be5b-4459-9225-61a5b0db8988\",\"sourceRuleCode\":\"ALR-TH-PRESSURE-HIGH\",\"sourceBatchId\":\"INGB-67c5495e-249b-4310-941f-1ae36017303d\",\"dqScoreSnapshot\":100.0,\"alertConfFinal\":0.92,\"confirmedBy\":null,\"confirmedAt\":null,\"resolvedAt\":null,\"closeReason\":null,\"traceId\":\"TRACE-SMOKE-INGEST-1778231777216\",\"createdAt\":\"2026-05-08T17:16:17.43275\",\"updatedAt\":\"2026-05-08T17:16:17.43275\",\"versionNo\":1},{\"incidentId\":\"INC-ALERT-d9158e46-75f0-4e44-8b63-38f8274801c4\",\"incidentType\":\"ALERT_EVENT\",\"segmentId\":\"SEG-001\",\"nodeId\":\"NODE-001\",\"deviceId\":\"DEV-001\",\"title\":\"Alert incident DEV-001 ALR-CB-PRESSURE-OR-DQ ACTIVE\",\"severity\":\"HIGH\",\"severitySource\":\"HIGH\",\"status\":\"OPEN\",\"sourceCaseId\":\"ALCASE-93630a73-3cc6-4289-a865-c1e63fa8ca2b\",\"sourceAlertId\":\"ALERT-1fcfde09-7f8c-4b80-ba50-22fc2ad4cf2b\",\"sourceRuleCode\":\"ALR-CB-PRESSURE-OR-DQ\",\"sourceBatchId\":\"INGB-67c5495e-249b-4310-941f-1ae36017303d\",\"dqScoreSnapshot\":100.0,\"alertConfFinal\":0.92,\"confirmedBy\":null,\"confirmedAt\":null,\"resolvedAt\":null,\"closeReason\":null,\"traceId\":\"TRACE-SMOKE-INGEST-1778231777216\",\"createdAt\":\"2026-05-08T17:16:17.4156\",\"updatedAt\":\"2026-05-08T17:16:17.4156\",\"versionNo\":1},{\"incidentId\":\"INC-ALERT-SEED-004\",\"incidentType\":\"ALERT_EVENT\",\"segmentId\":\"SEG-001\",\"nodeId\":\"NODE-001\",\"deviceId\":\"DEV-001\",\"title\":\"DQ闃绘柇鐣欑棔浜嬩欢\",\"severity\":\"MEDIUM\",\"severitySource\":\"DQ_POLICY\",\"status\":\"PENDING_CONFIRMATION\",\"sourceCaseId\":\"ALCASE-SEED-006\",\"sourceAlertId\":\"ALERT-SEED-003\",\"sourceRuleCode\":\"ALR-TH-DQ-ANOMALY\",\"sourceBatchId\":\"INGB-SEED-INVALID-001\",\"dqScoreSnapshot\":45.0,\"alertConfFinal\":0.51,\"confirmedBy\":null,\"confirmedAt\":nu"
+    },
+    {
+      "method": "GET",
+      "url": "/api/workorders?page=1&pageSize=10&incidentId=INC-ALERT-SEED-001",
+      "status": 200,
+      "ms": 74,
+      "traceId": "TRACE-SMOKE-1778231777739",
+      "success": true,
+      "error": null,
+      "dataSummary": {
+        "total": 2,
+        "page": 1,
+        "pageSize": 10,
+        "first": {
+          "workOrderId": "WO-B22-DISPATCHED-001",
+          "incidentId": "INC-ALERT-SEED-001",
+          "segmentId": "SEG-001",
+          "nodeId": "NODE-001",
+          "workOrderType": "INCIDENT_RESPONSE",
+          "priority": "HIGH",
+          "description": "绉嶅瓙宸叉淳鍙戝伐鍗�",
+          "assigneeUserId": "U-INSPECT-001",
+          "assignee": "zhangsan",
+          "status": "DISPATCHED",
+          "slaDueAt": "2026-04-26T12:00:00",
+          "createdBy": "U-DISPATCH-001",
+          "dispatchedBy": "U-DISPATCH-001",
+          "acceptedBy": null,
+          "completedBy": null,
+          "closedBy": null,
+          "dispatchedAt": "2026-04-22T10:00:00",
+          "acceptedAt": null,
+          "completedAt": null,
+          "closedAt": null,
+          "completionSummary": null,
+          "closeReason": null,
+          "writebackType": null,
+          "writebackReason": null,
+          "writebackAt": null,
+          "createdAt": "2026-04-22T09:30:00",
+          "updatedAt": "2026-04-22T10:00:00",
+          "versionNo": 1
+        }
+      },
+      "body": "{\"success\":true,\"data\":{\"items\":[{\"workOrderId\":\"WO-B22-DISPATCHED-001\",\"incidentId\":\"INC-ALERT-SEED-001\",\"segmentId\":\"SEG-001\",\"nodeId\":\"NODE-001\",\"workOrderType\":\"INCIDENT_RESPONSE\",\"priority\":\"HIGH\",\"description\":\"绉嶅瓙宸叉淳鍙戝伐鍗�\",\"assigneeUserId\":\"U-INSPECT-001\",\"assignee\":\"zhangsan\",\"status\":\"DISPATCHED\",\"slaDueAt\":\"2026-04-26T12:00:00\",\"createdBy\":\"U-DISPATCH-001\",\"dispatchedBy\":\"U-DISPATCH-001\",\"acceptedBy\":null,\"completedBy\":null,\"closedBy\":null,\"dispatchedAt\":\"2026-04-22T10:00:00\",\"acceptedAt\":null,\"completedAt\":null,\"closedAt\":null,\"completionSummary\":null,\"closeReason\":null,\"writebackType\":null,\"writebackReason\":null,\"writebackAt\":null,\"createdAt\":\"2026-04-22T09:30:00\",\"updatedAt\":\"2026-04-22T10:00:00\",\"versionNo\":1},{\"workOrderId\":\"WO-B22-CREATED-001\",\"incidentId\":\"INC-ALERT-SEED-001\",\"segmentId\":\"SEG-001\",\"nodeId\":\"NODE-001\",\"workOrderType\":\"INCIDENT_RESPONSE\",\"priority\":\"HIGH\",\"description\":\"绉嶅瓙寰呮淳鍙戝伐鍗�\",\"assigneeUserId\":\"U-INSPECT-001\",\"assignee\":\"zhangsan\",\"status\":\"CREATED\",\"slaDueAt\":\"2026-04-25T12:00:00\",\"createdBy\":\"U-DISPATCH-001\",\"dispatchedBy\":null,\"acceptedBy\":null,\"completedBy\":null,\"closedBy\":null,\"dispatchedAt\":null,\"acceptedAt\":null,\"completedAt\":null,\"closedAt\":null,\"completionSummary\":null,\"closeReason\":null,\"writebackType\":null,\"writebackReason\":null,\"writebackAt\":null,\"createdAt\":\"2026-04-22T09:00:00\",\"updatedAt\":\"2026-04-22T09:00:00\",\"versionNo\":1}],\"total\":2,\"page\":1,\"pageSize\":10,\"totalPages\":1,\"hasNext\":false},\"error\":null,\"traceId\":\"TRACE-SMOKE-1778231777739\",\"timestamp\":\"2026-05-08T09:16:17.806544400Z\"}"
+    },
+    {
+      "method": "GET",
+      "url": "/api/notifications?page=1&pageSize=10",
+      "status": 200,
+      "ms": 61,
+      "traceId": "TRACE-SMOKE-1778231777814",
+      "success": true,
+      "error": null,
+      "dataSummary": {
+        "total": 1,
+        "page": 1,
+        "pageSize": 10,
+        "first": {
+          "notificationId": "NOTIFY-SEED-WO-B22-DISPATCHED-001",
+          "sourceEventId": "OBE-WO-B22-DISPATCHED-001",
+          "idempotentKey": "WO-B22-DISPATCHED-001:SEND_NOTIFICATION:1",
+          "aggregateType": "WORK_ORDER",
+          "aggregateId": "WO-B22-DISPATCHED-001",
+          "eventType": "WORK_ORDER_DISPATCHED",
+          "recipientUserId": "U-INSPECT-001",
+          "recipientUsername": "zhangsan",
+          "title": "宸ュ崟宸叉淳鍙戯細WO-B22-DISPATCHED-001",
+          "content": "eventType=WORK_ORDER_DISPATCHED, workOrderId=WO-B22-DISPATCHED-001, incidentId=INC-ALERT-SEED-001, status=DISPATCHED, assignee=zhangsan",
+          "status": "SENT",
+          "createdAt": "2026-04-22T10:00:02",
+          "updatedAt": "2026-04-22T10:00:02",
+          "completedAt": "2026-04-22T10:00:02",
+          "lastError": null,
+          "deliveries": [
+            {
+              "deliveryId": "ND-SEED-WO-B22-INAPP",
+              "channel": "IN_APP",
+              "target": "in-app://U-INSPECT-001",
+              "status": "SENT",
+              "attemptCount": 1,
+              "nextRetryAt": null,
+              "sentAt": "2026-04-22T10:00:02",
+              "createdAt": "2026-04-22T10:00:02",
+              "updatedAt": "2026-04-22T10:00:02",
+              "lastError": null
+            }
+          ]
+        }
+      },
+      "body": "{\"success\":true,\"data\":{\"items\":[{\"notificationId\":\"NOTIFY-SEED-WO-B22-DISPATCHED-001\",\"sourceEventId\":\"OBE-WO-B22-DISPATCHED-001\",\"idempotentKey\":\"WO-B22-DISPATCHED-001:SEND_NOTIFICATION:1\",\"aggregateType\":\"WORK_ORDER\",\"aggregateId\":\"WO-B22-DISPATCHED-001\",\"eventType\":\"WORK_ORDER_DISPATCHED\",\"recipientUserId\":\"U-INSPECT-001\",\"recipientUsername\":\"zhangsan\",\"title\":\"宸ュ崟宸叉淳鍙戯細WO-B22-DISPATCHED-001\",\"content\":\"eventType=WORK_ORDER_DISPATCHED, workOrderId=WO-B22-DISPATCHED-001, incidentId=INC-ALERT-SEED-001, status=DISPATCHED, assignee=zhangsan\",\"status\":\"SENT\",\"createdAt\":\"2026-04-22T10:00:02\",\"updatedAt\":\"2026-04-22T10:00:02\",\"completedAt\":\"2026-04-22T10:00:02\",\"lastError\":null,\"deliveries\":[{\"deliveryId\":\"ND-SEED-WO-B22-INAPP\",\"channel\":\"IN_APP\",\"target\":\"in-app://U-INSPECT-001\",\"status\":\"SENT\",\"attemptCount\":1,\"nextRetryAt\":null,\"sentAt\":\"2026-04-22T10:00:02\",\"createdAt\":\"2026-04-22T10:00:02\",\"updatedAt\":\"2026-04-22T10:00:02\",\"lastError\":null}]}],\"total\":1,\"page\":1,\"pageSize\":10,\"totalPages\":1,\"hasNext\":false},\"error\":null,\"traceId\":\"TRACE-SMOKE-1778231777814\",\"timestamp\":\"2026-05-08T09:16:17.868757600Z\"}"
+    }
+  ],
+  "websockets": [
+    {
+      "time": "2026-05-08T09:16:08.007Z",
+      "url": "ws://localhost:5173/?token=qYcqjrVLttEu",
+      "frames": [
+        {
+          "dir": "received",
+          "time": "2026-05-08T09:16:08.007Z",
+          "payload": "{\"type\":\"connected\"}"
+        }
+      ],
+      "closedAt": "2026-05-08T09:16:17.943Z"
+    },
+    {
+      "time": "2026-05-08T09:16:18.213Z",
+      "url": "ws://localhost:5173/?token=qYcqjrVLttEu",
+      "frames": [
+        {
+          "dir": "received",
+          "time": "2026-05-08T09:16:18.342Z",
+          "payload": "{\"type\":\"connected\"}"
+        }
+      ],
+      "closedAt": "2026-05-08T09:16:22.310Z"
+    },
+    {
+      "time": "2026-05-08T09:16:22.622Z",
+      "url": "ws://localhost:5173/?token=qYcqjrVLttEu",
+      "frames": [
+        {
+          "dir": "received",
+          "time": "2026-05-08T09:16:22.623Z",
+          "payload": "{\"type\":\"connected\"}"
+        }
+      ],
+      "closedAt": "2026-05-08T09:16:32.878Z"
+    },
+    {
+      "time": "2026-05-08T09:16:23.898Z",
+      "url": "ws://localhost:5173/ws/push",
+      "frames": [],
+      "closedAt": "2026-05-08T09:16:32.878Z"
+    },
+    {
+      "time": "2026-05-08T09:16:27.812Z",
+      "url": "ws://localhost:8080/ws/push?access_token=<redacted>",
+      "frames": [
+        {
+          "dir": "sent",
+          "time": "2026-05-08T09:16:27.885Z",
+          "payload": "CONNECT\naccept-version:1.2\nheart-beat:0,0\n\n\u0000"
+        },
+        {
+          "dir": "received",
+          "time": "2026-05-08T09:16:27.981Z",
+          "payload": "CONNECTED\nversion:1.2\nheart-beat:30000,30000\nuser-name:U-ADMIN-001\n\n\u0000"
+        },
+        {
+          "dir": "sent",
+          "time": "2026-05-08T09:16:27.981Z",
+          "payload": "SUBSCRIBE\nid:sub-region\ndestination:/topic/region.REGION-HZ.workorder.notifications\n\n\u0000"
+        },
+        {
+          "dir": "sent",
+          "time": "2026-05-08T09:16:27.981Z",
+          "payload": "SEND\ndestination:/app/push/heartbeat\ncontent-type:application/json\n\n{\"clientTime\":\"2026-05-08T09:16:27.942Z\"}\u0000"
+        },
+        {
+          "dir": "sent",
+          "time": "2026-05-08T09:16:27.981Z",
+          "payload": "SEND\ndestination:/app/push/ack\ncontent-type:application/json\n\n{\"topic\":\"region.REGION-HZ.workorder.notifications\",\"lastAckSeq\":0}\u0000"
+        }
+      ],
+      "closedAt": "2026-05-08T09:16:32.809Z"
+    },
+    {
+      "time": "2026-05-08T09:16:32.808Z",
+      "url": "direct:ws://localhost:8080/ws/push",
+      "frames": [
+        {
+          "at": "2026-05-08T09:16:27.860Z",
+          "type": "open",
+          "payload": "direct backend websocket opened"
+        },
+        {
+          "at": "2026-05-08T09:16:27.942Z",
+          "type": "message",
+          "payload": "CONNECTED\nversion:1.2\nheart-beat:30000,30000\nuser-name:U-ADMIN-001\n\n\u0000"
+        }
+      ]
+    },
+    {
+      "time": "2026-05-08T09:16:33.152Z",
+      "url": "ws://localhost:5173/?token=qYcqjrVLttEu",
+      "frames": [
+        {
+          "dir": "received",
+          "time": "2026-05-08T09:16:33.152Z",
+          "payload": "{\"type\":\"connected\"}"
+        }
+      ],
+      "closedAt": "2026-05-08T09:16:35.896Z"
+    },
+    {
+      "time": "2026-05-08T09:16:36.145Z",
+      "url": "ws://localhost:5173/?token=qYcqjrVLttEu",
+      "frames": [
+        {
+          "dir": "received",
+          "time": "2026-05-08T09:16:36.147Z",
+          "payload": "{\"type\":\"connected\"}"
+        }
+      ],
+      "closedAt": "2026-05-08T09:16:39.777Z"
+    },
+    {
+      "time": "2026-05-08T09:16:40.129Z",
+      "url": "ws://localhost:5173/?token=qYcqjrVLttEu",
+      "frames": [
+        {
+          "dir": "received",
+          "time": "2026-05-08T09:16:40.129Z",
+          "payload": "{\"type\":\"connected\"}"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-05-08T09:16:42.184Z"
+}

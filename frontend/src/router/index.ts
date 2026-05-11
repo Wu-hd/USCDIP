@@ -75,6 +75,18 @@ const router = createRouter({
       }
     },
     {
+      path: '/mgmt/changes',
+      name: 'mgmt-master-data-changes',
+      component: () => import('@/views/MasterDataChangeView.vue'),
+      meta: {
+        requiresAuth: true,
+        platformCode: 'MGMT',
+        entryPermission: 'ENTRY:MGMT',
+        menuPermission: 'MENU:ASSET:WRITE',
+        permissionLabel: '资产变更申请'
+      }
+    },
+    {
       path: '/mgmt/trends',
       name: 'mgmt-trends',
       component: () => import('@/views/TrendAnalyticsView.vue'),
@@ -120,6 +132,18 @@ const router = createRouter({
         entryPermission: 'ENTRY:EMGC',
         menuPermission: 'MENU:WORKORDER:READ',
         permissionLabel: '应急指挥平台'
+      }
+    },
+    {
+      path: '/emgc/workorders',
+      name: 'emgc-workorder-list',
+      component: () => import('@/views/WorkOrderListView.vue'),
+      meta: {
+        requiresAuth: true,
+        platformCode: 'EMGC',
+        entryPermission: 'ENTRY:EMGC',
+        menuPermission: 'MENU:WORKORDER:READ',
+        permissionLabel: '应急工单'
       }
     },
     {

@@ -1,33 +1,62 @@
 <template>
-  <div class="flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-ink dark:text-slate-100">
-    <div class="flex-1 overflow-y-auto p-4 sm:p-6">
-      <div class="mx-auto max-w-7xl space-y-6">
-        <header class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+  <main class="portal-shell">
+    <div class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-8">
+      <div class="space-y-6">
+        <header class="glass-panel p-5 sm:p-7">
+          <div class="flex flex-col justify-between gap-6 lg:flex-row lg:items-start">
             <div class="min-w-0">
-              <div class="flex flex-wrap items-center gap-3">
-                <h1 class="text-2xl font-bold tracking-tight">工单详情</h1>
-                <span class="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
-                  {{ workOrder?.workOrderType || '未知' }}
-                </span>
-                <span
-                  v-if="workOrder?.status"
-                  class="rounded-full px-2.5 py-1 text-xs font-semibold"
-                  :class="statusBadgeClass(workOrder.status)"
+              <button type="button" class="secondary-button focus-ring w-fit" @click="router.back()">
+                <ArrowLeftIcon class="h-4 w-4" />
+                返回
+              </button>
+
+              <div class="mt-7 flex items-start gap-5">
+                <div
+                  class="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-blue-300/20 bg-blue-400/10 text-blue-100 shadow-[0_0_28px_rgba(59,130,246,0.15)]"
+                  aria-hidden="true"
                 >
-                  {{ statusLabel(workOrder.status) }}
-                </span>
+                  <FilePenLineIcon class="h-8 w-8" />
+                </div>
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold uppercase tracking-[0.18em] text-blue-200">EMGC Work Order</p>
+                  <div class="mt-2 flex flex-wrap items-center gap-3">
+                    <h1 class="font-display text-3xl font-semibold text-white sm:text-4xl">工单详情</h1>
+                    <span
+                      v-if="workOrder?.workOrderType"
+                      class="rounded-full border border-blue-300/25 bg-blue-400/10 px-3 py-1 text-xs font-semibold text-blue-100"
+                    >
+                      {{ workOrder.workOrderType }}
+                    </span>
+                    <span
+                      v-if="workOrder?.status"
+                      class="rounded-full border px-3 py-1 text-xs font-semibold"
+                      :class="statusBadgeClass(workOrder.status)"
+                    >
+                      {{ statusLabel(workOrder.status) }}
+                    </span>
+                    <span
+                      v-if="workOrder?.priority"
+                      class="rounded-full border px-3 py-1 text-xs font-semibold"
+                      :class="priorityBadgeClass(workOrder.priority)"
+                    >
+                      {{ workOrder.priority }}
+                    </span>
+                  </div>
+                  <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+                    {{ workOrder?.description || '读取工单的处置对象、责任人、SLA 与流转记录。' }}
+                  </p>
+                  <p class="mt-3 break-all font-mono text-xs text-slate-400">
+                    {{ workOrder?.workOrderId || workOrderId }}
+                  </p>
+                </div>
               </div>
-              <p class="mt-2 break-all font-mono text-xs text-slate-500 dark:text-slate-400">
-                {{ workOrder?.workOrderId || workOrderId }}
-              </p>
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
               <button
                 v-if="canDispatch"
                 type="button"
-                class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-slate-950"
+                class="primary-button focus-ring"
                 :disabled="loading.action"
                 @click="openAction('dispatch')"
               >
@@ -37,7 +66,7 @@
               <button
                 v-if="canTransfer"
                 type="button"
-                class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-900/70 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-950/50"
+                class="secondary-button focus-ring"
                 :disabled="loading.action"
                 @click="openAction('transfer')"
               >
@@ -47,7 +76,7 @@
               <button
                 v-if="canWriteback"
                 type="button"
-                class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-amber-500 px-4 text-sm font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-slate-950"
+                class="focus-ring inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-amber-300/25 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-50 transition-colors duration-200 hover:border-amber-300/40 hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="loading.action"
                 @click="openAction('writeback')"
               >
@@ -57,7 +86,7 @@
               <button
                 v-if="workOrder?.status === 'DISPATCHED'"
                 type="button"
-                class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-slate-950"
+                class="focus-ring inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-emerald-300/25 bg-emerald-400/15 px-4 py-2 text-sm font-semibold text-emerald-50 transition-colors duration-200 hover:border-emerald-300/40 hover:bg-emerald-400/25 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="loading.action"
                 @click="handleAccept"
               >
@@ -65,61 +94,91 @@
                 <UserCheckIcon v-else class="h-4 w-4" />
                 接单
               </button>
-              <button
-                type="button"
-                class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                @click="router.back()"
-              >
-                <ArrowLeftIcon class="h-4 w-4" />
-                返回
-              </button>
             </div>
           </div>
 
           <div
             v-if="!hasDispatchPermission"
-            class="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200"
+            class="mt-6 flex items-start gap-3 rounded-lg border border-amber-300/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
           >
             <LockKeyholeIcon class="mt-0.5 h-4 w-4 shrink-0" />
             当前账号缺少 MENU:WORKORDER:DISPATCH，派单、转派和回写入口已隐藏。
           </div>
           <div
             v-if="successMessage"
-            class="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-200"
+            class="mt-4 flex items-start gap-3 rounded-lg border border-emerald-300/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100"
           >
             <CheckCircleIcon class="mt-0.5 h-4 w-4 shrink-0" />
             {{ successMessage }}
           </div>
           <div
             v-if="pageError"
-            class="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-300"
+            class="mt-4 flex items-start gap-3 rounded-lg border border-rose-300/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-100"
           >
             <CircleAlertIcon class="mt-0.5 h-4 w-4 shrink-0" />
             <span>
               {{ pageError }}
-              <span v-if="traceId" class="mt-1 block font-mono text-xs">traceId: {{ traceId }}</span>
+              <span v-if="traceId" class="mt-1 block font-mono text-xs text-rose-200">TraceId {{ traceId }}</span>
             </span>
           </div>
         </header>
 
-        <div v-if="loading.fetch" class="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+        <section v-if="!loading.fetch" class="grid gap-3 md:grid-cols-4">
+          <div class="rounded-lg border border-blue-400/20 bg-blue-400/10 p-4">
+            <div class="flex items-center justify-between gap-3 text-blue-100">
+              <p class="text-xs text-slate-300">当前状态</p>
+              <CheckCircleIcon class="h-4 w-4" />
+            </div>
+            <p class="mt-3 text-lg font-semibold text-white">{{ statusLabel(workOrder?.status || '-') }}</p>
+            <p class="mt-1 font-mono text-xs text-slate-400">version {{ workOrder?.versionNo ?? '-' }}</p>
+          </div>
+          <div class="rounded-lg border border-amber-400/20 bg-amber-400/10 p-4">
+            <div class="flex items-center justify-between gap-3 text-amber-100">
+              <p class="text-xs text-slate-300">SLA 到期</p>
+              <ClockIcon class="h-4 w-4" />
+            </div>
+            <p class="mt-3 text-lg font-semibold text-white">{{ formatDate(workOrder?.slaDueAt) }}</p>
+            <p class="mt-1 text-xs text-slate-400">优先级 {{ workOrder?.priority || '-' }}</p>
+          </div>
+          <div class="rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-4">
+            <div class="flex items-center justify-between gap-3 text-emerald-100">
+              <p class="text-xs text-slate-300">当前处理人</p>
+              <UserIcon class="h-4 w-4" />
+            </div>
+            <p class="mt-3 text-lg font-semibold text-white">{{ workOrder?.assignee || '-' }}</p>
+            <p class="mt-1 font-mono text-xs text-slate-400">{{ workOrder?.assigneeUserId || '-' }}</p>
+          </div>
+          <div class="rounded-lg border border-rose-400/20 bg-rose-400/10 p-4">
+            <div class="flex items-center justify-between gap-3 text-rose-100">
+              <p class="text-xs text-slate-300">关联事件</p>
+              <CircleAlertIcon class="h-4 w-4" />
+            </div>
+            <p class="mt-3 break-all font-mono text-sm font-semibold text-white">{{ workOrder?.incidentId || '-' }}</p>
+            <p class="mt-1 text-xs text-slate-400">节点 {{ workOrder?.nodeId || '-' }}</p>
+          </div>
+        </section>
+
+        <div v-if="loading.fetch" class="glass-panel-muted p-10 text-center text-sm text-slate-400">
           <Loader2Icon class="mx-auto mb-3 h-6 w-6 animate-spin text-blue-500" />
           正在读取工单详情
         </div>
 
         <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div class="space-y-6 lg:col-span-2">
-            <section class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <section class="glass-panel-muted p-5 sm:p-6">
               <div class="mb-5 flex items-center justify-between gap-4">
-                <h2 class="text-lg font-semibold">工单信息</h2>
-                <span class="rounded-md bg-slate-100 px-2 py-1 font-mono text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.16em] text-blue-200">Work Order Data</p>
+                  <h2 class="mt-1 text-xl font-semibold text-white">工单信息</h2>
+                </div>
+                <span class="rounded-md border border-white/10 bg-white/[0.055] px-2 py-1 font-mono text-xs text-slate-300">
                   v{{ workOrder?.versionNo ?? '-' }}
                 </span>
               </div>
               <div class="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
-                <div class="md:col-span-2">
-                  <div class="mb-1 text-sm text-slate-500 dark:text-slate-400">工单描述</div>
-                  <div class="font-medium leading-7 whitespace-pre-wrap">{{ workOrder?.description || '-' }}</div>
+                <div class="rounded-lg border border-white/10 bg-white/[0.045] p-4 md:col-span-2">
+                  <div class="mb-2 text-xs text-slate-400">工单描述</div>
+                  <div class="font-medium leading-7 whitespace-pre-wrap text-white">{{ workOrder?.description || '-' }}</div>
                 </div>
                 <InfoItem label="优先级" :value="workOrder?.priority || '-'" />
                 <InfoItem label="关联事件 ID" :value="workOrder?.incidentId || '-'" monospace />
@@ -134,41 +193,52 @@
 
             <section
               v-if="workOrder?.completionSummary || workOrder?.closeReason || workOrder?.writebackReason"
-              class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+              class="glass-panel-muted p-5 sm:p-6"
             >
               <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <h2 class="text-lg font-semibold">处理结果与回写</h2>
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">Writeback</p>
+                  <h2 class="mt-1 text-xl font-semibold text-white">处理结果与回写</h2>
+                </div>
                 <span
                   v-if="workOrder?.writebackType"
-                  class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-200"
+                  class="rounded-full border border-amber-300/25 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-100"
                 >
                   {{ writebackTypeLabel(workOrder.writebackType) }}
                 </span>
               </div>
               <div class="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
                 <div v-if="workOrder?.completionSummary" class="md:col-span-2">
-                  <div class="mb-1 text-sm text-slate-500 dark:text-slate-400">处理总结</div>
-                  <div class="font-medium leading-7 whitespace-pre-wrap">{{ workOrder.completionSummary }}</div>
+                  <div class="mb-1 text-sm text-slate-400">处理总结</div>
+                  <div class="font-medium leading-7 whitespace-pre-wrap text-white">{{ workOrder.completionSummary }}</div>
                 </div>
                 <div v-if="workOrder?.closeReason" class="md:col-span-2">
-                  <div class="mb-1 text-sm text-slate-500 dark:text-slate-400">关闭原因</div>
-                  <div class="font-medium leading-7 whitespace-pre-wrap">{{ workOrder.closeReason }}</div>
+                  <div class="mb-1 text-sm text-slate-400">关闭原因</div>
+                  <div class="font-medium leading-7 whitespace-pre-wrap text-white">{{ workOrder.closeReason }}</div>
                 </div>
                 <div v-if="workOrder?.writebackReason" class="md:col-span-2">
-                  <div class="mb-1 text-sm text-slate-500 dark:text-slate-400">回写原因</div>
-                  <div class="font-medium leading-7 whitespace-pre-wrap">{{ workOrder.writebackReason }}</div>
+                  <div class="mb-1 text-sm text-slate-400">回写原因</div>
+                  <div class="font-medium leading-7 whitespace-pre-wrap text-white">{{ workOrder.writebackReason }}</div>
                 </div>
                 <InfoItem v-if="workOrder?.writebackAt" label="回写时间" :value="formatDate(workOrder.writebackAt)" />
               </div>
             </section>
           </div>
 
-          <aside class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 class="mb-6 flex items-center text-lg font-semibold">
-              <ClockIcon class="mr-2 h-5 w-5 text-slate-400" />
-              工单流转
-            </h2>
-            <div class="relative ml-3 space-y-6 border-l border-slate-200 dark:border-slate-800">
+          <aside class="glass-panel-muted p-5 sm:p-6 lg:sticky lg:top-8 lg:self-start">
+            <div class="mb-6 flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-blue-200">Timeline</p>
+                <h2 class="mt-1 flex items-center text-xl font-semibold text-white">
+                  <ClockIcon class="mr-2 h-5 w-5 text-slate-400" />
+                  工单流转
+                </h2>
+              </div>
+              <span class="rounded-full border border-white/10 bg-white/[0.055] px-3 py-1 text-xs text-slate-300">
+                {{ statusLabel(workOrder?.status || '-') }}
+              </span>
+            </div>
+            <div class="relative ml-3 space-y-6 border-l border-white/10">
               <TimelineItem
                 v-if="workOrder?.writebackAt"
                 tone="amber"
@@ -233,7 +303,7 @@
       @dispatch="handleDispatchSubmit"
       @writeback="handleWritebackSubmit"
     />
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -275,14 +345,14 @@ const InfoItem = defineComponent({
   },
   setup(props) {
     return () =>
-      h('div', [
-        h('div', { class: 'mb-1 text-sm text-slate-500 dark:text-slate-400' }, props.label),
+      h('div', { class: 'rounded-lg border border-white/10 bg-white/[0.045] p-4' }, [
+        h('div', { class: 'mb-2 text-xs text-slate-400' }, props.label),
         h(
           'div',
           {
             class: [
-              'font-medium text-slate-900 dark:text-slate-100',
-              props.monospace ? 'break-all font-mono text-xs' : ''
+              'font-medium text-white',
+              props.monospace ? 'break-all font-mono text-xs leading-5 text-slate-100' : 'text-sm'
             ]
           },
           props.value
@@ -301,11 +371,11 @@ const TimelineItem = defineComponent({
   },
   setup(props) {
     const toneClass: Record<string, string> = {
-      amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-300',
-      blue: 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300',
-      emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-300',
-      indigo: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300',
-      slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+      amber: 'border-amber-300/30 bg-amber-400/15 text-amber-100',
+      blue: 'border-blue-300/30 bg-blue-400/15 text-blue-100',
+      emerald: 'border-emerald-300/30 bg-emerald-400/15 text-emerald-100',
+      indigo: 'border-indigo-300/30 bg-indigo-400/15 text-indigo-100',
+      slate: 'border-white/10 bg-white/[0.055] text-slate-300'
     };
     return () =>
       h('div', { class: 'relative ml-6' }, [
@@ -313,15 +383,15 @@ const TimelineItem = defineComponent({
           'span',
           {
             class: [
-              'absolute -left-9 flex h-6 w-6 items-center justify-center rounded-full ring-4 ring-white dark:ring-slate-900',
+              'absolute -left-9 flex h-6 w-6 items-center justify-center rounded-full border ring-4 ring-[#111117]',
               toneClass[props.tone] ?? toneClass.slate
             ]
           },
           [h(props.icon, { class: 'h-3.5 w-3.5' })]
         ),
-        h('h3', { class: 'mb-1 text-sm font-semibold text-slate-900 dark:text-white' }, props.title),
-        h('time', { class: 'mb-2 block text-xs font-normal text-slate-400 dark:text-slate-500' }, props.time),
-        h('div', { class: 'text-xs text-slate-500 dark:text-slate-400' }, props.description)
+        h('h3', { class: 'mb-1 text-sm font-semibold text-white' }, props.title),
+        h('time', { class: 'mb-2 block text-xs font-normal text-slate-500' }, props.time),
+        h('div', { class: 'text-xs text-slate-400' }, props.description)
       ]);
   }
 });
@@ -372,11 +442,19 @@ function statusLabel(status: string) {
 
 function statusBadgeClass(status: string) {
   return {
-    'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300': status === 'CREATED',
-    'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300': status === 'DISPATCHED',
-    'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300': status === 'ACCEPTED',
-    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300': status === 'COMPLETED',
-    'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400': status === 'CLOSED'
+    'border-slate-300/20 bg-slate-400/10 text-slate-200': status === 'CREATED',
+    'border-amber-300/25 bg-amber-400/10 text-amber-100': status === 'DISPATCHED',
+    'border-blue-300/25 bg-blue-400/10 text-blue-100': status === 'ACCEPTED',
+    'border-emerald-300/25 bg-emerald-400/10 text-emerald-100': status === 'COMPLETED',
+    'border-white/10 bg-white/[0.045] text-slate-300': status === 'CLOSED'
+  };
+}
+
+function priorityBadgeClass(priority: string) {
+  return {
+    'border-rose-300/25 bg-rose-400/10 text-rose-100': priority === 'HIGH',
+    'border-amber-300/25 bg-amber-400/10 text-amber-100': priority === 'MEDIUM',
+    'border-white/10 bg-white/[0.045] text-slate-300': !priority || priority === 'LOW'
   };
 }
 

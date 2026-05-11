@@ -21,6 +21,8 @@ import {
   DatabaseZap,
   Eye,
   EyeOff,
+  GitFork,
+  Gauge,
   Layers3,
   Loader2,
   MapPinned,
@@ -66,6 +68,8 @@ import type {
 } from '@/types/api';
 
 type GisLayerKey = MapLayerKey;
+type FlowSegmentKey = 'INLET' | 'BRANCH_A' | 'BRANCH_B';
+type FlowSensorMode = 'SIMULATED' | 'SENSOR_READY';
 type ParsedGeometry =
   | { kind: 'POINT'; point: LatLngExpression }
   | { kind: 'LINESTRING'; points: LatLngExpression[] };
@@ -80,12 +84,35 @@ type RenderedAlertLayer = {
   alert: AlertRecordResponse;
   object: GisObjectRecordResponse;
 };
+type FlowSegmentConfig = {
+  key: FlowSegmentKey;
+  label: string;
+  path: LatLngExpression[];
+  color: string;
+};
+type FlowReading = {
+  segmentKey: FlowSegmentKey;
+  flow: number;
+  unit: string;
+  ratio: number;
+};
+type FlowSnapshot = {
+  mode: FlowSensorMode;
+  totalFlow: number;
+  updatedAt: string;
+  readings: Record<FlowSegmentKey, FlowReading>;
+};
 
 const LAYER_STATE_STORAGE_KEY = 'uscdip.gis.layerState.v1';
 const ASSET_SEARCH_PAGE_SIZE = 100;
 const ASSET_SEARCH_MAX_PAGES = 10;
 const ASSET_SEARCH_MIN_CHARS = 2;
 const ASSET_SEARCH_DEBOUNCE_MS = 250;
+const FLOW_TOTAL_M3H = 120;
+const FLOW_RANDOM_MIN_RATIO = 0.28;
+const FLOW_RANDOM_MAX_RATIO = 0.72;
+const FLOW_UPDATE_MS = 2500;
+const FLOW_ANIMATION_MS = 3600;
 
 const INITIAL_QUERY: GisBboxQuery = {
   minX: 120.15,
@@ -193,6 +220,9 @@ const objectLayers = new Map<string, RenderedObjectLayer>();
 const alertLayers = new Map<string, RenderedAlertLayer>();
 const assetIndexPromises = new Map<GisObjectType, Promise<void>>();
 const searchHighlightLayer = shallowRef<CircleMarker | Polyline | null>(null);
+const flowLayerGroup = shallowRef<LayerGroup | null>(null);
+const flowLineLayers = new Map<FlowSegmentKey, Polyline>();
+const flowPulseLayers = new Map<FlowSegmentKey, CircleMarker>();
 
 const objects = ref<GisObjectRecordResponse[]>([]);
 const alerts = ref<AlertRecordResponse[]>([]);
@@ -231,6 +261,8 @@ const selectedSearchType = ref<AssetSearchType>('ALL');
 const searchResults = ref<AssetSearchResult[]>([]);
 const locatingAssetKey = ref('');
 const activeDetailTab = ref<AssetDetailTab>('profile');
+const flowLayerVisible = ref(true);
+const flowSnapshot = ref<FlowSnapshot>(createInitialFlowSnapshot());
 const detailContext = reactive<AssetDetailContext>({
   objectKey: '',
   profile: createDetailTabState<MasterDataRecordResponse | null>(null),
@@ -240,8 +272,31 @@ const detailContext = reactive<AssetDetailContext>({
   workorders: createDetailTabState<WorkOrderResponse[]>([])
 });
 let searchDebounceTimer: ReturnType<typeof window.setTimeout> | null = null;
+let flowUpdateTimer: ReturnType<typeof window.setInterval> | null = null;
+let flowAnimationFrame = 0;
 const layerState = reactive(loadLayerState());
 const activeGisQuery = ref<GisBboxQuery>({ ...INITIAL_QUERY });
+
+const flowSegments: FlowSegmentConfig[] = [
+  {
+    key: 'INLET',
+    label: '总管入口',
+    path: [[30.2789, 120.1568], [30.2851, 120.1604]],
+    color: '#38BDF8'
+  },
+  {
+    key: 'BRANCH_A',
+    label: '左支管',
+    path: [[30.2851, 120.1604], [30.2913, 120.1555]],
+    color: '#22C55E'
+  },
+  {
+    key: 'BRANCH_B',
+    label: '右支管',
+    path: [[30.2851, 120.1604], [30.2914, 120.1649]],
+    color: '#F59E0B'
+  }
+];
 
 const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toUpperCase());
 const drawableCount = computed(() => objects.value.filter((object) => parseWkt(object.geometry2d)).length);
@@ -288,6 +343,11 @@ const gis3dQuery = computed(() => {
   }
   return query;
 });
+const branchAFlow = computed(() => flowSnapshot.value.readings.BRANCH_A.flow);
+const branchBFlow = computed(() => flowSnapshot.value.readings.BRANCH_B.flow);
+const branchBalanceLabel = computed(() =>
+  `${Math.round(flowSnapshot.value.readings.BRANCH_A.ratio * 100)}% / ${Math.round(flowSnapshot.value.readings.BRANCH_B.ratio * 100)}%`
+);
 
 function createAssetIndexState(): AssetSearchIndexState {
   return {
@@ -307,6 +367,56 @@ function createDetailTabState<T>(data: T): AssetDetailTabState<T> {
     traceId: '',
     message: ''
   };
+}
+
+function createInitialFlowSnapshot(): FlowSnapshot {
+  return buildFlowSnapshot(FLOW_TOTAL_M3H, 0.52, 'SIMULATED');
+}
+
+function buildFlowSnapshot(totalFlow: number, branchARatio: number, mode: FlowSensorMode): FlowSnapshot {
+  const normalizedRatio = Math.min(FLOW_RANDOM_MAX_RATIO, Math.max(FLOW_RANDOM_MIN_RATIO, branchARatio));
+  const branchA = roundFlow(totalFlow * normalizedRatio);
+  const branchB = roundFlow(totalFlow - branchA);
+  return {
+    mode,
+    totalFlow,
+    updatedAt: new Date().toISOString(),
+    readings: {
+      INLET: {
+        segmentKey: 'INLET',
+        flow: roundFlow(totalFlow),
+        unit: 'm³/h',
+        ratio: 1
+      },
+      BRANCH_A: {
+        segmentKey: 'BRANCH_A',
+        flow: branchA,
+        unit: 'm³/h',
+        ratio: branchA / totalFlow
+      },
+      BRANCH_B: {
+        segmentKey: 'BRANCH_B',
+        flow: branchB,
+        unit: 'm³/h',
+        ratio: branchB / totalFlow
+      }
+    }
+  };
+}
+
+function roundFlow(value: number) {
+  return Math.round(value * 10) / 10;
+}
+
+function getSimulatedFlowSnapshot(): FlowSnapshot {
+  const ratio =
+    FLOW_RANDOM_MIN_RATIO + Math.random() * (FLOW_RANDOM_MAX_RATIO - FLOW_RANDOM_MIN_RATIO);
+  return buildFlowSnapshot(FLOW_TOTAL_M3H, ratio, 'SIMULATED');
+}
+
+// Later this can call a real sensor API or WebSocket cache and return the same FlowSnapshot shape.
+async function getCurrentFlowSnapshot(): Promise<FlowSnapshot> {
+  return getSimulatedFlowSnapshot();
 }
 
 function objectKey(object: GisObjectRecordResponse) {
@@ -1043,6 +1153,19 @@ function initializeLayerGroups() {
     }
     syncLayerVisibility(config.key);
   });
+  initializeFlowLayer();
+}
+
+function initializeFlowLayer() {
+  if (!map.value || flowLayerGroup.value) {
+    return;
+  }
+  flowLayerGroup.value = markRaw(L.layerGroup());
+  if (flowLayerVisible.value) {
+    flowLayerGroup.value.addTo(map.value);
+  }
+  renderFlowLayer();
+  startFlowTimers();
 }
 
 function syncLayerVisibility(layerKey: GisLayerKey) {
@@ -1062,6 +1185,20 @@ function syncLayerVisibility(layerKey: GisLayerKey) {
   }
 }
 
+function syncFlowLayerVisibility() {
+  if (!map.value || !flowLayerGroup.value) {
+    return;
+  }
+  const isOnMap = map.value.hasLayer(flowLayerGroup.value);
+  if (flowLayerVisible.value && !isOnMap) {
+    flowLayerGroup.value.addTo(map.value);
+    startFlowTimers();
+  }
+  if (!flowLayerVisible.value && isOnMap) {
+    map.value.removeLayer(flowLayerGroup.value);
+  }
+}
+
 function clearObjectLayers() {
   objectLayers.forEach(({ layerKey, layer }) => {
     layerGroups.get(layerKey)?.removeLayer(layer);
@@ -1075,6 +1212,12 @@ function clearAlertLayers() {
   });
   alertLayers.clear();
   unlocatedAlertCount.value = 0;
+}
+
+function clearFlowLayer() {
+  flowLineLayers.clear();
+  flowPulseLayers.clear();
+  flowLayerGroup.value?.clearLayers();
 }
 
 function clearSearchHighlight() {
@@ -1131,6 +1274,133 @@ function renderObjectLayers(fit = false) {
   if (fit && bounds.length > 0) {
     map.value.fitBounds(bounds as LatLngBoundsExpression, { padding: [36, 36], maxZoom: 17 });
   }
+}
+
+function renderFlowLayer() {
+  if (!map.value || !flowLayerGroup.value) {
+    return;
+  }
+  clearFlowLayer();
+
+  flowSegments.forEach((segment) => {
+    const reading = flowSnapshot.value.readings[segment.key];
+    const line = L.polyline(segment.path, getFlowLineStyle(segment.key));
+    line.bindTooltip(`${segment.label} / ${reading.flow} ${reading.unit}`, {
+      direction: 'top',
+      opacity: 0.92
+    });
+    flowLayerGroup.value?.addLayer(line);
+    flowLineLayers.set(segment.key, markRaw(line));
+
+    const pulse = L.circleMarker(interpolatePath(segment.path, 0), getFlowPulseStyle(segment.key));
+    pulse.bindTooltip(`${segment.label} 实时流量 ${reading.flow} ${reading.unit}`, {
+      direction: 'top',
+      opacity: 0.92
+    });
+    flowLayerGroup.value?.addLayer(pulse);
+    flowPulseLayers.set(segment.key, markRaw(pulse));
+  });
+}
+
+function updateFlowLayerStyles() {
+  flowSegments.forEach((segment) => {
+    const reading = flowSnapshot.value.readings[segment.key];
+    const line = flowLineLayers.get(segment.key);
+    const pulse = flowPulseLayers.get(segment.key);
+    line?.setStyle(getFlowLineStyle(segment.key));
+    line?.setTooltipContent(`${segment.label} / ${reading.flow} ${reading.unit}`);
+    pulse?.setStyle(getFlowPulseStyle(segment.key));
+    pulse?.setTooltipContent(`${segment.label} 实时流量 ${reading.flow} ${reading.unit}`);
+  });
+}
+
+function getFlowLineStyle(segmentKey: FlowSegmentKey) {
+  const segment = flowSegments.find((item) => item.key === segmentKey);
+  const reading = flowSnapshot.value.readings[segmentKey];
+  return {
+    color: segment?.color ?? '#38BDF8',
+    dashArray: segmentKey === 'INLET' ? undefined : '10 10',
+    lineCap: 'round' as const,
+    opacity: flowLayerVisible.value ? 0.92 : 0,
+    weight: 4 + Math.max(0, reading.ratio) * 5
+  };
+}
+
+function getFlowPulseStyle(segmentKey: FlowSegmentKey) {
+  const segment = flowSegments.find((item) => item.key === segmentKey);
+  const reading = flowSnapshot.value.readings[segmentKey];
+  return {
+    radius: 5 + Math.max(0, reading.ratio) * 5,
+    color: '#E0F2FE',
+    fillColor: segment?.color ?? '#38BDF8',
+    fillOpacity: 0.95,
+    opacity: 0.98,
+    weight: 2
+  };
+}
+
+function interpolatePath(path: LatLngExpression[], progress: number): LatLngExpression {
+  const [start, end] = path;
+  const [startLat, startLng] = toLatLngTuple(start);
+  const [endLat, endLng] = toLatLngTuple(end);
+  return [
+    startLat + (endLat - startLat) * progress,
+    startLng + (endLng - startLng) * progress
+  ];
+}
+
+function toLatLngTuple(value: LatLngExpression): [number, number] {
+  if (Array.isArray(value)) {
+    return [Number(value[0]), Number(value[1])];
+  }
+  const point = L.latLng(value);
+  return [point.lat, point.lng];
+}
+
+function startFlowTimers() {
+  if (!flowUpdateTimer) {
+    flowUpdateTimer = window.setInterval(() => {
+      void refreshFlowSnapshot();
+    }, FLOW_UPDATE_MS);
+  }
+  if (!flowAnimationFrame) {
+    flowAnimationFrame = window.requestAnimationFrame(animateFlowPulses);
+  }
+}
+
+function stopFlowTimers() {
+  if (flowUpdateTimer) {
+    window.clearInterval(flowUpdateTimer);
+    flowUpdateTimer = null;
+  }
+  if (flowAnimationFrame) {
+    window.cancelAnimationFrame(flowAnimationFrame);
+    flowAnimationFrame = 0;
+  }
+}
+
+async function refreshFlowSnapshot() {
+  flowSnapshot.value = await getCurrentFlowSnapshot();
+  updateFlowLayerStyles();
+}
+
+function animateFlowPulses(timestamp: number) {
+  if (!flowLayerVisible.value) {
+    flowAnimationFrame = window.requestAnimationFrame(animateFlowPulses);
+    return;
+  }
+  flowSegments.forEach((segment, index) => {
+    const reading = flowSnapshot.value.readings[segment.key];
+    const speedFactor = 0.85 + reading.ratio * 0.55;
+    const progress = ((timestamp * speedFactor + index * 620) % FLOW_ANIMATION_MS) / FLOW_ANIMATION_MS;
+    flowPulseLayers.get(segment.key)?.setLatLng(interpolatePath(segment.path, progress));
+  });
+  flowAnimationFrame = window.requestAnimationFrame(animateFlowPulses);
+}
+
+function toggleFlowLayer() {
+  flowLayerVisible.value = !flowLayerVisible.value;
+  syncFlowLayerVisibility();
 }
 
 function renderSearchHighlight(object: GisObjectRecordResponse) {
@@ -1606,6 +1876,7 @@ onBeforeUnmount(() => {
   if (searchDebounceTimer) {
     window.clearTimeout(searchDebounceTimer);
   }
+  stopFlowTimers();
   assetIndexPromises.clear();
   clearSearchHighlight();
   if (map.value) {
@@ -1615,6 +1886,7 @@ onBeforeUnmount(() => {
   }
   clearObjectLayers();
   clearAlertLayers();
+  clearFlowLayer();
   layerGroups.clear();
 });
 </script>
@@ -1773,6 +2045,67 @@ onBeforeUnmount(() => {
               <button class="secondary-button focus-ring min-h-8 px-2 text-xs" type="button" @click="refreshSearchIndex">
                 <RefreshCcw class="h-3.5 w-3.5" />
                 刷新
+              </button>
+            </div>
+          </section>
+
+          <section
+            class="rounded-lg border p-3"
+            :class="flowLayerVisible ? 'border-cyan-400/25 bg-cyan-400/10' : 'border-white/10 bg-white/[0.045]'"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="flex items-center gap-2 text-sm font-semibold text-white">
+                  <GitFork class="h-4 w-4 text-cyan-200" aria-hidden="true" />
+                  人字形流量模拟
+                </div>
+                <p class="mt-1 text-xs leading-5 text-slate-400">固定总流量，两个支管随机分配</p>
+              </div>
+              <label class="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-200">
+                <input
+                  class="h-4 w-4 cursor-pointer accent-primary"
+                  type="checkbox"
+                  :checked="flowLayerVisible"
+                  aria-label="模拟流量图层显隐"
+                  @change="toggleFlowLayer"
+                />
+                显示
+              </label>
+            </div>
+
+            <dl class="mt-3 grid grid-cols-3 gap-2 text-xs">
+              <div class="rounded-md border border-white/10 bg-black/10 p-2">
+                <dt class="text-slate-400">总管</dt>
+                <dd class="mt-1 font-mono text-cyan-100">
+                  {{ flowSnapshot.readings.INLET.flow }} {{ flowSnapshot.readings.INLET.unit }}
+                </dd>
+              </div>
+              <div class="rounded-md border border-white/10 bg-black/10 p-2">
+                <dt class="text-slate-400">左支</dt>
+                <dd class="mt-1 font-mono text-emerald-100">{{ branchAFlow }} m³/h</dd>
+              </div>
+              <div class="rounded-md border border-white/10 bg-black/10 p-2">
+                <dt class="text-slate-400">右支</dt>
+                <dd class="mt-1 font-mono text-amber-100">{{ branchBFlow }} m³/h</dd>
+              </div>
+            </dl>
+
+            <div class="mt-3 rounded-lg border border-white/10 bg-black/10 p-3">
+              <div class="flex items-center justify-between gap-3 text-xs">
+                <span class="text-slate-400">分流比例</span>
+                <span class="font-mono text-blue-100">{{ branchBalanceLabel }}</span>
+              </div>
+              <div class="mt-2 flex h-2 overflow-hidden rounded-full bg-white/10">
+                <span class="bg-emerald-400" :style="{ width: `${flowSnapshot.readings.BRANCH_A.ratio * 100}%` }" />
+                <span class="bg-amber-400" :style="{ width: `${flowSnapshot.readings.BRANCH_B.ratio * 100}%` }" />
+              </div>
+            </div>
+
+            <div class="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400">
+              <span class="truncate">{{ flowSnapshot.mode }} / {{ formatDateTime(flowSnapshot.updatedAt) }}</span>
+              <button class="secondary-button focus-ring min-h-8 px-2 text-xs" type="button" @click="refreshFlowSnapshot">
+                <RefreshCcw class="h-3.5 w-3.5" />
+                随机
               </button>
             </div>
           </section>
@@ -1967,6 +2300,28 @@ onBeforeUnmount(() => {
               <div class="flex items-center gap-2">
                 <AlertTriangle class="h-4 w-4" />
                 {{ message }}
+              </div>
+            </div>
+            <div
+              v-if="flowLayerVisible"
+              class="absolute right-4 top-4 z-[500] w-[min(20rem,calc(100%-2rem))] rounded-lg border border-cyan-300/20 bg-ink/85 p-3 text-xs text-slate-300 backdrop-blur"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <span class="flex items-center gap-2 font-semibold text-white">
+                  <Gauge class="h-4 w-4 text-cyan-200" aria-hidden="true" />
+                  管道流量
+                </span>
+                <span class="font-mono text-cyan-100">{{ flowSnapshot.readings.INLET.flow }} m³/h</span>
+              </div>
+              <div class="mt-3 grid grid-cols-2 gap-2">
+                <div class="rounded-md border border-emerald-300/20 bg-emerald-400/10 p-2">
+                  <p class="text-slate-400">左支管</p>
+                  <p class="mt-1 font-mono text-sm font-semibold text-emerald-100">{{ branchAFlow }} m³/h</p>
+                </div>
+                <div class="rounded-md border border-amber-300/20 bg-amber-400/10 p-2">
+                  <p class="text-slate-400">右支管</p>
+                  <p class="mt-1 font-mono text-sm font-semibold text-amber-100">{{ branchBFlow }} m³/h</p>
+                </div>
               </div>
             </div>
             <div

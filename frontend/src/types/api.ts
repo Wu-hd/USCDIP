@@ -209,6 +209,30 @@ export interface MasterDataRecordResponse {
   attributes: Record<string, unknown>;
 }
 
+export interface MasterChangeSubmitRequest {
+  objectType: GisObjectType;
+  objectId: string;
+  baseVersionNo: number;
+  reason: string;
+  payload: Record<string, unknown>;
+}
+
+export interface MasterChangeResponse {
+  requestId: string;
+  objectType: GisObjectType | string;
+  objectId: string;
+  requestStatus: string;
+  requestedBy: string;
+  approvedBy: string | null;
+  baseVersionNo: number;
+  effectiveVersionNo: number | null;
+  reason: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  approvedAt: string | null;
+  updatedAt: string;
+}
+
 export interface AssetSearchResult {
   objectType: GisObjectType;
   objectId: string;

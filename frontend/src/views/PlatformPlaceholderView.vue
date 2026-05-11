@@ -91,11 +91,11 @@ function actionToneClass(action: ButtonPermissionConfig) {
   return 'border-blue-400/25 bg-blue-400/10 text-blue-100 hover:border-blue-300/40 hover:bg-blue-400/15';
 }
 
-const ACTION_ROUTE_MAP: Record<string, string> = {
+const ACTION_ROUTE_MAP: Record<string, string | { path: string; query?: Record<string, string> }> = {
   'asset-read': '/mgmt/devices',
-  'asset-write': '/mgmt/gis',
-  'workorder-read': '/emgc',
-  'workorder-dispatch': '/emgc',
+  'asset-write': '/mgmt/changes',
+  'workorder-read': '/emgc/workorders',
+  'workorder-dispatch': { path: '/emgc/workorders', query: { status: 'CREATED' } },
   'model-read': '/diag/models',
   'model-write': '/diag/models'
 };

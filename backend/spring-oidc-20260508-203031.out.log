@@ -1,0 +1,305 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -------------------------< com.uscdip:backend >-------------------------
+[INFO] Building uscdip-backend 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.3.2:clean (default-clean) @ backend ---
+[INFO] Deleting E:\Whd\USCDIP\backend\target
+[INFO] 
+[INFO] >>> spring-boot:3.3.5:run (default-cli) > test-compile @ backend >>>
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ backend ---
+[INFO] Copying 3 resources from src\main\resources to target\classes
+[INFO] Copying 5 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ backend ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 312 source files with javac [debug parameters release 17] to target\classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ backend ---
+[INFO] skip non existing resourceDirectory E:\Whd\USCDIP\backend\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ backend ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 31 source files with javac [debug parameters release 17] to target\test-classes
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[4,30] 无法访问com.uscdip.backend.dto.ProtocolAdaptRequest
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\ProtocolAdaptRequest.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[5,30] 无法访问com.uscdip.backend.dto.UnifiedIngestMetricDto
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\UnifiedIngestMetricDto.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/WebSocketPushGatewayIntegrationTest.java:[5,30] 无法访问com.uscdip.backend.dto.WebSocketPushPayload
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\WebSocketPushPayload.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthCallbackControllerTest.java:[3,33] 无法访问com.uscdip.backend.config.BackendOidcProperties
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\config\BackendOidcProperties.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[104,13] 找不到符号
+  符号:   类 BackendOidcProperties
+  位置: 类 com.uscdip.backend.controller.AuthControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/AlertRuleEngineIntegrationTest.java:[82,49] 无法访问com.uscdip.backend.entity.AlertRecordEntity
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\AlertRecordEntity.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/DeviceLedgerIntegrationTest.java:[138,48] 无法访问com.uscdip.backend.entity.DeviceHeartbeatEntity
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\DeviceHeartbeatEntity.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/FeatureViewServiceIntegrationTest.java:[66,38] 无法访问com.uscdip.backend.entity.FeatureViewAccessAuditEntity
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\FeatureViewAccessAuditEntity.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/NotificationDeadLetterIntegrationTest.java:[68,142] 无法访问com.uscdip.backend.entity.NotificationDeliveryEntity
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\NotificationDeliveryEntity.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[24,9] 找不到符号
+  符号:   类 ProtocolAdaptRequest
+  位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[24,44] 找不到符号
+  符号:   类 ProtocolAdaptRequest
+  位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[43,14] 找不到符号
+  符号:   类 UnifiedIngestMetricDto
+  位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[53,9] 找不到符号
+  符号:   类 ProtocolAdaptRequest
+  位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[53,44] 找不到符号
+  符号:   类 ProtocolAdaptRequest
+  位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[71,14] 找不到符号
+  符号:   类 UnifiedIngestMetricDto
+  位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[82,9] 找不到符号
+  符号:   类 ProtocolAdaptRequest
+  位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[82,44] 找不到符号
+  符号:   类 ProtocolAdaptRequest
+  位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[100,14] 找不到符号
+  符号:   类 UnifiedIngestMetricDto
+  位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/TraceLinkInstrumentationIntegrationTest.java:[157,57] 无法访问com.uscdip.backend.dto.NotificationConsumeResponse
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\NotificationConsumeResponse.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/TraceLinkInstrumentationIntegrationTest.java:[178,35] 无法访问com.uscdip.backend.entity.WebSocketAckEntity
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\WebSocketAckEntity.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/UnifiedAuditLogServiceIntegrationTest.java:[80,41] 无法访问com.uscdip.backend.entity.AuditLogEntity
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\AuditLogEntity.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/WebSocketPushGatewayIntegrationTest.java:[63,37] 无法访问com.uscdip.backend.entity.WebSocketConnectionEntity
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\WebSocketConnectionEntity.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/WebSocketPushGatewayIntegrationTest.java:[88,14] 找不到符号
+  符号:   类 WebSocketPushPayload
+  位置: 类 com.uscdip.backend.WebSocketPushGatewayIntegrationTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/WebSocketPushGatewayIntegrationTest.java:[97,14] 找不到符号
+  符号:   类 WebSocketPushPayload
+  位置: 类 com.uscdip.backend.WebSocketPushGatewayIntegrationTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthCallbackControllerTest.java:[38,9] 找不到符号
+  符号:   类 BackendOidcProperties
+  位置: 类 com.uscdip.backend.controller.AuthCallbackControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthCallbackControllerTest.java:[38,52] 找不到符号
+  符号:   类 BackendOidcProperties
+  位置: 类 com.uscdip.backend.controller.AuthCallbackControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthCallbackControllerTest.java:[42,9] 无法访问com.uscdip.backend.controller.AuthController
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\controller\AuthController.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthCallbackControllerTest.java:[59,38] 无法访问com.uscdip.backend.dto.AuthCallbackRequest
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\AuthCallbackRequest.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[39,9] 找不到符号
+  符号:   类 BackendOidcProperties
+  位置: 类 com.uscdip.backend.controller.AuthControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[46,55] 无法访问com.uscdip.backend.dto.TokenRevocationResponse
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\TokenRevocationResponse.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[72,9] 找不到符号
+  符号:   类 BackendOidcProperties
+  位置: 类 com.uscdip.backend.controller.AuthControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[105,9] 找不到符号
+  符号:   类 BackendOidcProperties
+  位置: 类 com.uscdip.backend.controller.AuthControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[105,52] 找不到符号
+  符号:   类 BackendOidcProperties
+  位置: 类 com.uscdip.backend.controller.AuthControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/service/LocalTokenServiceTest.java:[64,9] 找不到符号
+  符号:   类 BackendOidcProperties
+  位置: 类 com.uscdip.backend.service.LocalTokenServiceTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/service/LocalTokenServiceTest.java:[64,52] 找不到符号
+  符号:   类 BackendOidcProperties
+  位置: 类 com.uscdip.backend.service.LocalTokenServiceTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/service/OidcUserSyncServiceTest.java:[50,9] 找不到符号
+  符号:   类 BackendOidcProperties
+  位置: 类 com.uscdip.backend.service.OidcUserSyncServiceTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/service/OidcUserSyncServiceTest.java:[50,52] 找不到符号
+  符号:   类 BackendOidcProperties
+  位置: 类 com.uscdip.backend.service.OidcUserSyncServiceTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/service/OidcUserSyncServiceTest.java:[71,28] 无法访问com.uscdip.backend.entity.RoleEntity
+  错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\RoleEntity.class
+    类文件具有错误的版本 65.0, 应为 61.0
+    请删除该文件或确保该文件位于正确的类路径子目录中。
+[INFO] 38 errors 
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  21.900 s
+[INFO] Finished at: 2026-05-08T20:30:54+08:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.13.0:testCompile (default-testCompile) on project backend: Compilation failure: Compilation failure: 
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[4,30] 无法访问com.uscdip.backend.dto.ProtocolAdaptRequest
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\ProtocolAdaptRequest.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[5,30] 无法访问com.uscdip.backend.dto.UnifiedIngestMetricDto
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\UnifiedIngestMetricDto.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/WebSocketPushGatewayIntegrationTest.java:[5,30] 无法访问com.uscdip.backend.dto.WebSocketPushPayload
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\WebSocketPushPayload.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthCallbackControllerTest.java:[3,33] 无法访问com.uscdip.backend.config.BackendOidcProperties
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\config\BackendOidcProperties.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[104,13] 找不到符号
+[ERROR]   符号:   类 BackendOidcProperties
+[ERROR]   位置: 类 com.uscdip.backend.controller.AuthControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/AlertRuleEngineIntegrationTest.java:[82,49] 无法访问com.uscdip.backend.entity.AlertRecordEntity
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\AlertRecordEntity.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/DeviceLedgerIntegrationTest.java:[138,48] 无法访问com.uscdip.backend.entity.DeviceHeartbeatEntity
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\DeviceHeartbeatEntity.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/FeatureViewServiceIntegrationTest.java:[66,38] 无法访问com.uscdip.backend.entity.FeatureViewAccessAuditEntity
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\FeatureViewAccessAuditEntity.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/NotificationDeadLetterIntegrationTest.java:[68,142] 无法访问com.uscdip.backend.entity.NotificationDeliveryEntity
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\NotificationDeliveryEntity.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[24,9] 找不到符号
+[ERROR]   符号:   类 ProtocolAdaptRequest
+[ERROR]   位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[24,44] 找不到符号
+[ERROR]   符号:   类 ProtocolAdaptRequest
+[ERROR]   位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[43,14] 找不到符号
+[ERROR]   符号:   类 UnifiedIngestMetricDto
+[ERROR]   位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[53,9] 找不到符号
+[ERROR]   符号:   类 ProtocolAdaptRequest
+[ERROR]   位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[53,44] 找不到符号
+[ERROR]   符号:   类 ProtocolAdaptRequest
+[ERROR]   位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[71,14] 找不到符号
+[ERROR]   符号:   类 UnifiedIngestMetricDto
+[ERROR]   位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[82,9] 找不到符号
+[ERROR]   符号:   类 ProtocolAdaptRequest
+[ERROR]   位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[82,44] 找不到符号
+[ERROR]   符号:   类 ProtocolAdaptRequest
+[ERROR]   位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/ProtocolIngestAdapterTest.java:[100,14] 找不到符号
+[ERROR]   符号:   类 UnifiedIngestMetricDto
+[ERROR]   位置: 类 com.uscdip.backend.ProtocolIngestAdapterTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/TraceLinkInstrumentationIntegrationTest.java:[157,57] 无法访问com.uscdip.backend.dto.NotificationConsumeResponse
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\NotificationConsumeResponse.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/TraceLinkInstrumentationIntegrationTest.java:[178,35] 无法访问com.uscdip.backend.entity.WebSocketAckEntity
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\WebSocketAckEntity.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/UnifiedAuditLogServiceIntegrationTest.java:[80,41] 无法访问com.uscdip.backend.entity.AuditLogEntity
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\AuditLogEntity.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/WebSocketPushGatewayIntegrationTest.java:[63,37] 无法访问com.uscdip.backend.entity.WebSocketConnectionEntity
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\WebSocketConnectionEntity.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/WebSocketPushGatewayIntegrationTest.java:[88,14] 找不到符号
+[ERROR]   符号:   类 WebSocketPushPayload
+[ERROR]   位置: 类 com.uscdip.backend.WebSocketPushGatewayIntegrationTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/WebSocketPushGatewayIntegrationTest.java:[97,14] 找不到符号
+[ERROR]   符号:   类 WebSocketPushPayload
+[ERROR]   位置: 类 com.uscdip.backend.WebSocketPushGatewayIntegrationTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthCallbackControllerTest.java:[38,9] 找不到符号
+[ERROR]   符号:   类 BackendOidcProperties
+[ERROR]   位置: 类 com.uscdip.backend.controller.AuthCallbackControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthCallbackControllerTest.java:[38,52] 找不到符号
+[ERROR]   符号:   类 BackendOidcProperties
+[ERROR]   位置: 类 com.uscdip.backend.controller.AuthCallbackControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthCallbackControllerTest.java:[42,9] 无法访问com.uscdip.backend.controller.AuthController
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\controller\AuthController.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthCallbackControllerTest.java:[59,38] 无法访问com.uscdip.backend.dto.AuthCallbackRequest
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\AuthCallbackRequest.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[39,9] 找不到符号
+[ERROR]   符号:   类 BackendOidcProperties
+[ERROR]   位置: 类 com.uscdip.backend.controller.AuthControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[46,55] 无法访问com.uscdip.backend.dto.TokenRevocationResponse
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\dto\TokenRevocationResponse.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[72,9] 找不到符号
+[ERROR]   符号:   类 BackendOidcProperties
+[ERROR]   位置: 类 com.uscdip.backend.controller.AuthControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[105,9] 找不到符号
+[ERROR]   符号:   类 BackendOidcProperties
+[ERROR]   位置: 类 com.uscdip.backend.controller.AuthControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/controller/AuthControllerTest.java:[105,52] 找不到符号
+[ERROR]   符号:   类 BackendOidcProperties
+[ERROR]   位置: 类 com.uscdip.backend.controller.AuthControllerTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/service/LocalTokenServiceTest.java:[64,9] 找不到符号
+[ERROR]   符号:   类 BackendOidcProperties
+[ERROR]   位置: 类 com.uscdip.backend.service.LocalTokenServiceTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/service/LocalTokenServiceTest.java:[64,52] 找不到符号
+[ERROR]   符号:   类 BackendOidcProperties
+[ERROR]   位置: 类 com.uscdip.backend.service.LocalTokenServiceTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/service/OidcUserSyncServiceTest.java:[50,9] 找不到符号
+[ERROR]   符号:   类 BackendOidcProperties
+[ERROR]   位置: 类 com.uscdip.backend.service.OidcUserSyncServiceTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/service/OidcUserSyncServiceTest.java:[50,52] 找不到符号
+[ERROR]   符号:   类 BackendOidcProperties
+[ERROR]   位置: 类 com.uscdip.backend.service.OidcUserSyncServiceTest
+[ERROR] /E:/Whd/USCDIP/backend/src/test/java/com/uscdip/backend/service/OidcUserSyncServiceTest.java:[71,28] 无法访问com.uscdip.backend.entity.RoleEntity
+[ERROR]   错误的类文件: E:\Whd\USCDIP\backend\target\classes\com\uscdip\backend\entity\RoleEntity.class
+[ERROR]     类文件具有错误的版本 65.0, 应为 61.0
+[ERROR]     请删除该文件或确保该文件位于正确的类路径子目录中。
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

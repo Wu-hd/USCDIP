@@ -31,7 +31,7 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -92,7 +92,7 @@ public class OidcAuthorizationService {
                 codeVerifier,
                 blankToNull(redirectUri),
                 STATE_STATUS_ACTIVE,
-                LocalDateTime.ofInstant(stateExpiresAt, ZoneOffset.UTC),
+                LocalDateTime.ofInstant(stateExpiresAt, ZoneId.systemDefault()),
                 LocalDateTime.now(),
                 null,
                 clientIp,
@@ -102,7 +102,7 @@ public class OidcAuthorizationService {
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(registration.getProviderDetails().getAuthorizationUri())
                 .queryParam("response_type", "code")
                 .queryParam("client_id", registration.getClientId())
-                .queryParam("scope", String.join(" ", registration.getScopes()))
+                .queryParam("scope", String.join("+", registration.getScopes()))
                 .queryParam("state", state)
                 .queryParam("code_challenge", codeChallenge)
                 .queryParam("code_challenge_method", "S256");
@@ -110,7 +110,7 @@ public class OidcAuthorizationService {
             builder.queryParam("redirect_uri", redirectUri);
         }
 
-        return new AuthLoginDescriptor(true, oidcProperties.getRegistrationId(), builder.build(true).toUriString(), state, stateExpiresAt);
+        return new AuthLoginDescriptor(true, oidcProperties.getRegistrationId(), builder.build(false).toUriString(), state, stateExpiresAt);
     }
 
     @Transactional

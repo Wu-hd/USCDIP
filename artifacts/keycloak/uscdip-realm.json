@@ -1,0 +1,93 @@
+{
+  "realm": "uscdip",
+  "enabled": true,
+  "displayName": "USCDIP",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "LEADER_READONLY",
+        "description": "Default USCDIP read-only leader role"
+      },
+      {
+        "name": "PLATFORM_ADMIN",
+        "description": "USCDIP platform administrator"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "uscdip-backend",
+      "name": "USCDIP Backend",
+      "description": "Local development OIDC client for USCDIP",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "change-me",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "redirectUris": [
+        "http://localhost:5173/auth/callback",
+        "http://localhost:8080/login/oauth2/code/keycloak"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/portal##http://localhost:8080/swagger-ui/index.html"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "USCDIP",
+      "lastName": "Admin",
+      "email": "admin@uscdip.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "PLATFORM_ADMIN",
+        "LEADER_READONLY"
+      ],
+      "attributes": {
+        "region": [
+          "REGION-HZ"
+        ],
+        "region_scopes": [
+          "REGION-HZ"
+        ]
+      }
+    }
+  ]
+}

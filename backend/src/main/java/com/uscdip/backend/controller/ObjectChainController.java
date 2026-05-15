@@ -2,6 +2,7 @@ package com.uscdip.backend.controller;
 
 import com.uscdip.backend.dto.ObjectChainResponse;
 import com.uscdip.backend.dto.ObjectDictionaryItem;
+import com.uscdip.backend.model.ApiErrorCode;
 import com.uscdip.backend.model.ApiResponse;
 import com.uscdip.backend.service.ObjectChainService;
 import org.springframework.http.HttpStatus;
@@ -39,7 +40,7 @@ public class ObjectChainController {
         return objectChainService.getBySegmentId(segmentId)
                 .map(chain -> ResponseEntity.ok(ApiResponse.success(chain)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(ApiResponse.failure("SEGMENT_NOT_FOUND", "Segment not found: " + segmentId, null)));
+                .body(ApiResponse.failure(ApiErrorCode.RESOURCE_NOT_FOUND.code(), "Segment not found: " + segmentId, null)));
     }
 
     @GetMapping("/object-chain/node/{nodeId}")
@@ -47,6 +48,6 @@ public class ObjectChainController {
         return objectChainService.getByNodeId(nodeId)
                 .map(chain -> ResponseEntity.ok(ApiResponse.success(chain)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(ApiResponse.failure("NODE_NOT_FOUND", "Node not found: " + nodeId, null)));
+                        .body(ApiResponse.failure(ApiErrorCode.RESOURCE_NOT_FOUND.code(), "Node not found: " + nodeId, null)));
     }
 }

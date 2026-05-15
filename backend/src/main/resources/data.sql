@@ -53,7 +53,11 @@ INSERT INTO user_account (user_id, username, display_name, primary_region_id, st
 ('U-DISPATCH-001', 'hz_dispatcher', '杭州区域调度员', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('U-INSPECT-001', 'zhangsan', '巡检人员张三', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('U-ALGO-001', 'algo_user', '算法工程师', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('U-LEADER-001', 'leader_readonly', '领导只读', 'CITY-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+('U-LEADER-001', 'leader_readonly', '领导只读', 'CITY-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('U-NOROLE-001', 'guest_no_role', '无角色测试用户', 'REGION-HZ', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO work_order (work_order_id, incident_id, segment_id, node_id, assignee, status, created_at, updated_at) VALUES
+('WO-CONFLICT-001', 'INC-001', 'SEG-001', 'NODE-002', 'zhangsan', 'DISPATCHED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO rbac_role (role_code, role_name, description, read_only) VALUES
 ('PLATFORM_ADMIN', '平台管理员', '全平台管理权限', FALSE),

@@ -7,6 +7,7 @@
 - A-04 权限模型与数据范围矩阵（RBAC + 数据范围 + topic 订阅范围）
 - A-05 实时链路指标口径表（trace_id/event_time/recv_time/is_backfill/last_ack_seq）
 - A-06 事件状态机与工单状态机（告警/事件/工单三套状态枚举与流转规则）
+- A-07 API 错误码与异常响应规范（统一错误码、全局异常处理、traceId 透传）
 
 当前项目已添加数据库能力。
 
@@ -39,6 +40,7 @@
    - PUT /api/incidents/{incidentId}/actions
    - GET /api/work-orders/{workOrderId}/allowed-actions
    - PUT /api/work-orders/{workOrderId}/actions
+   - GET /api/error-codes
 
 ## 常见问题
 - 报错 `UnsupportedClassVersionError`（如 class file version 65.0）：
@@ -63,6 +65,10 @@
 - A-06 三套状态机：alarm、incident、work_order
 - A-06 关键动作：去重（dedupe）、抑制（suppress）、升级（escalate）、派单（dispatch）、误报回写（false_report_writeback）、关闭（close）
 - A-06 流转校验：所有状态切换统一经后端状态机服务校验，非法流转返回 INVALID_STATE_TRANSITION
+- A-07 统一错误结构：success/data/error/traceId
+- A-07 统一错误码：AUTHENTICATION_FAILED、FORBIDDEN、DATA_SCOPE_EMPTY、IDEMPOTENT_CONFLICT、INVALID_PARAMETER、INVALID_REQUEST、RESOURCE_NOT_FOUND、INVALID_STATE_TRANSITION、INTERNAL_ERROR
+- A-07 异常处理：全局异常处理器统一处理参数校验、业务异常、未捕获异常
+- A-07 traceId：请求头 X-Trace-Id 支持透传，未提供时自动生成
 
 ## A-03 接口说明
 
@@ -107,6 +113,24 @@
 - 请求体示例：
    - {"action":"false_report_writeback","feedbackType":"FALSE_POSITIVE","feedbackReason":"现场复核无异常"}
 - 说明：误报回写独立建模，不与 close 动作合并。
+
+## A-07 接口说明
+
+### 1) 错误码字典
+- GET /api/error-codes
+- 用途：提供前后端统一错误码与默认文案，便于前端按 code 做分支处理。
+
+### 2) 统一错误响应示例
+- 参数校验失败（HTTP 400）：
+   - {"success":false,"data":null,"error":{"code":"INVALID_PARAMETER","message":"authority_srid is required"},"traceId":"..."}
+- 权限不足（HTTP 403）：
+   - {"success":false,"data":null,"error":{"code":"FORBIDDEN","message":"Authorization denied: ENTRY_PERMISSION_DENIED"},"traceId":"..."}
+- 数据范围为空（HTTP 403）：
+   - {"success":false,"data":null,"error":{"code":"DATA_SCOPE_EMPTY","message":"No accessible data in current scope"},"traceId":"..."}
+
+### 3) traceId 约定
+- 请求可选头：X-Trace-Id
+- 若请求头缺失，后端会自动生成并回传在响应头与响应体 traceId 字段中。
 
 ## 数据库配置说明
 
@@ -165,10 +189,10 @@
    - device：3 条
    - alarm：3 条
    - incident：2 条
-   - work_order：2 条
+   - work_order：3 条
    - model_result：2 条
 - 已生成 A-04 权限联调数据：
-   - user_account：5 条（五类角色示例用户）
+   - user_account：6 条（含 1 条无角色错误场景用户）
    - rbac_role：5 条
    - rbac_permission：12 条
    - rbac_user_role：5 条
@@ -180,6 +204,9 @@
    - 覆盖 3 条 trace_id（含 1 条 is_backfill=true 的补偿链路）
    - 覆盖字段：trace_id、event_time、recv_time、is_backfill、last_ack_seq
    - 覆盖阶段：device_sampling、edge_recv、cloud_ingest、alarm_decide、frontend_recv、map_render
+- 已生成 A-07 错误场景联调数据：
+   - user_account：新增 U-NOROLE-001（用于权限不足/角色未分配场景）
+   - work_order：新增 WO-CONFLICT-001（用于幂等冲突场景模拟）
 
 ## 快速验证命令
 - 查询对象字典：
@@ -220,6 +247,12 @@
    - curl -s -X PUT http://localhost:8080/api/incidents/INC-001/actions -H "Content-Type: application/json" -d "{\"action\":\"dispatch\"}"
 - 执行工单误报回写动作：
    - curl -s -X PUT http://localhost:8080/api/work-orders/WO-001/actions -H "Content-Type: application/json" -d "{\"action\":\"false_report_writeback\",\"feedbackType\":\"FALSE_POSITIVE\",\"feedbackReason\":\"现场复核无异常\"}"
+- 查看 A-07 错误码字典：
+   - curl -s http://localhost:8080/api/error-codes
+- 验证 A-07 参数校验错误：
+   - curl -s -X POST http://localhost:8080/api/gis/convert -H "Content-Type: application/json" -d "{}"
+- 验证 A-07 数据范围为空错误：
+   - curl -s -X POST http://localhost:8080/api/authz/check -H "Content-Type: application/json" -d "{\"userId\":\"U-DISPATCH-001\",\"entryPermission\":\"ENTRY:EMGC\",\"menuPermission\":\"MENU:WORKORDER:READ\",\"regionId\":\"REGION-SH\",\"topic\":\"region.REGION-SH.alerts.critical\",\"dataView\":\"AGGREGATED\"}"
 
 ## 下一步建议
 - 接入 Spring Security OIDC，落地 B-02 到 B-05。

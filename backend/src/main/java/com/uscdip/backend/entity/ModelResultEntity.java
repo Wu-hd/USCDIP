@@ -23,10 +23,10 @@ public class ModelResultEntity {
     @Column(name = "model_result_id", length = 64)
     private String modelResultId;
 
-    @Column(name = "segment_id", nullable = false, length = 64)
+    @Column(name = "segment_id", length = 64)
     private String segmentId;
 
-    @Column(name = "node_id", nullable = false, length = 64)
+    @Column(name = "node_id", length = 64)
     private String nodeId;
 
     @Column(name = "model_code", nullable = false, length = 64)

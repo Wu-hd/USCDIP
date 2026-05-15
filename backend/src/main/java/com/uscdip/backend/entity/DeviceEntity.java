@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -41,6 +42,21 @@ public class DeviceEntity {
     @Column(name = "last_heartbeat")
     private LocalDateTime lastHeartbeat;
 
+    @Column(name = "last_recv_time")
+    private LocalDateTime lastRecvTime;
+
+    @Column(name = "last_buffer_level")
+    private Integer lastBufferLevel;
+
+    @Column(name = "last_abnormal_flags", length = 512)
+    private String lastAbnormalFlags;
+
+    @Column(name = "online_status_reason", length = 128)
+    private String onlineStatusReason;
+
+    @Column(name = "calibration_due_at")
+    private LocalDateTime calibrationDueAt;
+
     @Column(name = "status", nullable = false, length = 32)
     private String status;
 
@@ -49,4 +65,8 @@ public class DeviceEntity {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Version
+    @Column(name = "version_no")
+    private Long versionNo;
 }

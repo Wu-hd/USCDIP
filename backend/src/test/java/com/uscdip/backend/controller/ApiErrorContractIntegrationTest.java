@@ -1,9 +1,12 @@
 package com.uscdip.backend.controller;
 
+import com.uscdip.backend.dto.TokenPairResponse;
+import com.uscdip.backend.service.LocalTokenService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -16,10 +19,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@TestPropertySource(properties = "backend.oidc.enabled=false")
 class ApiErrorContractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private LocalTokenService localTokenService;
 
     @Test
     void shouldGenerateTraceIdWhenHeaderMissing() throws Exception {
@@ -62,13 +69,16 @@ class ApiErrorContractIntegrationTest {
         mockMvc.perform(get("/api/platforms/UNKNOWN"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.error.code").value("PLATFORM_NOT_FOUND"))
                 .andExpect(jsonPath("$.traceId").isString());
     }
 
     @Test
     void shouldReturnDataScopeEmptyWhenOutOfRegionRequested() throws Exception {
+        TokenPairResponse token = localTokenService.issueForUser("U-DISPATCH-001", "127.0.0.1", "JUnit");
+
         mockMvc.perform(post("/api/authz/check")
+                        .header("Authorization", "Bearer " + token.accessToken())
                         .contentType("application/json")
                         .content("{" +
                                 "\"userId\":\"U-DISPATCH-001\"," +
@@ -80,13 +90,16 @@ class ApiErrorContractIntegrationTest {
                                 "}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.error.code").value("DATA_SCOPE_EMPTY"))
+                .andExpect(jsonPath("$.error.code").value("DATA_SCOPE_DENIED"))
                 .andExpect(jsonPath("$.traceId").isString());
     }
 
     @Test
     void shouldListStandardErrorCodes() throws Exception {
-        mockMvc.perform(get("/api/error-codes"))
+        TokenPairResponse token = localTokenService.issueForUser("U-ADMIN-001", "127.0.0.1", "JUnit");
+
+        mockMvc.perform(get("/api/error-codes")
+                        .header("Authorization", "Bearer " + token.accessToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data[?(@.code=='INVALID_PARAMETER')]").exists())

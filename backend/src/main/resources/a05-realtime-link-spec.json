@@ -1,0 +1,93 @@
+{
+  "version": "1.0.0",
+  "source": "A-05-realtime-link-metric-spec",
+  "summary": "统一地下管网一期实时链路字段口径，覆盖设备采样、边缘接收、云端入库、告警判定、通知推送、WebSocket ack 与前端预留阶段。",
+  "canonicalFields": [
+    {
+      "canonicalName": "trace_id",
+      "apiField": "traceId",
+      "required": true,
+      "description": "整条链路的关联标识；同一业务动作或同一条实时消息在 HTTP、Outbox、通知、WebSocket 中保持一致。"
+    },
+    {
+      "canonicalName": "event_time",
+      "apiField": "eventTime",
+      "required": true,
+      "description": "设备原始采样时间；补偿写入时仍指原始采样时刻，不因回传时间改变。"
+    },
+    {
+      "canonicalName": "recv_time",
+      "apiField": "recvTime",
+      "required": true,
+      "description": "平台或边缘网关实际接收时间；用于计算入站延迟与实时链路时延。"
+    },
+    {
+      "canonicalName": "is_backfill",
+      "apiField": "isBackfill",
+      "required": true,
+      "description": "是否为补偿写入；前后端展示、DQ、告警置信度与补发链路均按该口径识别。"
+    },
+    {
+      "canonicalName": "last_ack_seq",
+      "apiField": "lastAckSeq",
+      "required": true,
+      "description": "WebSocket 客户端最近确认的消息序号；用于断线补发、重连恢复与推送堆积判断。"
+    }
+  ],
+  "stages": [
+    {
+      "stageCode": "DEVICE_SAMPLE",
+      "stageName": "设备采样",
+      "mustCarry": ["traceId", "eventTime"],
+      "notes": "设备采样侧可不直接产生 ack 字段，但必须保留原始采样时间。"
+    },
+    {
+      "stageCode": "EDGE_RECEIVE",
+      "stageName": "边缘接收",
+      "mustCarry": ["traceId", "eventTime", "recvTime", "isBackfill"],
+      "notes": "补偿回传时 recvTime 记录边缘或平台接收补偿包的时间。"
+    },
+    {
+      "stageCode": "CLOUD_INGEST",
+      "stageName": "云端入库",
+      "mustCarry": ["traceId", "eventTime", "recvTime", "isBackfill"],
+      "notes": "ingest_batch、ingest_record、ts_metric、ts_write_log 使用同一字段口径。"
+    },
+    {
+      "stageCode": "ALERT_EVALUATION",
+      "stageName": "告警判定",
+      "mustCarry": ["traceId", "eventTime", "isBackfill"],
+      "notes": "alert_record、alert_case、incident 可按 traceId 回溯至时序样本。"
+    },
+    {
+      "stageCode": "NOTIFICATION_PUSH",
+      "stageName": "通知推送",
+      "mustCarry": ["traceId"],
+      "notes": "outbox_event、notification_message、dead_letter 使用相同 traceId。"
+    },
+    {
+      "stageCode": "WEBSOCKET_ACK",
+      "stageName": "WebSocket ack",
+      "mustCarry": ["traceId", "lastAckSeq"],
+      "notes": "websocket_push_message payload 与 websocket_ack 共同支撑补发。"
+    },
+    {
+      "stageCode": "FRONTEND_RESERVED",
+      "stageName": "前端接收与地图渲染预留",
+      "mustCarry": ["traceId", "eventTime", "recvTime", "isBackfill", "lastAckSeq"],
+      "notes": "当前仓库未包含独立前端实现，该阶段仅冻结口径，不在本仓库内验收。"
+    }
+  ],
+  "derivedMetrics": [
+    {
+      "metricCode": "ingest_latency_ms",
+      "formula": "recvTime - eventTime",
+      "description": "采样到平台接收延迟。"
+    },
+    {
+      "metricCode": "push_backlog_count",
+      "formula": "max(seqNo) - lastAckSeq",
+      "description": "客户端待补发消息积压量。"
+    }
+  ]
+}

@@ -31,31 +31,30 @@ public class IncidentWorkflowService {
     public Optional<Map<String, Object>> getAllowedActionSnapshot(String incidentId) {
         return incidentRepository.findById(incidentId)
                 .map(incident -> {
-                    IncidentStatus currentStatus = incident.getStatus() == null ? IncidentStatus.OPEN : incident.getStatus();
+                    String currentStatus = normalizeStatus(incident.getStatus());
                     Map<String, Object> payload = new LinkedHashMap<>();
                     payload.put("machineType", "incident");
                     payload.put("incidentId", incidentId);
-                    payload.put("currentStatus", currentStatus.name());
-                    payload.put("allowedActions", stateMachineService.getAllowedActions(StateMachineService.MACHINE_INCIDENT, currentStatus.name()));
+                    payload.put("currentStatus", currentStatus);
+                    payload.put("allowedActions", stateMachineService.getAllowedActions(StateMachineService.MACHINE_INCIDENT, currentStatus));
                     return payload;
                 });
     }
 
     private WorkflowTransitionResult applyTransition(IncidentEntity incident, TransitionActionRequest request) {
-        IncidentStatus currentStatus = incident.getStatus() == null ? IncidentStatus.OPEN : incident.getStatus();
+        String currentStatus = normalizeStatus(incident.getStatus());
         String normalizedAction = stateMachineService.normalizeAction(request.getAction());
         String nextStatusName = stateMachineService.resolveNextStatus(
                 StateMachineService.MACHINE_INCIDENT,
-                currentStatus.name(),
+                currentStatus,
                 normalizedAction
         );
-        IncidentStatus nextStatus = IncidentStatus.valueOf(nextStatusName);
 
         LocalDateTime now = LocalDateTime.now();
         if (incident.getCreatedAt() == null) {
             incident.setCreatedAt(now);
         }
-        incident.setStatus(nextStatus);
+        incident.setStatus(nextStatusName);
         incident.setLastAction(normalizedAction);
         incident.setUpdatedAt(now);
         incidentRepository.save(incident);
@@ -63,11 +62,18 @@ public class IncidentWorkflowService {
         return WorkflowTransitionResult.builder()
                 .machineType("incident")
                 .entityId(incident.getIncidentId())
-                .previousStatus(currentStatus.name())
+                .previousStatus(currentStatus)
                 .action(normalizedAction)
-                .currentStatus(nextStatus.name())
+                .currentStatus(nextStatusName)
                 .updatedAt(now)
-                .allowedActions(stateMachineService.getAllowedActions(StateMachineService.MACHINE_INCIDENT, nextStatus.name()))
+                .allowedActions(stateMachineService.getAllowedActions(StateMachineService.MACHINE_INCIDENT, nextStatusName))
                 .build();
+    }
+
+    private String normalizeStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return IncidentStatus.OPEN.name();
+        }
+        return status.trim().toUpperCase();
     }
 }

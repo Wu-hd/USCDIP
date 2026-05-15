@@ -31,25 +31,24 @@ public class WorkOrderWorkflowService {
     public Optional<Map<String, Object>> getAllowedActionSnapshot(String workOrderId) {
         return workOrderRepository.findById(workOrderId)
                 .map(workOrder -> {
-                    WorkOrderStatus currentStatus = workOrder.getStatus() == null ? WorkOrderStatus.CREATED : workOrder.getStatus();
+                    String currentStatus = normalizeStatus(workOrder.getStatus());
                     Map<String, Object> payload = new LinkedHashMap<>();
                     payload.put("machineType", "work_order");
                     payload.put("workOrderId", workOrderId);
-                    payload.put("currentStatus", currentStatus.name());
-                    payload.put("allowedActions", stateMachineService.getAllowedActions(StateMachineService.MACHINE_WORK_ORDER, currentStatus.name()));
+                    payload.put("currentStatus", currentStatus);
+                    payload.put("allowedActions", stateMachineService.getAllowedActions(StateMachineService.MACHINE_WORK_ORDER, currentStatus));
                     return payload;
                 });
     }
 
     private WorkflowTransitionResult applyTransition(WorkOrderEntity workOrder, TransitionActionRequest request) {
-        WorkOrderStatus currentStatus = workOrder.getStatus() == null ? WorkOrderStatus.CREATED : workOrder.getStatus();
+        String currentStatus = normalizeStatus(workOrder.getStatus());
         String normalizedAction = stateMachineService.normalizeAction(request.getAction());
         String nextStatusName = stateMachineService.resolveNextStatus(
                 StateMachineService.MACHINE_WORK_ORDER,
-                currentStatus.name(),
+                currentStatus,
                 normalizedAction
         );
-        WorkOrderStatus nextStatus = WorkOrderStatus.valueOf(nextStatusName);
 
         LocalDateTime now = LocalDateTime.now();
         if (workOrder.getCreatedAt() == null) {
@@ -59,7 +58,7 @@ public class WorkOrderWorkflowService {
             workOrder.setFeedbackType(request.getFeedbackType());
             workOrder.setFeedbackReason(request.getFeedbackReason());
         }
-        workOrder.setStatus(nextStatus);
+        workOrder.setStatus(nextStatusName);
         workOrder.setLastAction(normalizedAction);
         workOrder.setUpdatedAt(now);
         workOrderRepository.save(workOrder);
@@ -67,11 +66,18 @@ public class WorkOrderWorkflowService {
         return WorkflowTransitionResult.builder()
                 .machineType("work_order")
                 .entityId(workOrder.getWorkOrderId())
-                .previousStatus(currentStatus.name())
+                .previousStatus(currentStatus)
                 .action(normalizedAction)
-                .currentStatus(nextStatus.name())
+                .currentStatus(nextStatusName)
                 .updatedAt(now)
-                .allowedActions(stateMachineService.getAllowedActions(StateMachineService.MACHINE_WORK_ORDER, nextStatus.name()))
+                .allowedActions(stateMachineService.getAllowedActions(StateMachineService.MACHINE_WORK_ORDER, nextStatusName))
                 .build();
+    }
+
+    private String normalizeStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return WorkOrderStatus.CREATED.name();
+        }
+        return status.trim().toUpperCase();
     }
 }

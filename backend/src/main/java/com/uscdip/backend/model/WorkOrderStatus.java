@@ -5,6 +5,5 @@ public enum WorkOrderStatus {
     DISPATCHED,
     ACCEPTED,
     COMPLETED,
-    FALSE_REPORT_WRITTEN,
     CLOSED
 }

@@ -1,4 +1,12 @@
 backend/target/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/node_modules/.tmp/
+frontend/*.log
+*.tsbuildinfo
+__pycache__/
+*.pyc
 
 # IDE
 .idea/

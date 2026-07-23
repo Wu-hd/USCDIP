@@ -1,0 +1,73 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:uscdip}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  sql:
+    init:
+      mode: never
+      encoding: UTF-8
+
+server:
+  port: 8080
+
+backend:
+  oidc:
+    enabled: ${BACKEND_OIDC_ENABLED:false}
+    registration-id: ${OIDC_REGISTRATION_ID:keycloak}
+    issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8081/realms/uscdip}
+    client-id: ${OIDC_CLIENT_ID:uscdip-backend}
+    client-secret: ${OIDC_CLIENT_SECRET:change-me}
+    access-token-secret: ${LOCAL_ACCESS_TOKEN_SECRET:change-me-local-access-token-secret}
+    access-token-ttl-seconds: ${LOCAL_ACCESS_TOKEN_TTL_SECONDS:1800}
+    refresh-token-ttl-seconds: ${LOCAL_REFRESH_TOKEN_TTL_SECONDS:1209600}
+    emergency-access-token-ttl-seconds: ${EMERGENCY_ACCESS_TOKEN_TTL_SECONDS:600}
+    emergency-refresh-token-ttl-seconds: ${EMERGENCY_REFRESH_TOKEN_TTL_SECONDS:1800}
+    emergency-password-hash-strength: ${EMERGENCY_PASSWORD_HASH_STRENGTH:10}
+    state-ttl-seconds: ${OIDC_STATE_TTL_SECONDS:300}
+    refresh-token-hash-algorithm: ${REFRESH_TOKEN_HASH_ALGORITHM:SHA-256}
+    local-token-issuer: ${LOCAL_TOKEN_ISSUER:uscdip-backend}
+    post-logout-redirect-uri: ${OIDC_POST_LOGOUT_REDIRECT_URI:http://localhost:8080/swagger-ui/index.html}
+    default-role: ${OIDC_DEFAULT_ROLE:LEADER_READONLY}
+    default-region: ${OIDC_DEFAULT_REGION:REGION-HZ}
+  gateway:
+    body-size-limit-bytes: ${GATEWAY_BODY_SIZE_LIMIT_BYTES:4096}
+    page-size-max: ${GATEWAY_PAGE_SIZE_MAX:200}
+    default-window-seconds: ${GATEWAY_DEFAULT_WINDOW_SECONDS:60}
+    default-capacity: ${GATEWAY_DEFAULT_CAPACITY:10}
+  tsdb:
+    retry-fixed-delay-ms: ${TSDB_RETRY_FIXED_DELAY_MS:30000}
+    retry-base-delay-seconds: ${TSDB_RETRY_BASE_DELAY_SECONDS:30}
+    max-attempts: ${TSDB_MAX_ATTEMPTS:3}
+  outbox:
+    relay-fixed-delay-ms: ${OUTBOX_RELAY_FIXED_DELAY_MS:30000}
+    batch-size: ${OUTBOX_BATCH_SIZE:20}
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:3}
+    retry-base-delay-seconds: ${OUTBOX_RETRY_BASE_DELAY_SECONDS:30}
+    claim-timeout-seconds: ${OUTBOX_CLAIM_TIMEOUT_SECONDS:120}
+    instance-id: ${OUTBOX_INSTANCE_ID:local-relay-1}
+  idempotency:
+    max-attempts: ${IDEMPOTENCY_MAX_ATTEMPTS:3}
+  notification:
+    channels: ${NOTIFICATION_CHANNELS:IN_APP,SMS,WECHAT}
+    fail-channels: ${NOTIFICATION_FAIL_CHANNELS:}
+    max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:3}
+    retry-base-delay-seconds: ${NOTIFICATION_RETRY_BASE_DELAY_SECONDS:30}
+    retry-fixed-delay-ms: ${NOTIFICATION_RETRY_FIXED_DELAY_MS:30000}
+  websocket:
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8080}
+    max-connections: ${WEBSOCKET_MAX_CONNECTIONS:200}
+    max-connections-per-user: ${WEBSOCKET_MAX_CONNECTIONS_PER_USER:5}
+    frame-size-limit-bytes: ${WEBSOCKET_FRAME_SIZE_LIMIT_BYTES:65536}
+    send-buffer-size-limit-bytes: ${WEBSOCKET_SEND_BUFFER_SIZE_LIMIT_BYTES:524288}
+    send-time-limit-ms: ${WEBSOCKET_SEND_TIME_LIMIT_MS:15000}
+    idle-timeout-seconds: ${WEBSOCKET_IDLE_TIMEOUT_SECONDS:120}
+    heartbeat-interval-ms: ${WEBSOCKET_HEARTBEAT_INTERVAL_MS:30000}
+    replay-batch-size: ${WEBSOCKET_REPLAY_BATCH_SIZE:50}
+    idle-scan-fixed-delay-ms: ${WEBSOCKET_IDLE_SCAN_FIXED_DELAY_MS:30000}
+    notification-bridge-fixed-delay-ms: ${WEBSOCKET_NOTIFICATION_BRIDGE_FIXED_DELAY_MS:30000}

@@ -1,0 +1,16 @@
+{
+  "width": 513,
+  "height": 513,
+  "bounds": {
+    "minLongitude": 108.792209,
+    "minLatitude": 24.636548,
+    "maxLongitude": 114.260116,
+    "maxLatitude": 30.125989
+  },
+  "minimumElevation": -409,
+  "maximumElevation": 2042,
+  "tileZoom": 9,
+  "source": "AWS Open Data Terrain Tiles / Mapzen",
+  "sourceUrl": "https://registry.opendata.aws/terrain-tiles/",
+  "generatedAt": "2026-07-14T15:33:41.136Z"
+}

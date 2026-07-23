@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "source": "A-04-permission-matrix",
+  "rule": {
+    "code": "R3",
+    "expression": "access = entryPermission && menuPermission && dataScope && topicScope"
+  },
+  "roles": [
+    {
+      "roleCode": "PLATFORM_ADMIN",
+      "roleName": "平台管理员",
+      "entryPermissions": ["entry:PORTAL", "entry:MGMT", "entry:EMGC", "entry:DIAG", "entry:SUPPORT"],
+      "dataScopeRule": "ALL",
+      "topicPatterns": ["#"]
+    },
+    {
+      "roleCode": "REGIONAL_DISPATCHER",
+      "roleName": "区域调度员",
+      "entryPermissions": ["entry:MGMT", "entry:EMGC"],
+      "dataScopeRule": "REGION_ONLY",
+      "topicPatterns": ["region.{regionId}.alerts.#", "region.{regionId}.workorder.#"]
+    },
+    {
+      "roleCode": "INSPECTOR",
+      "roleName": "巡检人员",
+      "entryPermissions": ["entry:EMGC"],
+      "dataScopeRule": "ASSIGNEE_ONLY",
+      "topicPatterns": ["user.{userId}.workorder.#"]
+    },
+    {
+      "roleCode": "ALGORITHM_ENGINEER",
+      "roleName": "算法工程师",
+      "entryPermissions": ["entry:DIAG"],
+      "dataScopeRule": "MASKED_FEATURE_ONLY",
+      "topicPatterns": ["diag.model.#"]
+    },
+    {
+      "roleCode": "LEADER_READONLY",
+      "roleName": "领导只读",
+      "entryPermissions": ["entry:EMGC"],
+      "dataScopeRule": "AGGREGATED_READ_ONLY",
+      "topicPatterns": ["city.aggregate.#"]
+    }
+  ]
+}

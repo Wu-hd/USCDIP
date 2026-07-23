@@ -1,0 +1,26 @@
+# Dependencies and compiled output
+frontend/node_modules/
+frontend/dist/
+backend/target/
+
+# Local verification artifacts
+.playwright-cli/
+output/
+frontend/output/
+tmp/
+*.log
+
+# Local environment and deployment state
+.env
+.env.*
+!.env.example
+frontend/.vercel/
+
+# Local source material
+docs/ChatGPT - WHD.pdf
+
+# Editor and operating-system metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

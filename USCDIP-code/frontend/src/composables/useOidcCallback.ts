@@ -3,6 +3,7 @@ import type { LocationQuery, Router } from 'vue-router';
 
 import { ApiClientError, saveTokenPair } from '@/services/api';
 import {
+  buildPostLoginLaunchRoute,
   clearPendingOidcState,
   DEFAULT_POST_LOGIN_ROUTE,
   exchangeOidcCallback,
@@ -78,7 +79,7 @@ export function useOidcCallback(router: Router) {
     }
     redirectTimer = window.setTimeout(() => {
       redirectTimer = null;
-      void router.replace(target);
+      void router.replace(buildPostLoginLaunchRoute(target));
     }, REDIRECT_DELAY_MS);
   }
 

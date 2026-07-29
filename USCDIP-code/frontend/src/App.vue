@@ -5,7 +5,9 @@ import { useRoute } from 'vue-router';
 import AppHeader from '@/components/AppHeader.vue';
 
 const route = useRoute();
-const showAppHeader = computed(() => route.meta.requiresAuth === true);
+const showAppHeader = computed(
+  () => route.meta.requiresAuth === true && route.meta.fullscreen !== true
+);
 </script>
 
 <template>

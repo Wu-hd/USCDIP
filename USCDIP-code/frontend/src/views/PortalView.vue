@@ -16,7 +16,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import loginBackgroundUrl from '@/assets/login-underground-city.png';
-import { resolvePostLoginRoute } from '@/services/auth';
+import { buildPostLoginLaunchRoute, resolvePostLoginRoute } from '@/services/auth';
 import { useAuthStore } from '@/stores/auth';
 
 const CAPTCHA_CHARACTERS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -93,7 +93,7 @@ async function handleLogin(): Promise<void> {
       localStorage.removeItem(REMEMBERED_ACCOUNT_KEY);
     }
     password.value = '';
-    await router.replace(resolvePostLoginRoute(route.query.redirect));
+    await router.replace(buildPostLoginLaunchRoute(route.query.redirect));
   } catch {
     loginError.value = '登录请求异常，请稍后重试';
     refreshCaptcha();

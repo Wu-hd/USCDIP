@@ -8,7 +8,9 @@ import type {
 
 const PENDING_OIDC_STATE_KEY = 'uscdip.oidc.pendingState';
 const PROCESSED_OIDC_STATE_PREFIX = 'uscdip.oidc.processed.';
+const POST_LOGIN_LAUNCH_STARTED_AT_KEY = 'uscdip.launch.startedAt';
 export const DEFAULT_POST_LOGIN_ROUTE = '/home';
+export const POST_LOGIN_LAUNCH_ROUTE = '/launch';
 
 export function exchangeOidcCallback(request: AuthCallbackRequest) {
   return apiRequest<TokenPairResponse>('/api/auth/callback', {
@@ -67,6 +69,21 @@ export function markOidcStateProcessed(state: string): void {
   sessionStorage.setItem(`${PROCESSED_OIDC_STATE_PREFIX}${state}`, 'true');
 }
 
+export function buildPostLoginLaunchRoute(target: unknown): string {
+  const redirect = resolvePostLoginRoute(target);
+  sessionStorage.setItem(POST_LOGIN_LAUNCH_STARTED_AT_KEY, String(Date.now()));
+  return `${POST_LOGIN_LAUNCH_ROUTE}?redirect=${encodeURIComponent(redirect)}`;
+}
+
+export function consumePostLoginLaunchElapsedMs(): number {
+  const raw = sessionStorage.getItem(POST_LOGIN_LAUNCH_STARTED_AT_KEY);
+  sessionStorage.removeItem(POST_LOGIN_LAUNCH_STARTED_AT_KEY);
+  const startedAt = Number(raw);
+  if (!Number.isFinite(startedAt) || startedAt <= 0) return 0;
+  const elapsed = Date.now() - startedAt;
+  return elapsed > 0 && elapsed < 60_000 ? elapsed : 0;
+}
+
 export function resolvePostLoginRoute(value: unknown): string {
   const candidate = Array.isArray(value) ? value[0] : value;
   if (typeof candidate !== 'string' || !candidate.startsWith('/') || candidate.startsWith('//')) {
@@ -81,7 +98,11 @@ export function resolvePostLoginRoute(value: unknown): string {
     if (parsed.origin !== window.location.origin) {
       return DEFAULT_POST_LOGIN_ROUTE;
     }
-    if (parsed.pathname === '/portal' || parsed.pathname === '/auth/callback') {
+    if (
+      parsed.pathname === '/portal'
+      || parsed.pathname === '/auth/callback'
+      || parsed.pathname === POST_LOGIN_LAUNCH_ROUTE
+    ) {
       return DEFAULT_POST_LOGIN_ROUTE;
     }
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;

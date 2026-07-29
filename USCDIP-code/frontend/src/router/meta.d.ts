@@ -10,6 +10,7 @@ declare module 'vue-router' {
     menuPermission?: string;
     permissionLabel?: string;
     requiredRole?: string;
+    fullscreen?: boolean;
   }
 }
 

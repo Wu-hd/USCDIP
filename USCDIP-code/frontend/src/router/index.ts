@@ -23,6 +23,17 @@ const router = createRouter({
       component: () => import('@/views/AuthCallbackView.vue')
     },
     {
+      path: '/launch',
+      name: 'post-login-launch',
+      component: () => import('@/views/LaunchView.vue'),
+      meta: {
+        requiresAuth: true,
+        authOnly: true,
+        fullscreen: true,
+        permissionLabel: '系统启动动画'
+      }
+    },
+    {
       path: '/forbidden',
       name: 'forbidden',
       component: () => import('@/views/ForbiddenView.vue')
